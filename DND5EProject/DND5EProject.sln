@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.4.33205.214
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "dnd", "dnd\dnd.csproj", "{04E64250-6FC0-469B-8DFF-CA3301EC0983}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DnDLibrary", "DnDLibrary\DnDLibrary.csproj", "{098A275E-1715-4E00-853A-06A03F236C16}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{04E64250-6FC0-469B-8DFF-CA3301EC0983}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{04E64250-6FC0-469B-8DFF-CA3301EC0983}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{04E64250-6FC0-469B-8DFF-CA3301EC0983}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{04E64250-6FC0-469B-8DFF-CA3301EC0983}.Release|Any CPU.Build.0 = Release|Any CPU
+		{098A275E-1715-4E00-853A-06A03F236C16}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{098A275E-1715-4E00-853A-06A03F236C16}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{098A275E-1715-4E00-853A-06A03F236C16}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{098A275E-1715-4E00-853A-06A03F236C16}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {A9081DA3-26FE-4DBD-A15C-CA2FE65432D2}
+	EndGlobalSection
+EndGlobal
