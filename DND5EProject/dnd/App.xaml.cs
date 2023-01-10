@@ -7,10 +7,13 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
+using DnDLibrary.Engine;
+using DnDLibrary.System;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Serilog;
+
 
 namespace dnd
 {
@@ -48,7 +51,11 @@ namespace dnd
             AppHost = Host.CreateDefaultBuilder()
                 .ConfigureServices((context, services) =>
                 {
+                    services.AddSingleton<MainWindow> ();
+                    services.AddTransient<IRng,Rng>();
+                    services.AddTransient<IDice, Dice>();
                     
+
                 }).UseSerilog()
                 .Build();
 
@@ -56,7 +63,7 @@ namespace dnd
         protected override async void OnStartup(StartupEventArgs e)
         {
             await AppHost!.StartAsync();
-            var startupForm = AppHost.Services.GetRequiredService<Main>();
+            var startupForm = AppHost.Services.GetRequiredService<MainWindow>();
 
             startupForm.Show();
         }

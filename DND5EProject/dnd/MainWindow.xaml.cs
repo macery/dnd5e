@@ -1,4 +1,6 @@
-﻿using System;
+﻿using DnDLibrary.Engine;
+using Serilog;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -20,9 +22,25 @@ namespace dnd
     /// </summary>
     public partial class MainWindow : Window
     {
-        public MainWindow()
+        private readonly IRng _random;
+        private readonly IDice _dice;
+
+        //private readonly Rng _newrandom;
+
+        public MainWindow(IRng random, IDice dice)
         {
             InitializeComponent();
+            _random = random;
+            _dice = dice;
+            roll_xDy(4, 1);
+            //_newrandom = newrandom;
         }
+        private void roll_xDy(int x, int y)
+        {
+            var rolls = _dice.D4(x);
+            MessageBox.Show("");
+        }
+        
+        
     }
 }
