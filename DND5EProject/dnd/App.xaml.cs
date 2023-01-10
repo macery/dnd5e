@@ -42,6 +42,7 @@ namespace dnd
                 .ReadFrom.Configuration(builder.Build())
                 .Enrich.FromLogContext()
                 .WriteTo.File("test.Log")
+                .WriteTo.Debug()
                 //.WriteTo.Console()
                 .CreateLogger();
 

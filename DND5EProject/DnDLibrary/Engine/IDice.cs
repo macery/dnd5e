@@ -4,12 +4,14 @@ namespace DnDLibrary.Engine
 {
     public interface IDice
     {
-        int D100();
-        int D12();
-        int D20();
-        //int D4();
+        List<int> D100(int num);
+        List<int> D12(int num);
+        List<int> D20(int num);
+        
         List<int> D4(int num);
-        int D6();
-        int D8();
+        List<int> D6(int num);
+        List<int> D8(int num);
+        int RollTotal(List<int> list);
+        
     }
 }

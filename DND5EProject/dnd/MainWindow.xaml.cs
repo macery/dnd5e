@@ -37,8 +37,8 @@ namespace dnd
         }
         private void roll_xDy(int x, int y)
         {
-            var rolls = _dice.D4(x);
-            MessageBox.Show("");
+            var rolls = _dice.D20(x);
+            var total = _dice.RollTotal(rolls);
         }
         
         
