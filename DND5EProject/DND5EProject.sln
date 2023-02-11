@@ -7,7 +7,11 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "dnd", "dnd\dnd.csproj", "{0
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DnDLibrary", "DnDLibrary\DnDLibrary.csproj", "{098A275E-1715-4E00-853A-06A03F236C16}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DnD.Test", "DnD.Test\DnD.Test.csproj", "{52302EEF-4E90-48EB-BD1C-92FDD3D77E34}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DnD.Test", "DnD.Test\DnD.Test.csproj", "{52302EEF-4E90-48EB-BD1C-92FDD3D77E34}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DnD.Core", "DnD.Core\DnD.Core.csproj", "{456EECC6-ABF3-44C3-BFAB-0B489CF62827}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DnD.Wpf", "DnD.Wpf\DnD.Wpf.csproj", "{875A7FC9-B71B-41FC-8564-3EE7826C8B74}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -27,6 +31,14 @@ Global
 		{52302EEF-4E90-48EB-BD1C-92FDD3D77E34}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{52302EEF-4E90-48EB-BD1C-92FDD3D77E34}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{52302EEF-4E90-48EB-BD1C-92FDD3D77E34}.Release|Any CPU.Build.0 = Release|Any CPU
+		{456EECC6-ABF3-44C3-BFAB-0B489CF62827}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{456EECC6-ABF3-44C3-BFAB-0B489CF62827}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{456EECC6-ABF3-44C3-BFAB-0B489CF62827}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{456EECC6-ABF3-44C3-BFAB-0B489CF62827}.Release|Any CPU.Build.0 = Release|Any CPU
+		{875A7FC9-B71B-41FC-8564-3EE7826C8B74}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{875A7FC9-B71B-41FC-8564-3EE7826C8B74}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{875A7FC9-B71B-41FC-8564-3EE7826C8B74}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{875A7FC9-B71B-41FC-8564-3EE7826C8B74}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
