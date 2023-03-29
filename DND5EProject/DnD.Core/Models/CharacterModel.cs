@@ -13,5 +13,6 @@ public class CharacterModel : ICharacterModel
     public int Class { get; set; }
     public int Race { get; set; }
     public int Alignment { get; set; }
+    public int Level { get; set; }
 
 }

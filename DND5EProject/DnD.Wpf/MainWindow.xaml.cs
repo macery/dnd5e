@@ -21,8 +21,10 @@ namespace DnD.Wpf
     /// </summary>
     public partial class MainWindow : MvxWindow
     {
+        
         public MainWindow()
         {
+            
             InitializeComponent();
         }
     }

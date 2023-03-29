@@ -1,6 +1,8 @@
-﻿using MvvmCross.Platforms.Wpf.Views;
+﻿using DnD.Core.Engine;
+using MvvmCross.Platforms.Wpf.Views;
 using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -12,6 +14,10 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
+using System.IO;
+using Serilog;
+using MvvmCross.Platforms.Wpf.Binding;
+using DnD.Core.ViewModels;
 
 namespace DnD.Wpf.Views
 {
@@ -22,7 +28,16 @@ namespace DnD.Wpf.Views
     {
         public HomeView()
         {
+            
             InitializeComponent();
+            
+           
+        }
+
+        private void comboPlayer_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+           this.playerSelected.Text = comboPlayer.SelectedValue.ToString();
         }
     }
+
 }

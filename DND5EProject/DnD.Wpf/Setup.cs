@@ -24,7 +24,7 @@ namespace DnD.Wpf
                 .Enrich.FromLogContext()
                 // add more sinks here
                 .WriteTo.Debug()
-                //.WriteTo.File("Wpf.Log")
+                .WriteTo.File("..\\Wpf.Log")
                 .CreateLogger();
             Log.Debug("Logger Built");
             return new SerilogLoggerFactory();

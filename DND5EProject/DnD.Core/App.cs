@@ -10,10 +10,20 @@ namespace DnD.Core
         {
             CreatableTypes()
                 .EndingWith("Service")
-                //.InNamespace("Model")
                 .AsInterfaces()
                 .RegisterAsLazySingleton();
-                
+
+            CreatableTypes()
+                .InNamespace("Models")
+                .AsInterfaces()
+                .RegisterAsLazySingleton();
+            //CreatableTypes()
+            //    .EndingWith("")
+            //    .
+            CreatableTypes()
+                .EndingWith("Engine")
+                .AsInterfaces()
+                .RegisterAsLazySingleton();
             RegisterAppStart<HomeViewModel>();
         }
     }

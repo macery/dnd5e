@@ -26,8 +26,8 @@ namespace DnD.Core.ViewModels
 			get { return _characterName; }
 			set { SetProperty(ref _characterName , value); }
 		}
-		private ObservableCollection<CharacterModel> _characterModels = new ObservableCollection<CharacterModel>();
-			public ObservableCollection<CharacterModel> CharacterModels
+		private ObservableCollection<ICharacterModel> _characterModels = new ObservableCollection<ICharacterModel>();
+			public ObservableCollection<ICharacterModel> CharacterModels
 		{		get { return _characterModels; }
 				set { SetProperty(ref _characterModels, value); }
 		}
@@ -49,5 +49,8 @@ namespace DnD.Core.ViewModels
 			Log.Debug(c.CharacterName.ToString());
 
 		}
+		
+		
+
 	}
 }

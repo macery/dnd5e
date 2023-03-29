@@ -6,13 +6,14 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:DnD.Wpf.Views"
+    
         mc:Ignorable="d" 
         >
     
     <Grid >
         <Grid.ColumnDefinitions >
             <ColumnDefinition Width="10" />
-            <ColumnDefinition Width="64"/>
+            <ColumnDefinition Width="auto"/>
             <ColumnDefinition Width="106"/>
             <ColumnDefinition Width="auto"/>
             <ColumnDefinition Width="auto"/>
@@ -22,16 +23,46 @@
         </Grid.ColumnDefinitions>
         <Grid.RowDefinitions>
             <RowDefinition Height="15"/>
-            <RowDefinition Height="48"/>
+            <RowDefinition Height="auto"/>
             <RowDefinition Height="auto"/>
             <RowDefinition Height="auto"/>
             <RowDefinition Height="auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="25"/>
         </Grid.RowDefinitions>
-        <StackPanel Grid.Column="1" Grid.ColumnSpan="1" Grid.Row="2">
-            
+        <StackPanel Grid.Column="1" Grid.ColumnSpan="1" Grid.Row="1" >
+            <ComboBox x:Name="comboPlayer"
+                        ItemsSource="{Binding Player, Mode=TwoWay}" 
+                      DisplayMemberPath="PlayerName"
+                      SelectedValuePath="PlayerID"
+                      SelectionChanged="comboPlayer_SelectionChanged"
+                      />
+            <TextBlock 
+                x:Name="playerSelected"
+                Text="{Binding SelectedPlayer, Mode=TwoWay}" 
+                Visibility="Hidden" />
+            <GroupBox BorderThickness="3" BorderBrush="Goldenrod" Header="Character Name" Width="150" FontFamily="Rockwell">
+                <Image  Source="C:\\Repos\\dnd5e\\DND5EProject\\DnD.Core\\Assests\\Icons\\1\1_7.jpg" Stretch="None" Margin="10"/>
+            </GroupBox>
+            <!--"C:\\Repos\\dnd5e\\DND5EProject\\DnD.Core\\Assests\\Icons\\test\\0_3.jpg" />-->
+            <!--"{Binding ImageSrc}"-->
         </StackPanel>
+        
+
+
+        <DataGrid Grid.Column="1" 
+                  Grid.ColumnSpan="2" 
+                  Grid.Row="2" 
+                  AutoGenerateColumns="False"
+                  
+                  ItemsSource="{Binding CharacterModels, Mode=TwoWay}" 
+                  BorderBrush="Aqua"
+                  >
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="Name" Binding="{Binding CharacterName}"/>
+                <DataGridTextColumn Header="Level" Binding="{Binding Level,Mode=Default}"/>
+            </DataGrid.Columns>
+        </DataGrid>
     </Grid>
     
 </views:MvxWpfView>

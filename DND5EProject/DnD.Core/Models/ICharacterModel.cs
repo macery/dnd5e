@@ -7,5 +7,6 @@
         string CharacterName { get; set; }
         int Class { get; set; }
         int Race { get; set; }
+        int Level { get; set; }
     }
 }
