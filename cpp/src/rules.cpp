@@ -115,4 +115,17 @@ int initiative(const Character& character) {
     return ability_modifier(character.dexterity);
 }
 
+int weapon_attack_ability_modifier(const Character& character, const Weapon& weapon) {
+    int str_modifier = ability_modifier(character.strength);
+    int dex_modifier = ability_modifier(character.dexterity);
+
+    if (weapon.is_ranged) return dex_modifier;
+    if (weapon.is_finesse) return dex_modifier >= str_modifier ? dex_modifier : str_modifier;
+    return str_modifier;
+}
+
+int weapon_attack_bonus(const Character& character, const Weapon& weapon) {
+    return proficiency_bonus(character.level) + weapon_attack_ability_modifier(character, weapon);
+}
+
 }  // namespace dnd

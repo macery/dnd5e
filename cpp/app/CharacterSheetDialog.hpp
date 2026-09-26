@@ -6,6 +6,7 @@
 #include "dnd/character.hpp"
 #include "dnd/dice.hpp"
 #include "dnd/lookup_entry.hpp"
+#include "dnd/weapon.hpp"
 
 class QLabel;
 class QComboBox;
@@ -21,7 +22,7 @@ class CharacterSheetDialog : public QDialog {
 public:
     CharacterSheetDialog(const dnd::Character& character, const std::vector<dnd::LookupEntry>& classes,
                           const std::vector<dnd::LookupEntry>& races, const std::vector<dnd::LookupEntry>& alignments,
-                          QWidget* parent = nullptr);
+                          const std::vector<dnd::Weapon>& weapons, QWidget* parent = nullptr);
 
 private:
     void rollAndShow(const QString& label, int bonus);

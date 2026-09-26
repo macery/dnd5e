@@ -7,6 +7,7 @@
 #include "dnd/character.hpp"
 #include "dnd/lookup_entry.hpp"
 #include "dnd/rules.hpp"
+#include "dnd/weapon.hpp"
 
 class QLineEdit;
 class QSpinBox;
@@ -24,14 +25,14 @@ class CharacterEditorDialog : public QDialog {
 
 public:
     CharacterEditorDialog(const std::vector<dnd::LookupEntry>& classes, const std::vector<dnd::LookupEntry>& races,
-                          const std::vector<dnd::LookupEntry>& alignments, const dnd::Character* existing = nullptr,
-                          QWidget* parent = nullptr);
+                          const std::vector<dnd::LookupEntry>& alignments, const std::vector<dnd::Weapon>& weapons,
+                          const dnd::Character* existing = nullptr, QWidget* parent = nullptr);
 
     dnd::Character character() const;
 
 private:
     QWidget* buildBasicsTab(const std::vector<dnd::LookupEntry>& classes, const std::vector<dnd::LookupEntry>& races,
-                            const std::vector<dnd::LookupEntry>& alignments);
+                            const std::vector<dnd::LookupEntry>& alignments, const std::vector<dnd::Weapon>& weapons);
     QWidget* buildAbilityScoresTab();
     QWidget* buildProficienciesTab();
     void populateFrom(const dnd::Character& existing);
@@ -40,6 +41,7 @@ private:
     QComboBox* classCombo_ = nullptr;
     QComboBox* raceCombo_ = nullptr;
     QComboBox* alignmentCombo_ = nullptr;
+    QComboBox* weaponCombo_ = nullptr;
     QSpinBox* levelSpin_ = nullptr;
     QSpinBox* currentHpSpin_ = nullptr;
     QSpinBox* maxHpSpin_ = nullptr;

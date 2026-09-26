@@ -1,6 +1,7 @@
 #pragma once
 
 #include "dnd/character.hpp"
+#include "dnd/weapon.hpp"
 
 namespace dnd {
 
@@ -53,5 +54,14 @@ int saving_throw_bonus(const Character& character, Ability ability);
 
 int passive_perception(const Character& character);
 int initiative(const Character& character);
+
+// DEX modifier if the weapon is ranged, or finesse and DEX >= STR;
+// STR modifier otherwise. There's no proficiency-with-a-specific-weapon
+// tracking yet, so this assumes the character is proficient with whatever
+// they have equipped.
+int weapon_attack_ability_modifier(const Character& character, const Weapon& weapon);
+
+// proficiency_bonus(level) + weapon_attack_ability_modifier(...).
+int weapon_attack_bonus(const Character& character, const Weapon& weapon);
 
 }  // namespace dnd

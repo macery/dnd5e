@@ -48,20 +48,22 @@ TEST_CASE("run_migrations brings a fresh database to the latest schema", "[migra
 
     dnd::run_migrations(db.handle);
 
-    REQUIRE(dnd::current_schema_version(db.handle) == 5);
+    REQUIRE(dnd::current_schema_version(db.handle) == 6);
     REQUIRE(table_exists(db.handle, "Players"));
     REQUIRE(table_exists(db.handle, "Classes"));
     REQUIRE(table_exists(db.handle, "Characters"));
     REQUIRE(table_exists(db.handle, "Races"));
     REQUIRE(table_exists(db.handle, "Alignments"));
     REQUIRE(table_exists(db.handle, "Monsters"));
+    REQUIRE(table_exists(db.handle, "Weapons"));
     // Column added by migration 2 -- this would fail to prepare if it were missing.
     REQUIRE(row_count(db.handle, "SELECT COUNT(*) FROM Characters WHERE Strength = 10;") == 0);
-    // Seeded by migrations 3, 4, and 5.
+    // Seeded by migrations 3, 4, 5, and 6.
     REQUIRE(row_count(db.handle, "SELECT COUNT(*) FROM Classes;") == 12);
     REQUIRE(row_count(db.handle, "SELECT COUNT(*) FROM Races;") == 9);
     REQUIRE(row_count(db.handle, "SELECT COUNT(*) FROM Alignments;") == 9);
     REQUIRE(row_count(db.handle, "SELECT COUNT(*) FROM Monsters;") == 6);
+    REQUIRE(row_count(db.handle, "SELECT COUNT(*) FROM Weapons;") == 8);
 }
 
 TEST_CASE("run_migrations is a no-op the second time", "[migrations]") {
@@ -70,10 +72,49 @@ TEST_CASE("run_migrations is a no-op the second time", "[migrations]") {
     dnd::run_migrations(db.handle);
     dnd::run_migrations(db.handle);
 
-    REQUIRE(row_count(db.handle, "SELECT COUNT(*) FROM SchemaMigrations;") == 5);
+    REQUIRE(row_count(db.handle, "SELECT COUNT(*) FROM SchemaMigrations;") == 6);
     REQUIRE(row_count(db.handle, "SELECT COUNT(*) FROM Classes;") == 12);
     REQUIRE(row_count(db.handle, "SELECT COUNT(*) FROM Races;") == 9);
     REQUIRE(row_count(db.handle, "SELECT COUNT(*) FROM Monsters;") == 6);
+    REQUIRE(row_count(db.handle, "SELECT COUNT(*) FROM Weapons;") == 8);
+}
+
+TEST_CASE("migration 6 equips existing characters with Unarmed Strike", "[migrations]") {
+    // Simulates the real scenario: a character that already existed before
+    // Weapons/WeaponID were added. Manually builds a database recorded as
+    // already at version 5 (migration 6's SQL only touches Characters and
+    // Weapons, so the other tables from migrations 1-5 aren't needed here).
+    RawDb db(":memory:");
+
+    char* error = nullptr;
+    int result = sqlite3_exec(db.handle,
+        "CREATE TABLE Players (PlayerID INTEGER PRIMARY KEY AUTOINCREMENT, PlayerName TEXT NOT NULL UNIQUE);"
+        "CREATE TABLE Characters (CharacterId INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "CharacterName TEXT NOT NULL UNIQUE, Class INTEGER NOT NULL, Race INTEGER NOT NULL, "
+        "Alignment INTEGER NOT NULL, PlayerID INTEGER NOT NULL, Level INTEGER NOT NULL DEFAULT 1);"
+        "INSERT INTO Players (PlayerName) VALUES ('Aria');"
+        "INSERT INTO Characters (CharacterName, Class, Race, Alignment, PlayerID) "
+        "VALUES ('Aria''s Fighter', 1, 1, 1, 1);"
+        "CREATE TABLE SchemaMigrations (Version INTEGER PRIMARY KEY, Description TEXT NOT NULL, "
+        "AppliedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);"
+        "INSERT INTO SchemaMigrations (Version, Description) VALUES "
+        "(1, 'x'), (2, 'x'), (3, 'x'), (4, 'x'), (5, 'x');",
+        nullptr, nullptr, &error);
+    REQUIRE(result == SQLITE_OK);
+
+    dnd::run_migrations(db.handle);
+
+    REQUIRE(dnd::current_schema_version(db.handle) == 6);
+
+    sqlite3_stmt* stmt = nullptr;
+    REQUIRE(sqlite3_prepare_v2(db.handle,
+        "SELECT Weapons.Name FROM Characters JOIN Weapons ON Characters.WeaponID = Weapons.WeaponID "
+        "WHERE Characters.CharacterName = 'Aria''s Fighter';",
+        -1, &stmt, nullptr) == SQLITE_OK);
+    REQUIRE(sqlite3_step(stmt) == SQLITE_ROW);
+    std::string weapon_name = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
+    sqlite3_finalize(stmt);
+    REQUIRE(weapon_name == "Unarmed Strike");
 }
 
 TEST_CASE("Repository upgrades a real pre-migration database in place", "[migrations]") {

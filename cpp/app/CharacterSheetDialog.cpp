@@ -25,12 +25,28 @@ QString nameFor(const std::vector<dnd::LookupEntry>& entries, int id) {
     return QString("#%1").arg(id);
 }
 
+QString weaponSummaryFor(const dnd::Character& character, const std::vector<dnd::Weapon>& weapons) {
+    for (const auto& weapon : weapons) {
+        if (weapon.weapon_id != character.weapon_id) continue;
+
+        int bonus = dnd::weapon_attack_bonus(character, weapon);
+        int damage_modifier = dnd::weapon_attack_ability_modifier(character, weapon);
+        QString damage = QString("%1d%2").arg(weapon.damage_dice_count).arg(weapon.damage_dice_sides);
+        if (damage_modifier != 0) damage += formatModifier(damage_modifier);
+
+        return QString("%1 (%2 to hit, %3 damage)")
+            .arg(QString::fromStdString(weapon.name), formatModifier(bonus), damage);
+    }
+    return "None";
+}
+
 }  // namespace
 
 CharacterSheetDialog::CharacterSheetDialog(const dnd::Character& character,
                                             const std::vector<dnd::LookupEntry>& classes,
                                             const std::vector<dnd::LookupEntry>& races,
-                                            const std::vector<dnd::LookupEntry>& alignments, QWidget* parent)
+                                            const std::vector<dnd::LookupEntry>& alignments,
+                                            const std::vector<dnd::Weapon>& weapons, QWidget* parent)
     : QDialog(parent), dice_(randomSource_) {
     setWindowTitle(QString::fromStdString(character.character_name));
 
@@ -55,6 +71,7 @@ CharacterSheetDialog::CharacterSheetDialog(const dnd::Character& character,
     summaryForm->addRow("Class", new QLabel(nameFor(classes, character.class_id), summaryGroup));
     summaryForm->addRow("Race", new QLabel(nameFor(races, character.race), summaryGroup));
     summaryForm->addRow("Alignment", new QLabel(nameFor(alignments, character.alignment), summaryGroup));
+    summaryForm->addRow("Weapon", new QLabel(weaponSummaryFor(character, weapons), summaryGroup));
     summaryForm->addRow("Hit Points",
         new QLabel(QString("%1 / %2").arg(character.current_hp).arg(character.max_hp), summaryGroup));
     summaryForm->addRow("Armor Class", new QLabel(QString::number(character.armor_class), summaryGroup));

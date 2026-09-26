@@ -7,6 +7,7 @@
 #include "dnd/lookup_entry.hpp"
 #include "dnd/monster.hpp"
 #include "dnd/player.hpp"
+#include "dnd/weapon.hpp"
 
 struct sqlite3;
 
@@ -32,6 +33,7 @@ public:
     std::vector<Character> get_characters() const;
     std::vector<Character> get_characters_by_player(int player_id) const;
     std::vector<Monster> get_monsters() const;
+    std::vector<Weapon> get_weapons() const;
 
     int add_player(const std::string& player_name);
     int add_character(const Character& character);

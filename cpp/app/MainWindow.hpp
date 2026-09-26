@@ -5,6 +5,7 @@
 
 #include "dnd/lookup_entry.hpp"
 #include "dnd/repository.hpp"
+#include "dnd/weapon.hpp"
 
 class QComboBox;
 class QLineEdit;
@@ -47,6 +48,7 @@ private:
     std::vector<dnd::LookupEntry> classes_;
     std::vector<dnd::LookupEntry> races_;
     std::vector<dnd::LookupEntry> alignments_;
+    std::vector<dnd::Weapon> weapons_;
 
     QComboBox* playerCombo_ = nullptr;
     QLineEdit* newPlayerName_ = nullptr;

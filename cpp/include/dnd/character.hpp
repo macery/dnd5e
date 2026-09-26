@@ -24,6 +24,7 @@ struct Character {
     int current_hp = 0;
     int max_hp = 0;
     int armor_class = 10;
+    int weapon_id = 0;
 
     // Bit index = static_cast<int>(dnd::Skill) / dnd::Ability. Kept as raw
     // bitmasks here (rather than a join table) because the set of skills and

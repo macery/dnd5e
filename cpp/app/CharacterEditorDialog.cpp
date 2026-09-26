@@ -21,12 +21,13 @@ void populateLookupCombo(QComboBox* combo, const std::vector<dnd::LookupEntry>& 
 CharacterEditorDialog::CharacterEditorDialog(const std::vector<dnd::LookupEntry>& classes,
                                               const std::vector<dnd::LookupEntry>& races,
                                               const std::vector<dnd::LookupEntry>& alignments,
+                                              const std::vector<dnd::Weapon>& weapons,
                                               const dnd::Character* existing, QWidget* parent)
     : QDialog(parent) {
     setWindowTitle(existing ? "Edit Character" : "Add Character");
 
     auto* tabs = new QTabWidget(this);
-    tabs->addTab(buildBasicsTab(classes, races, alignments), "Basics");
+    tabs->addTab(buildBasicsTab(classes, races, alignments, weapons), "Basics");
     tabs->addTab(buildAbilityScoresTab(), "Ability Scores");
     tabs->addTab(buildProficienciesTab(), "Proficiencies");
 
@@ -44,7 +45,8 @@ CharacterEditorDialog::CharacterEditorDialog(const std::vector<dnd::LookupEntry>
 
 QWidget* CharacterEditorDialog::buildBasicsTab(const std::vector<dnd::LookupEntry>& classes,
                                                 const std::vector<dnd::LookupEntry>& races,
-                                                const std::vector<dnd::LookupEntry>& alignments) {
+                                                const std::vector<dnd::LookupEntry>& alignments,
+                                                const std::vector<dnd::Weapon>& weapons) {
     auto* page = new QWidget(this);
     auto* form = new QFormLayout(page);
 
@@ -55,6 +57,10 @@ QWidget* CharacterEditorDialog::buildBasicsTab(const std::vector<dnd::LookupEntr
     populateLookupCombo(raceCombo_, races);
     alignmentCombo_ = new QComboBox(page);
     populateLookupCombo(alignmentCombo_, alignments);
+    weaponCombo_ = new QComboBox(page);
+    for (const auto& weapon : weapons) {
+        weaponCombo_->addItem(QString::fromStdString(weapon.name), weapon.weapon_id);
+    }
     levelSpin_ = new QSpinBox(page);
     levelSpin_->setRange(1, 20);
     levelSpin_->setValue(1);
@@ -70,6 +76,7 @@ QWidget* CharacterEditorDialog::buildBasicsTab(const std::vector<dnd::LookupEntr
     form->addRow("Class", classCombo_);
     form->addRow("Race", raceCombo_);
     form->addRow("Alignment", alignmentCombo_);
+    form->addRow("Weapon", weaponCombo_);
     form->addRow("Level", levelSpin_);
     form->addRow("Current HP", currentHpSpin_);
     form->addRow("Max HP", maxHpSpin_);
@@ -131,6 +138,7 @@ void CharacterEditorDialog::populateFrom(const dnd::Character& existing) {
     classCombo_->setCurrentIndex(classCombo_->findData(existing.class_id));
     raceCombo_->setCurrentIndex(raceCombo_->findData(existing.race));
     alignmentCombo_->setCurrentIndex(alignmentCombo_->findData(existing.alignment));
+    weaponCombo_->setCurrentIndex(weaponCombo_->findData(existing.weapon_id));
     levelSpin_->setValue(existing.level);
     currentHpSpin_->setValue(existing.current_hp);
     maxHpSpin_->setValue(existing.max_hp);
@@ -157,6 +165,7 @@ dnd::Character CharacterEditorDialog::character() const {
     character.class_id = classCombo_->currentData().toInt();
     character.race = raceCombo_->currentData().toInt();
     character.alignment = alignmentCombo_->currentData().toInt();
+    character.weapon_id = weaponCombo_->currentData().toInt();
     character.level = levelSpin_->value();
     character.current_hp = currentHpSpin_->value();
     character.max_hp = maxHpSpin_->value();

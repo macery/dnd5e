@@ -58,6 +58,58 @@ TEST_CASE("get_monsters returns the seeded sample enemies", "[repository]") {
     REQUIRE(goblin->challenge_rating == 0.25);
 }
 
+TEST_CASE("get_weapons returns the seeded weapon list", "[repository]") {
+    dnd::Repository repo(":memory:");
+
+    auto weapons = repo.get_weapons();
+    REQUIRE(weapons.size() == 8);
+
+    const dnd::Weapon* rapier = nullptr;
+    for (const auto& weapon : weapons) {
+        if (weapon.name == "Rapier") rapier = &weapon;
+    }
+    REQUIRE(rapier != nullptr);
+    REQUIRE(rapier->damage_dice_count == 1);
+    REQUIRE(rapier->damage_dice_sides == 8);
+    REQUIRE(rapier->is_finesse);
+    REQUIRE_FALSE(rapier->is_ranged);
+}
+
+TEST_CASE("a character's weapon_id round-trips and new characters default to Unarmed Strike", "[repository]") {
+    dnd::Repository repo(":memory:");
+    int player_id = repo.add_player("Aria");
+
+    auto weapons = repo.get_weapons();
+    int unarmed_id = 0;
+    int dagger_id = 0;
+    for (const auto& weapon : weapons) {
+        if (weapon.name == "Unarmed Strike") unarmed_id = weapon.weapon_id;
+        if (weapon.name == "Dagger") dagger_id = weapon.weapon_id;
+    }
+    REQUIRE(unarmed_id != 0);
+    REQUIRE(dagger_id != 0);
+
+    dnd::Character character;
+    character.character_name = "Aria's Rogue";
+    character.class_id = 1;
+    character.race = 1;
+    character.alignment = 1;
+    character.player_id = player_id;
+    character.weapon_id = unarmed_id;
+    repo.add_character(character);
+
+    auto characters = repo.get_characters();
+    REQUIRE(characters.size() == 1);
+    REQUIRE(characters[0].weapon_id == unarmed_id);
+
+    dnd::Character updated = characters[0];
+    updated.weapon_id = dagger_id;
+    repo.update_character(updated);
+
+    auto reloaded = repo.get_characters();
+    REQUIRE(reloaded[0].weapon_id == dagger_id);
+}
+
 TEST_CASE("add_player and get_players round-trip", "[repository]") {
     dnd::Repository repo(":memory:");
 

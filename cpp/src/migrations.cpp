@@ -18,7 +18,7 @@ using detail::Statement;
 // for future schema changes -- never edit an existing one, since a
 // migration's sql is exactly what already ran on every database that has it
 // recorded in SchemaMigrations.
-constexpr std::array<Migration, 5> kMigrations = {{
+constexpr std::array<Migration, 6> kMigrations = {{
     {1, "initial schema: Players, Classes, Characters", R"sql(
         CREATE TABLE IF NOT EXISTS Players (
             PlayerID INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -103,6 +103,30 @@ constexpr std::array<Migration, 5> kMigrations = {{
             ('Wolf',     13, 11, 12, 15, 12, 3,  12, 6, 0.25),
             ('Zombie',   8,  22, 13, 6,  16, 3,  6, 5, 0.25),
             ('Orc',      13, 15, 16, 12, 16, 7,  11, 10, 0.5);
+    )sql"},
+    {6, "add Weapons table, seeded, and equip existing characters with it", R"sql(
+        CREATE TABLE IF NOT EXISTS Weapons (
+            WeaponID INTEGER PRIMARY KEY AUTOINCREMENT,
+            Name TEXT NOT NULL UNIQUE,
+            DamageDiceCount INTEGER NOT NULL,
+            DamageDiceSides INTEGER NOT NULL,
+            IsFinesse INTEGER NOT NULL DEFAULT 0,
+            IsRanged INTEGER NOT NULL DEFAULT 0
+        );
+
+        INSERT INTO Weapons (Name, DamageDiceCount, DamageDiceSides, IsFinesse, IsRanged) VALUES
+            ('Unarmed Strike', 1, 1, 0, 0),
+            ('Dagger',         1, 4, 1, 0),
+            ('Shortsword',     1, 6, 1, 0),
+            ('Rapier',         1, 8, 1, 0),
+            ('Longsword',      1, 8, 0, 0),
+            ('Greataxe',       1, 12, 0, 0),
+            ('Shortbow',       1, 6, 0, 1),
+            ('Longbow',        1, 8, 0, 1);
+
+        ALTER TABLE Characters ADD COLUMN WeaponID INTEGER;
+
+        UPDATE Characters SET WeaponID = (SELECT WeaponID FROM Weapons WHERE Name = 'Unarmed Strike');
     )sql"},
 }};
 

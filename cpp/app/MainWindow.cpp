@@ -123,6 +123,7 @@ void MainWindow::reloadLookupTables() {
     classes_ = repository_.get_classes();
     races_ = repository_.get_races();
     alignments_ = repository_.get_alignments();
+    weapons_ = repository_.get_weapons();
     characterModel_->setClasses(classes_);
     characterModel_->setRaces(races_);
     characterModel_->setAlignments(alignments_);
@@ -189,7 +190,7 @@ void MainWindow::onAddCharacterClicked() {
         return;
     }
 
-    CharacterEditorDialog dialog(classes_, races_, alignments_, /*existing=*/nullptr, this);
+    CharacterEditorDialog dialog(classes_, races_, alignments_, weapons_, /*existing=*/nullptr, this);
     if (dialog.exec() == QDialog::Accepted) {
         dnd::Character character = dialog.character();
         character.player_id = currentPlayerId();
@@ -206,7 +207,7 @@ void MainWindow::onEditCharacterClicked() {
     }
 
     const dnd::Character& existing = characterModel_->characterAt(index.row());
-    CharacterEditorDialog dialog(classes_, races_, alignments_, &existing, this);
+    CharacterEditorDialog dialog(classes_, races_, alignments_, weapons_, &existing, this);
     if (dialog.exec() == QDialog::Accepted) {
         dnd::Character updated = dialog.character();
         updated.character_id = existing.character_id;
@@ -237,7 +238,7 @@ void MainWindow::onCharacterActivated(const QModelIndex& index) {
     if (!index.isValid()) return;
 
     const dnd::Character& character = characterModel_->characterAt(index.row());
-    CharacterSheetDialog dialog(character, classes_, races_, alignments_, this);
+    CharacterSheetDialog dialog(character, classes_, races_, alignments_, weapons_, this);
     dialog.exec();
 }
 
