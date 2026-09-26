@@ -10,14 +10,18 @@
 #include <QMessageBox>
 #include <QModelIndex>
 #include <QPushButton>
+#include <QSpinBox>
 #include <QTableView>
 #include <QVBoxLayout>
 #include <QWidget>
+
+#include <algorithm>
 
 #include "CharacterEditorDialog.hpp"
 #include "CharacterSheetDialog.hpp"
 #include "CharacterTableModel.hpp"
 #include "DiceRollerWidget.hpp"
+#include "InitiativeTrackerDialog.hpp"
 
 MainWindow::MainWindow(dnd::Repository& repository, QWidget* parent)
     : QMainWindow(parent), repository_(repository) {
@@ -56,6 +60,20 @@ MainWindow::MainWindow(dnd::Repository& repository, QWidget* parent)
     characterRow->addWidget(deleteCharacterButton_);
     rootLayout->addLayout(characterRow);
 
+    auto* combatRow = new QHBoxLayout();
+    hpAmountSpin_ = new QSpinBox(central);
+    hpAmountSpin_->setRange(1, 999);
+    hpAmountSpin_->setValue(1);
+    damageButton_ = new QPushButton("Damage", central);
+    healButton_ = new QPushButton("Heal", central);
+    initiativeTrackerButton_ = new QPushButton("Initiative Tracker", central);
+    combatRow->addWidget(hpAmountSpin_);
+    combatRow->addWidget(damageButton_);
+    combatRow->addWidget(healButton_);
+    combatRow->addStretch(1);
+    combatRow->addWidget(initiativeTrackerButton_);
+    rootLayout->addLayout(combatRow);
+
     diceRoller_ = new DiceRollerWidget(central);
     rootLayout->addWidget(diceRoller_);
 
@@ -71,6 +89,9 @@ MainWindow::MainWindow(dnd::Repository& repository, QWidget* parent)
     connect(editCharacterButton_, &QPushButton::clicked, this, &MainWindow::onEditCharacterClicked);
     connect(deleteCharacterButton_, &QPushButton::clicked, this, &MainWindow::onDeleteCharacterClicked);
     connect(characterTable_, &QTableView::doubleClicked, this, &MainWindow::onCharacterActivated);
+    connect(damageButton_, &QPushButton::clicked, this, &MainWindow::onDamageClicked);
+    connect(healButton_, &QPushButton::clicked, this, &MainWindow::onHealClicked);
+    connect(initiativeTrackerButton_, &QPushButton::clicked, this, &MainWindow::onInitiativeTrackerClicked);
 
     reloadLookupTables();
     reloadPlayers();
@@ -213,5 +234,31 @@ void MainWindow::onCharacterActivated(const QModelIndex& index) {
 
     const dnd::Character& character = characterModel_->characterAt(index.row());
     CharacterSheetDialog dialog(character, classes_, races_, alignments_, this);
+    dialog.exec();
+}
+
+void MainWindow::adjustCurrentCharacterHp(int delta) {
+    QModelIndex index = characterTable_->currentIndex();
+    if (!index.isValid()) {
+        QMessageBox::information(this, "Adjust HP", "Select a character first.");
+        return;
+    }
+
+    dnd::Character character = characterModel_->characterAt(index.row());
+    character.current_hp = std::clamp(character.current_hp + delta, 0, character.max_hp);
+    repository_.update_character(character);
+    reloadCharactersForCurrentPlayer();
+}
+
+void MainWindow::onDamageClicked() {
+    adjustCurrentCharacterHp(-hpAmountSpin_->value());
+}
+
+void MainWindow::onHealClicked() {
+    adjustCurrentCharacterHp(hpAmountSpin_->value());
+}
+
+void MainWindow::onInitiativeTrackerClicked() {
+    InitiativeTrackerDialog dialog(repository_.get_characters(), this);
     dialog.exec();
 }

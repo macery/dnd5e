@@ -2,7 +2,7 @@
 
 namespace {
 
-constexpr int kColumnCount = 5;
+constexpr int kColumnCount = 6;
 
 QString nameFor(const std::vector<dnd::LookupEntry>& entries, int id) {
     for (const auto& entry : entries) {
@@ -63,6 +63,7 @@ QVariant CharacterTableModel::data(const QModelIndex& index, int role) const {
         case 2: return nameFor(races_, character.race);
         case 3: return nameFor(alignments_, character.alignment);
         case 4: return character.level;
+        case 5: return QString("%1/%2").arg(character.current_hp).arg(character.max_hp);
         default: return {};
     }
 }
@@ -76,6 +77,7 @@ QVariant CharacterTableModel::headerData(int section, Qt::Orientation orientatio
         case 2: return "Race";
         case 3: return "Alignment";
         case 4: return "Level";
+        case 5: return "HP";
         default: return {};
     }
 }

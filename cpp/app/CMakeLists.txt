@@ -9,5 +9,6 @@ add_executable(dnd_app
     DiceRollerWidget.cpp
     CharacterEditorDialog.cpp
     CharacterSheetDialog.cpp
+    InitiativeTrackerDialog.cpp
 )
 target_link_libraries(dnd_app PRIVATE dndcore Qt6::Widgets)

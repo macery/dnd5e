@@ -9,6 +9,7 @@
 class QComboBox;
 class QLineEdit;
 class QPushButton;
+class QSpinBox;
 class QTableView;
 class QModelIndex;
 class CharacterTableModel;
@@ -29,11 +30,15 @@ private slots:
     void onEditCharacterClicked();
     void onDeleteCharacterClicked();
     void onCharacterActivated(const QModelIndex& index);
+    void onDamageClicked();
+    void onHealClicked();
+    void onInitiativeTrackerClicked();
 
 private:
     void reloadPlayers();
     void reloadLookupTables();
     void reloadCharactersForCurrentPlayer();
+    void adjustCurrentCharacterHp(int delta);
     int currentPlayerId() const;
     QString currentPlayerName() const;
 
@@ -51,6 +56,10 @@ private:
     QPushButton* addCharacterButton_ = nullptr;
     QPushButton* editCharacterButton_ = nullptr;
     QPushButton* deleteCharacterButton_ = nullptr;
+    QSpinBox* hpAmountSpin_ = nullptr;
+    QPushButton* damageButton_ = nullptr;
+    QPushButton* healButton_ = nullptr;
+    QPushButton* initiativeTrackerButton_ = nullptr;
     CharacterTableModel* characterModel_ = nullptr;
     DiceRollerWidget* diceRoller_ = nullptr;
 };
