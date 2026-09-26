@@ -40,6 +40,14 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
     participantTable_->setHorizontalHeaderLabels({"Name", "Initiative", "AC", "HP", "Status"});
     participantTable_->horizontalHeader()->setStretchLastSection(true);
     participantTable_->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    participantTable_->horizontalHeaderItem(1)->setToolTip(
+        "Turn order for this encounter, highest first. Rolled once at the start of combat.");
+    participantTable_->horizontalHeaderItem(2)->setToolTip(
+        "Armor Class -- how hard this participant is to hit. An attack roll must meet or beat this to hit.");
+    participantTable_->horizontalHeaderItem(3)->setToolTip("Current hit points out of maximum.");
+    participantTable_->horizontalHeaderItem(4)->setToolTip(
+        "\"Dodging\" means attacks against this participant have disadvantage until the start of their "
+        "next turn.");
 
     auto* monsterRow = new QHBoxLayout();
     monsterTypeCombo_ = new QComboBox(this);
@@ -71,8 +79,14 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
     moveLabel_ = new QLabel("Movement: up to 30 ft. this turn (not tracked -- no map)", attackGroup);
     actionCombo_ = new QComboBox(attackGroup);
     actionCombo_->addItem("Attack");
+    actionCombo_->setItemData(0, "Make one weapon attack against a target.", Qt::ToolTipRole);
     actionCombo_->addItem("Dash");
+    actionCombo_->setItemData(
+        1, "Double your movement for the turn (informational only -- there's no map to move on).",
+        Qt::ToolTipRole);
     actionCombo_->addItem("Dodge");
+    actionCombo_->setItemData(2,
+        "Until the start of your next turn, attacks against you have disadvantage.", Qt::ToolTipRole);
     targetCombo_ = new QComboBox(attackGroup);
     attackBonusSpin_ = new QSpinBox(attackGroup);
     attackBonusSpin_->setRange(-10, 20);

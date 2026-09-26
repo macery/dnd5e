@@ -34,6 +34,11 @@ constexpr int kSkillCount = 18;
 const char* ability_name(Ability ability);
 const char* skill_name(Skill skill);
 
+// A short, beginner-facing explanation of what the ability/skill covers and
+// when you'd roll it -- used for in-app help (tooltips), not gameplay math.
+const char* ability_description(Ability ability);
+const char* skill_description(Skill skill);
+
 // The fixed 5e skill -> governing ability mapping (e.g. Stealth -> Dexterity).
 Ability ability_for_skill(Skill skill);
 

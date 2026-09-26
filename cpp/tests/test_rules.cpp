@@ -1,5 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 
+#include <cstring>
 #include <stdexcept>
 
 #include "dnd/rules.hpp"
@@ -100,4 +101,18 @@ TEST_CASE("weapon_attack_bonus adds the level's proficiency bonus", "[rules]") {
 
     dnd::Weapon longsword;
     REQUIRE(dnd::weapon_attack_bonus(character, longsword) == 6);
+}
+
+TEST_CASE("every Ability and Skill has a non-empty description", "[rules]") {
+    for (int i = 0; i < dnd::kAbilityCount; ++i) {
+        const char* description = dnd::ability_description(static_cast<dnd::Ability>(i));
+        REQUIRE(description != nullptr);
+        REQUIRE(std::strlen(description) > 0);
+    }
+
+    for (int i = 0; i < dnd::kSkillCount; ++i) {
+        const char* description = dnd::skill_description(static_cast<dnd::Skill>(i));
+        REQUIRE(description != nullptr);
+        REQUIRE(std::strlen(description) > 0);
+    }
 }

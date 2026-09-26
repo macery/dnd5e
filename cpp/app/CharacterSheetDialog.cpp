@@ -66,20 +66,39 @@ CharacterSheetDialog::CharacterSheetDialog(const dnd::Character& character,
     lastRollLabel_ = new QLabel("Last Roll: -", this);
     lastRollLabel_->setStyleSheet("font-weight: bold;");
 
+    // Adds a row and tooltips both the value label and the row's own name
+    // label (found via labelForField) with the same explanation.
+    auto addExplainedRow = [](QFormLayout* form, const QString& name, QWidget* value,
+                               const QString& explanation) {
+        form->addRow(name, value);
+        value->setToolTip(explanation);
+        if (QWidget* nameLabel = form->labelForField(value)) nameLabel->setToolTip(explanation);
+    };
+
     auto* summaryGroup = new QGroupBox("Summary", this);
     auto* summaryForm = new QFormLayout(summaryGroup);
     summaryForm->addRow("Class", new QLabel(nameFor(classes, character.class_id), summaryGroup));
     summaryForm->addRow("Race", new QLabel(nameFor(races, character.race), summaryGroup));
     summaryForm->addRow("Alignment", new QLabel(nameFor(alignments, character.alignment), summaryGroup));
-    summaryForm->addRow("Weapon", new QLabel(weaponSummaryFor(character, weapons), summaryGroup));
-    summaryForm->addRow("Hit Points",
-        new QLabel(QString("%1 / %2").arg(character.current_hp).arg(character.max_hp), summaryGroup));
-    summaryForm->addRow("Armor Class", new QLabel(QString::number(character.armor_class), summaryGroup));
-    summaryForm->addRow("Proficiency Bonus",
-        new QLabel(formatModifier(dnd::proficiency_bonus(character.level)), summaryGroup));
-    summaryForm->addRow("Initiative", new QLabel(formatModifier(dnd::initiative(character)), summaryGroup));
-    summaryForm->addRow("Passive Perception",
-        new QLabel(QString::number(dnd::passive_perception(character)), summaryGroup));
+    addExplainedRow(summaryForm, "Weapon", new QLabel(weaponSummaryFor(character, weapons), summaryGroup),
+                     "The weapon this character has equipped, its bonus to hit, and its damage roll.");
+    addExplainedRow(summaryForm, "Hit Points",
+        new QLabel(QString("%1 / %2").arg(character.current_hp).arg(character.max_hp), summaryGroup),
+        "How much damage this character can take before falling unconscious. Current / maximum.");
+    addExplainedRow(summaryForm, "Armor Class",
+        new QLabel(QString::number(character.armor_class), summaryGroup),
+        "How hard this character is to hit. An attack roll must meet or beat this number to hit.");
+    addExplainedRow(summaryForm, "Proficiency Bonus",
+        new QLabel(formatModifier(dnd::proficiency_bonus(character.level)), summaryGroup),
+        "A bonus added to attack rolls, saving throws, and skill checks this character is proficient in. "
+        "It grows as the character levels up.");
+    addExplainedRow(summaryForm, "Initiative",
+        new QLabel(formatModifier(dnd::initiative(character)), summaryGroup),
+        "Added to a d20 roll at the start of combat to determine turn order. Equal to the Dexterity modifier.");
+    addExplainedRow(summaryForm, "Passive Perception",
+        new QLabel(QString::number(dnd::passive_perception(character)), summaryGroup),
+        "A passive score (10 + Perception bonus) used instead of rolling, for noticing things without "
+        "actively searching.");
 
     auto* abilitiesGroup = new QGroupBox("Ability Scores", this);
     auto* abilitiesForm = new QFormLayout(abilitiesGroup);
@@ -87,9 +106,9 @@ CharacterSheetDialog::CharacterSheetDialog(const dnd::Character& character,
         auto ability = static_cast<dnd::Ability>(i);
         int score = dnd::ability_score(character, ability);
         int modifier = dnd::ability_modifier(score);
-        abilitiesForm->addRow(
-            dnd::ability_name(ability),
-            new QLabel(QString("%1 (%2)").arg(score).arg(formatModifier(modifier)), abilitiesGroup));
+        addExplainedRow(abilitiesForm, dnd::ability_name(ability),
+            new QLabel(QString("%1 (%2)").arg(score).arg(formatModifier(modifier)), abilitiesGroup),
+            dnd::ability_description(ability));
     }
 
     // Each saving throw / skill row is a bonus label plus a "Roll" button
@@ -117,9 +136,11 @@ CharacterSheetDialog::CharacterSheetDialog(const dnd::Character& character,
     for (int i = 0; i < dnd::kAbilityCount; ++i) {
         auto ability = static_cast<dnd::Ability>(i);
         QString name = QString(dnd::ability_name(ability)) + " Save";
-        savesForm->addRow(dnd::ability_name(ability),
+        QString explanation = QString("Rolled to resist or shrug off an effect. %1").arg(dnd::ability_description(ability));
+        addExplainedRow(savesForm, dnd::ability_name(ability),
             buildRollableRow(savesGroup, name, dnd::saving_throw_bonus(character, ability),
-                              dnd::has_save_proficiency(character, ability)));
+                              dnd::has_save_proficiency(character, ability)),
+            explanation);
     }
 
     auto* skillsGroup = new QGroupBox("Skills", this);
@@ -127,9 +148,10 @@ CharacterSheetDialog::CharacterSheetDialog(const dnd::Character& character,
     for (int i = 0; i < dnd::kSkillCount; ++i) {
         auto skill = static_cast<dnd::Skill>(i);
         QString name = dnd::skill_name(skill);
-        skillsForm->addRow(name,
+        addExplainedRow(skillsForm, name,
             buildRollableRow(skillsGroup, name, dnd::skill_bonus(character, skill),
-                              dnd::has_skill_proficiency(character, skill)));
+                              dnd::has_skill_proficiency(character, skill)),
+            dnd::skill_description(skill));
     }
 
     auto* skillsScroll = new QScrollArea(this);
