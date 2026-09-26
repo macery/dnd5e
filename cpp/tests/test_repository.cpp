@@ -156,3 +156,90 @@ TEST_CASE("adding a character without setting the new fields uses sane defaults"
     REQUIRE(loaded.skill_proficiencies == 0);
     REQUIRE(loaded.save_proficiencies == 0);
 }
+
+TEST_CASE("update_player renames an existing player", "[repository]") {
+    dnd::Repository repo(":memory:");
+    int player_id = repo.add_player("Aria");
+
+    dnd::Player player;
+    player.player_id = player_id;
+    player.player_name = "Aria the Bold";
+    repo.update_player(player);
+
+    auto players = repo.get_players();
+    REQUIRE(players.size() == 1);
+    REQUIRE(players[0].player_name == "Aria the Bold");
+}
+
+TEST_CASE("update_character changes fields in place", "[repository]") {
+    dnd::Repository repo(":memory:");
+    int player_id = repo.add_player("Aria");
+
+    dnd::Character character;
+    character.character_name = "Aria's Fighter";
+    character.class_id = 1;
+    character.race = 1;
+    character.alignment = 1;
+    character.player_id = player_id;
+    character.level = 1;
+    character.strength = 10;
+    int character_id = repo.add_character(character);
+
+    auto loaded = repo.get_characters();
+    REQUIRE(loaded.size() == 1);
+    dnd::Character updated = loaded[0];
+    updated.level = 4;
+    updated.strength = 16;
+    repo.update_character(updated);
+
+    auto reloaded = repo.get_characters();
+    REQUIRE(reloaded.size() == 1);
+    REQUIRE(reloaded[0].character_id == character_id);
+    REQUIRE(reloaded[0].level == 4);
+    REQUIRE(reloaded[0].strength == 16);
+}
+
+TEST_CASE("delete_character removes only that character", "[repository]") {
+    dnd::Repository repo(":memory:");
+    int player_id = repo.add_player("Aria");
+
+    dnd::Character a;
+    a.character_name = "Keep Me";
+    a.class_id = 1;
+    a.race = 1;
+    a.alignment = 1;
+    a.player_id = player_id;
+    repo.add_character(a);
+
+    dnd::Character b;
+    b.character_name = "Delete Me";
+    b.class_id = 1;
+    b.race = 1;
+    b.alignment = 1;
+    b.player_id = player_id;
+    int delete_id = repo.add_character(b);
+
+    repo.delete_character(delete_id);
+
+    auto remaining = repo.get_characters();
+    REQUIRE(remaining.size() == 1);
+    REQUIRE(remaining[0].character_name == "Keep Me");
+}
+
+TEST_CASE("delete_player cascades to that player's characters", "[repository]") {
+    dnd::Repository repo(":memory:");
+    int player_id = repo.add_player("Aria");
+
+    dnd::Character character;
+    character.character_name = "Aria's Fighter";
+    character.class_id = 1;
+    character.race = 1;
+    character.alignment = 1;
+    character.player_id = player_id;
+    repo.add_character(character);
+
+    repo.delete_player(player_id);
+
+    REQUIRE(repo.get_players().empty());
+    REQUIRE(repo.get_characters().empty());
+}

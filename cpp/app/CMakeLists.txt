@@ -7,7 +7,7 @@ add_executable(dnd_app
     MainWindow.cpp
     CharacterTableModel.cpp
     DiceRollerWidget.cpp
-    AddCharacterDialog.cpp
+    CharacterEditorDialog.cpp
     CharacterSheetDialog.cpp
 )
 target_link_libraries(dnd_app PRIVATE dndcore Qt6::Widgets)

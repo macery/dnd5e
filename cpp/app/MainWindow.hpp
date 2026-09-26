@@ -23,7 +23,11 @@ public:
 private slots:
     void onPlayerSelected(int index);
     void onAddPlayerClicked();
+    void onEditPlayerClicked();
+    void onDeletePlayerClicked();
     void onAddCharacterClicked();
+    void onEditCharacterClicked();
+    void onDeleteCharacterClicked();
     void onCharacterActivated(const QModelIndex& index);
 
 private:
@@ -31,6 +35,7 @@ private:
     void reloadLookupTables();
     void reloadCharactersForCurrentPlayer();
     int currentPlayerId() const;
+    QString currentPlayerName() const;
 
     dnd::Repository& repository_;
     std::vector<dnd::LookupEntry> classes_;
@@ -40,8 +45,12 @@ private:
     QComboBox* playerCombo_ = nullptr;
     QLineEdit* newPlayerName_ = nullptr;
     QPushButton* addPlayerButton_ = nullptr;
+    QPushButton* editPlayerButton_ = nullptr;
+    QPushButton* deletePlayerButton_ = nullptr;
     QTableView* characterTable_ = nullptr;
     QPushButton* addCharacterButton_ = nullptr;
+    QPushButton* editCharacterButton_ = nullptr;
+    QPushButton* deleteCharacterButton_ = nullptr;
     CharacterTableModel* characterModel_ = nullptr;
     DiceRollerWidget* diceRoller_ = nullptr;
 };

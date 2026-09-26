@@ -13,14 +13,20 @@ class QSpinBox;
 class QCheckBox;
 class QComboBox;
 
-class AddCharacterDialog : public QDialog {
+// Used for both adding a new character and editing an existing one. Pass
+// `existing` to pre-populate every field from it and title the dialog
+// "Edit Character"; pass nullptr for "Add Character" with defaults. Either
+// way, character() just reflects the current field values -- the caller
+// decides whether to add_character or update_character, and re-attaches
+// character_id/player_id, which this dialog never touches.
+class CharacterEditorDialog : public QDialog {
     Q_OBJECT
 
 public:
-    AddCharacterDialog(const std::vector<dnd::LookupEntry>& classes, const std::vector<dnd::LookupEntry>& races,
-                        const std::vector<dnd::LookupEntry>& alignments, QWidget* parent = nullptr);
+    CharacterEditorDialog(const std::vector<dnd::LookupEntry>& classes, const std::vector<dnd::LookupEntry>& races,
+                          const std::vector<dnd::LookupEntry>& alignments, const dnd::Character* existing = nullptr,
+                          QWidget* parent = nullptr);
 
-    // player_id is left at 0; the caller (MainWindow) fills it in.
     dnd::Character character() const;
 
 private:
@@ -28,6 +34,7 @@ private:
                             const std::vector<dnd::LookupEntry>& alignments);
     QWidget* buildAbilityScoresTab();
     QWidget* buildProficienciesTab();
+    void populateFrom(const dnd::Character& existing);
 
     QLineEdit* nameEdit_ = nullptr;
     QComboBox* classCombo_ = nullptr;

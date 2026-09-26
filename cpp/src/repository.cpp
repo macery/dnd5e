@@ -171,4 +171,63 @@ int Repository::add_character(const Character& character) {
     return static_cast<int>(sqlite3_last_insert_rowid(db_));
 }
 
+void Repository::update_player(const Player& player) {
+    Statement stmt(db_, "UPDATE Players SET PlayerName = ? WHERE PlayerID = ?;");
+    bind_text(stmt, 1, player.player_name);
+    sqlite3_bind_int(stmt.get(), 2, player.player_id);
+    detail::run_and_expect_done(stmt, "update player");
+}
+
+void Repository::delete_player(int player_id) {
+    sqlite3_exec(db_, "BEGIN;", nullptr, nullptr, nullptr);
+    try {
+        {
+            Statement stmt(db_, "DELETE FROM Characters WHERE PlayerID = ?;");
+            sqlite3_bind_int(stmt.get(), 1, player_id);
+            detail::run_and_expect_done(stmt, "delete player's characters");
+        }
+        {
+            Statement stmt(db_, "DELETE FROM Players WHERE PlayerID = ?;");
+            sqlite3_bind_int(stmt.get(), 1, player_id);
+            detail::run_and_expect_done(stmt, "delete player");
+        }
+        sqlite3_exec(db_, "COMMIT;", nullptr, nullptr, nullptr);
+    } catch (...) {
+        sqlite3_exec(db_, "ROLLBACK;", nullptr, nullptr, nullptr);
+        throw;
+    }
+}
+
+void Repository::update_character(const Character& character) {
+    Statement stmt(db_,
+        "UPDATE Characters SET CharacterName = ?, Class = ?, Race = ?, Alignment = ?, Level = ?, "
+        "Strength = ?, Dexterity = ?, Constitution = ?, Intelligence = ?, Wisdom = ?, Charisma = ?, "
+        "CurrentHP = ?, MaxHP = ?, ArmorClass = ?, SkillProficiencies = ?, SaveProficiencies = ? "
+        "WHERE CharacterId = ?;");
+    bind_text(stmt, 1, character.character_name);
+    sqlite3_bind_int(stmt.get(), 2, character.class_id);
+    sqlite3_bind_int(stmt.get(), 3, character.race);
+    sqlite3_bind_int(stmt.get(), 4, character.alignment);
+    sqlite3_bind_int(stmt.get(), 5, character.level);
+    sqlite3_bind_int(stmt.get(), 6, character.strength);
+    sqlite3_bind_int(stmt.get(), 7, character.dexterity);
+    sqlite3_bind_int(stmt.get(), 8, character.constitution);
+    sqlite3_bind_int(stmt.get(), 9, character.intelligence);
+    sqlite3_bind_int(stmt.get(), 10, character.wisdom);
+    sqlite3_bind_int(stmt.get(), 11, character.charisma);
+    sqlite3_bind_int(stmt.get(), 12, character.current_hp);
+    sqlite3_bind_int(stmt.get(), 13, character.max_hp);
+    sqlite3_bind_int(stmt.get(), 14, character.armor_class);
+    sqlite3_bind_int(stmt.get(), 15, static_cast<int>(character.skill_proficiencies));
+    sqlite3_bind_int(stmt.get(), 16, static_cast<int>(character.save_proficiencies));
+    sqlite3_bind_int(stmt.get(), 17, character.character_id);
+    detail::run_and_expect_done(stmt, "update character");
+}
+
+void Repository::delete_character(int character_id) {
+    Statement stmt(db_, "DELETE FROM Characters WHERE CharacterId = ?;");
+    sqlite3_bind_int(stmt.get(), 1, character_id);
+    detail::run_and_expect_done(stmt, "delete character");
+}
+
 }  // namespace dnd

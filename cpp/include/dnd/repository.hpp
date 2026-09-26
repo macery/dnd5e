@@ -34,6 +34,15 @@ public:
     int add_player(const std::string& player_name);
     int add_character(const Character& character);
 
+    void update_player(const Player& player);
+    // Deletes the player and, to satisfy the PlayerID foreign key (enforced
+    // via PRAGMA foreign_keys), all of that player's characters too, in one
+    // transaction.
+    void delete_player(int player_id);
+
+    void update_character(const Character& character);
+    void delete_character(int character_id);
+
 private:
     sqlite3* db_ = nullptr;
 };

@@ -1,4 +1,4 @@
-#include "AddCharacterDialog.hpp"
+#include "CharacterEditorDialog.hpp"
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -10,11 +10,20 @@
 #include <QTabWidget>
 #include <QVBoxLayout>
 
-AddCharacterDialog::AddCharacterDialog(const std::vector<dnd::LookupEntry>& classes,
-                                        const std::vector<dnd::LookupEntry>& races,
-                                        const std::vector<dnd::LookupEntry>& alignments, QWidget* parent)
+namespace {
+void populateLookupCombo(QComboBox* combo, const std::vector<dnd::LookupEntry>& entries) {
+    for (const auto& entry : entries) {
+        combo->addItem(QString::fromStdString(entry.name), entry.id);
+    }
+}
+}  // namespace
+
+CharacterEditorDialog::CharacterEditorDialog(const std::vector<dnd::LookupEntry>& classes,
+                                              const std::vector<dnd::LookupEntry>& races,
+                                              const std::vector<dnd::LookupEntry>& alignments,
+                                              const dnd::Character* existing, QWidget* parent)
     : QDialog(parent) {
-    setWindowTitle("Add Character");
+    setWindowTitle(existing ? "Edit Character" : "Add Character");
 
     auto* tabs = new QTabWidget(this);
     tabs->addTab(buildBasicsTab(classes, races, alignments), "Basics");
@@ -29,19 +38,13 @@ AddCharacterDialog::AddCharacterDialog(const std::vector<dnd::LookupEntry>& clas
     layout->addWidget(tabs);
     layout->addWidget(buttons);
     resize(420, 360);
+
+    if (existing) populateFrom(*existing);
 }
 
-namespace {
-void populateLookupCombo(QComboBox* combo, const std::vector<dnd::LookupEntry>& entries) {
-    for (const auto& entry : entries) {
-        combo->addItem(QString::fromStdString(entry.name), entry.id);
-    }
-}
-}  // namespace
-
-QWidget* AddCharacterDialog::buildBasicsTab(const std::vector<dnd::LookupEntry>& classes,
-                                             const std::vector<dnd::LookupEntry>& races,
-                                             const std::vector<dnd::LookupEntry>& alignments) {
+QWidget* CharacterEditorDialog::buildBasicsTab(const std::vector<dnd::LookupEntry>& classes,
+                                                const std::vector<dnd::LookupEntry>& races,
+                                                const std::vector<dnd::LookupEntry>& alignments) {
     auto* page = new QWidget(this);
     auto* form = new QFormLayout(page);
 
@@ -74,7 +77,7 @@ QWidget* AddCharacterDialog::buildBasicsTab(const std::vector<dnd::LookupEntry>&
     return page;
 }
 
-QWidget* AddCharacterDialog::buildAbilityScoresTab() {
+QWidget* CharacterEditorDialog::buildAbilityScoresTab() {
     auto* page = new QWidget(this);
     auto* form = new QFormLayout(page);
 
@@ -89,7 +92,7 @@ QWidget* AddCharacterDialog::buildAbilityScoresTab() {
     return page;
 }
 
-QWidget* AddCharacterDialog::buildProficienciesTab() {
+QWidget* CharacterEditorDialog::buildProficienciesTab() {
     auto* page = new QWidget(this);
     auto* layout = new QVBoxLayout(page);
 
@@ -123,7 +126,32 @@ QWidget* AddCharacterDialog::buildProficienciesTab() {
     return page;
 }
 
-dnd::Character AddCharacterDialog::character() const {
+void CharacterEditorDialog::populateFrom(const dnd::Character& existing) {
+    nameEdit_->setText(QString::fromStdString(existing.character_name));
+    classCombo_->setCurrentIndex(classCombo_->findData(existing.class_id));
+    raceCombo_->setCurrentIndex(raceCombo_->findData(existing.race));
+    alignmentCombo_->setCurrentIndex(alignmentCombo_->findData(existing.alignment));
+    levelSpin_->setValue(existing.level);
+    currentHpSpin_->setValue(existing.current_hp);
+    maxHpSpin_->setValue(existing.max_hp);
+    armorClassSpin_->setValue(existing.armor_class);
+
+    abilityScoreSpins_[static_cast<int>(dnd::Ability::Strength)]->setValue(existing.strength);
+    abilityScoreSpins_[static_cast<int>(dnd::Ability::Dexterity)]->setValue(existing.dexterity);
+    abilityScoreSpins_[static_cast<int>(dnd::Ability::Constitution)]->setValue(existing.constitution);
+    abilityScoreSpins_[static_cast<int>(dnd::Ability::Intelligence)]->setValue(existing.intelligence);
+    abilityScoreSpins_[static_cast<int>(dnd::Ability::Wisdom)]->setValue(existing.wisdom);
+    abilityScoreSpins_[static_cast<int>(dnd::Ability::Charisma)]->setValue(existing.charisma);
+
+    for (int i = 0; i < dnd::kAbilityCount; ++i) {
+        saveProficiencyBoxes_[i]->setChecked((existing.save_proficiencies >> i) & 1u);
+    }
+    for (int i = 0; i < dnd::kSkillCount; ++i) {
+        skillProficiencyBoxes_[i]->setChecked((existing.skill_proficiencies >> i) & 1u);
+    }
+}
+
+dnd::Character CharacterEditorDialog::character() const {
     dnd::Character character;
     character.character_name = nameEdit_->text().trimmed().toStdString();
     character.class_id = classCombo_->currentData().toInt();
