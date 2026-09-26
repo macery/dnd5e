@@ -1,5 +1,6 @@
 #include "CharacterSheetDialog.hpp"
 
+#include <QComboBox>
 #include <QFormLayout>
 #include <QGroupBox>
 #include <QHBoxLayout>
@@ -37,6 +38,14 @@ CharacterSheetDialog::CharacterSheetDialog(const dnd::Character& character,
                                    .arg(QString::fromStdString(character.character_name))
                                    .arg(character.level),
                                this);
+
+    auto* rollModeRow = new QHBoxLayout();
+    rollModeRow->addWidget(new QLabel("Roll Mode:", this));
+    rollModeCombo_ = new QComboBox(this);
+    rollModeCombo_->addItem("Normal", static_cast<int>(dnd::RollMode::Normal));
+    rollModeCombo_->addItem("Advantage", static_cast<int>(dnd::RollMode::Advantage));
+    rollModeCombo_->addItem("Disadvantage", static_cast<int>(dnd::RollMode::Disadvantage));
+    rollModeRow->addWidget(rollModeCombo_, 1);
 
     lastRollLabel_ = new QLabel("Last Roll: -", this);
     lastRollLabel_->setStyleSheet("font-weight: bold;");
@@ -112,6 +121,7 @@ CharacterSheetDialog::CharacterSheetDialog(const dnd::Character& character,
 
     auto* layout = new QVBoxLayout(this);
     layout->addWidget(header);
+    layout->addLayout(rollModeRow);
     layout->addWidget(lastRollLabel_);
     layout->addWidget(summaryGroup);
     layout->addWidget(abilitiesGroup);
@@ -122,8 +132,18 @@ CharacterSheetDialog::CharacterSheetDialog(const dnd::Character& character,
 }
 
 void CharacterSheetDialog::rollAndShow(const QString& label, int bonus) {
-    int roll = dice_.roll(20, 1).front();
-    int total = roll + bonus;
+    auto mode = static_cast<dnd::RollMode>(rollModeCombo_->currentData().toInt());
+    dnd::D20Roll d20 = dice_.roll_d20(mode);
+    int total = d20.result + bonus;
+
+    QString rollsText;
+    if (d20.rolls.size() == 1) {
+        rollsText = QString("d20(%1)").arg(d20.rolls[0]);
+    } else {
+        const char* modeTag = mode == dnd::RollMode::Advantage ? "adv" : "dis";
+        rollsText = QString("d20(%1, %2 %3)").arg(d20.rolls[0]).arg(d20.rolls[1]).arg(modeTag);
+    }
+
     lastRollLabel_->setText(
-        QString("Last Roll: %1 — d20(%2) %3 = %4").arg(label).arg(roll).arg(formatModifier(bonus)).arg(total));
+        QString("Last Roll: %1 — %2 %3 = %4").arg(label, rollsText, formatModifier(bonus)).arg(total));
 }

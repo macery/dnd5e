@@ -1,5 +1,6 @@
 #include "dnd/dice.hpp"
 
+#include <algorithm>
 #include <numeric>
 #include <stdexcept>
 
@@ -15,6 +16,17 @@ std::vector<int> Dice::roll(int sides, int count) const {
         results.push_back(random_source_.roll_die(sides));
     }
     return results;
+}
+
+D20Roll Dice::roll_d20(RollMode mode) const {
+    if (mode == RollMode::Normal) {
+        auto rolls = roll(20, 1);
+        return D20Roll{rolls, rolls.front()};
+    }
+
+    auto rolls = roll(20, 2);
+    int result = (mode == RollMode::Advantage) ? std::max(rolls[0], rolls[1]) : std::min(rolls[0], rolls[1]);
+    return D20Roll{rolls, result};
 }
 
 int Dice::sum(const std::vector<int>& rolls) {

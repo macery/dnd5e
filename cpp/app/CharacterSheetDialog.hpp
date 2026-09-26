@@ -8,11 +8,13 @@
 #include "dnd/lookup_entry.hpp"
 
 class QLabel;
+class QComboBox;
 
 // Read-only view of a character's computed stats: ability modifiers,
 // saving throws, skills, HP/AC, proficiency bonus, passive perception, and
 // initiative -- all derived via dnd::rules, not stored directly. Each
-// saving throw and skill can also be rolled directly (d20 + its bonus).
+// saving throw and skill can also be rolled directly (d20 + its bonus),
+// under whichever roll mode (Normal/Advantage/Disadvantage) is selected.
 class CharacterSheetDialog : public QDialog {
     Q_OBJECT
 
@@ -27,4 +29,5 @@ private:
     dnd::SystemRandomSource randomSource_;
     dnd::Dice dice_;
     QLabel* lastRollLabel_ = nullptr;
+    QComboBox* rollModeCombo_ = nullptr;
 };
