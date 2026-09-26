@@ -83,3 +83,14 @@ TEST_CASE("resolve_attack: an ordinary roll hits or misses by the threshold", "[
         REQUIRE(result.damage_dice.empty());
     }
 }
+
+TEST_CASE("resolve_attack respects the roll mode (e.g. attacking a Dodging target)", "[combat]") {
+    SequenceRandomSource sequence({15, 5});
+    dnd::Dice dice(sequence);
+
+    // Disadvantage should use the lower of the two dice (5), not the higher (15).
+    auto result = dnd::resolve_attack(dice, /*attack_bonus=*/0, /*target_ac=*/10, 1, 6, 0,
+                                       dnd::RollMode::Disadvantage);
+
+    REQUIRE(result.attack_roll == 5);
+}

@@ -5,9 +5,9 @@
 namespace dnd {
 
 AttackResult resolve_attack(const Dice& dice, int attack_bonus, int target_ac, int damage_dice_count,
-                             int damage_dice_sides, int damage_bonus) {
+                             int damage_dice_sides, int damage_bonus, RollMode mode) {
     AttackResult result;
-    result.attack_roll = dice.roll(20, 1).front();
+    result.attack_roll = dice.roll_d20(mode).result;
 
     if (result.attack_roll == 1) {
         result.hit = false;

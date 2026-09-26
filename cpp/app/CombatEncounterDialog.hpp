@@ -11,6 +11,7 @@
 #include "dnd/weapon.hpp"
 
 class QComboBox;
+class QFormLayout;
 class QLabel;
 class QPlainTextEdit;
 class QPushButton;
@@ -35,7 +36,8 @@ private slots:
     void onAddMonsterClicked();
     void onRollInitiativeClicked();
     void onNextTurnClicked();
-    void onRollAttackClicked();
+    void onActionChanged(int index);
+    void onTakeActionClicked();
 
 private:
     struct Participant {
@@ -51,12 +53,16 @@ private:
         int damage_dice_count = 1;
         int damage_dice_sides = 4;
         int damage_bonus = 0;
+        // Set by the Dodge action; attacks against this participant are at
+        // disadvantage until the start of their own next turn.
+        bool is_dodging = false;
     };
 
     void addCharacterParticipants(const std::vector<dnd::Weapon>& weapons);
     void refreshParticipantTable();
     void refreshTargetCombo();
     void updateAttackFieldsForCurrentTurn();
+    void updateActionControlsVisibility();
     // Auto-resolves every monster turn from the current position onward,
     // stopping at the next living character's turn or when the encounter
     // ends, whichever comes first.
@@ -89,12 +95,16 @@ private:
     QPushButton* nextTurnButton_ = nullptr;
 
     QLabel* currentTurnLabel_ = nullptr;
+    QLabel* moveLabel_ = nullptr;
+    QLabel* bonusActionLabel_ = nullptr;
+    QComboBox* actionCombo_ = nullptr;
     QComboBox* targetCombo_ = nullptr;
     QSpinBox* attackBonusSpin_ = nullptr;
     QSpinBox* damageDiceCountSpin_ = nullptr;
     QSpinBox* damageDiceSidesSpin_ = nullptr;
     QSpinBox* damageBonusSpin_ = nullptr;
-    QPushButton* rollAttackButton_ = nullptr;
+    QPushButton* takeActionButton_ = nullptr;
+    QFormLayout* attackFormLayout_ = nullptr;
 
     QPlainTextEdit* logView_ = nullptr;
 };

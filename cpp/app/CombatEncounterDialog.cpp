@@ -64,8 +64,15 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
     turnRow->addStretch(1);
     turnRow->addWidget(currentTurnLabel_);
 
-    auto* attackGroup = new QGroupBox("Attack", this);
+    auto* attackGroup = new QGroupBox("Your Turn", this);
     auto* attackForm = new QFormLayout(attackGroup);
+    attackFormLayout_ = attackForm;
+
+    moveLabel_ = new QLabel("Movement: up to 30 ft. this turn (not tracked -- no map)", attackGroup);
+    actionCombo_ = new QComboBox(attackGroup);
+    actionCombo_->addItem("Attack");
+    actionCombo_->addItem("Dash");
+    actionCombo_->addItem("Dodge");
     targetCombo_ = new QComboBox(attackGroup);
     attackBonusSpin_ = new QSpinBox(attackGroup);
     attackBonusSpin_->setRange(-10, 20);
@@ -75,15 +82,19 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
     damageDiceSidesSpin_->setRange(1, 100);
     damageBonusSpin_ = new QSpinBox(attackGroup);
     damageBonusSpin_->setRange(-10, 20);
-    rollAttackButton_ = new QPushButton("Roll Attack", attackGroup);
-    rollAttackButton_->setEnabled(false);
+    bonusActionLabel_ = new QLabel("Bonus Action: none available", attackGroup);
+    takeActionButton_ = new QPushButton("Roll Attack", attackGroup);
+    takeActionButton_->setEnabled(false);
 
+    attackForm->addRow(moveLabel_);
+    attackForm->addRow("Action", actionCombo_);
     attackForm->addRow("Target", targetCombo_);
     attackForm->addRow("Attack Bonus", attackBonusSpin_);
     attackForm->addRow("Damage Dice Count", damageDiceCountSpin_);
     attackForm->addRow("Damage Dice Sides", damageDiceSidesSpin_);
     attackForm->addRow("Damage Bonus", damageBonusSpin_);
-    attackForm->addRow(rollAttackButton_);
+    attackForm->addRow(bonusActionLabel_);
+    attackForm->addRow(takeActionButton_);
 
     logView_ = new QPlainTextEdit(this);
     logView_->setReadOnly(true);
@@ -101,8 +112,11 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
     connect(addMonsterButton_, &QPushButton::clicked, this, &CombatEncounterDialog::onAddMonsterClicked);
     connect(rollInitiativeButton_, &QPushButton::clicked, this, &CombatEncounterDialog::onRollInitiativeClicked);
     connect(nextTurnButton_, &QPushButton::clicked, this, &CombatEncounterDialog::onNextTurnClicked);
-    connect(rollAttackButton_, &QPushButton::clicked, this, &CombatEncounterDialog::onRollAttackClicked);
+    connect(actionCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            &CombatEncounterDialog::onActionChanged);
+    connect(takeActionButton_, &QPushButton::clicked, this, &CombatEncounterDialog::onTakeActionClicked);
 
+    updateActionControlsVisibility();
     addCharacterParticipants(weapons);
     refreshParticipantTable();
 }
@@ -204,6 +218,10 @@ void CombatEncounterDialog::advanceToActionableTurn() {
             continue;
         }
 
+        // Dodge protects only until the start of this participant's own next
+        // turn, which is exactly now.
+        current.is_dodging = false;
+
         if (!current.is_character) {
             resolveMonsterTurn(current);
             refreshParticipantTable();
@@ -215,16 +233,18 @@ void CombatEncounterDialog::advanceToActionableTurn() {
 
         // A living character's turn -- stop here and let the user act.
         currentTurnLabel_->setText("Current Turn: " + current.name);
+        actionCombo_->setCurrentIndex(0);
+        updateActionControlsVisibility();
         refreshTargetCombo();
         updateAttackFieldsForCurrentTurn();
-        rollAttackButton_->setEnabled(true);
+        takeActionButton_->setEnabled(true);
         return;
     }
 
     if (encounterOver_) {
         currentTurnLabel_->setText("Current Turn: -");
         targetCombo_->clear();
-        rollAttackButton_->setEnabled(false);
+        takeActionButton_->setEnabled(false);
     }
 }
 
@@ -239,8 +259,9 @@ void CombatEncounterDialog::resolveMonsterTurn(Participant& monster) {
     int pick = dice_.roll(static_cast<int>(living_indices.size()), 1).front() - 1;
     Participant& target = participants_[static_cast<size_t>(living_indices[static_cast<size_t>(pick)])];
 
+    auto mode = target.is_dodging ? dnd::RollMode::Disadvantage : dnd::RollMode::Normal;
     auto result = dnd::resolve_attack(dice_, monster.attack_bonus, target.armor_class, monster.damage_dice_count,
-                                       monster.damage_dice_sides, monster.damage_bonus);
+                                       monster.damage_dice_sides, monster.damage_bonus, mode);
     QString outcome = applyDamage(target, result);
 
     log(QString("%1 attacks %2: d20(%3) %4 -> %5. %2 is now %6/%7 HP.")
@@ -251,29 +272,71 @@ void CombatEncounterDialog::resolveMonsterTurn(Participant& monster) {
             .arg(target.max_hp));
 }
 
-void CombatEncounterDialog::onRollAttackClicked() {
-    if (currentTurnIndex_ < 0 || turnOrder_.empty() || targetCombo_->count() == 0) return;
+void CombatEncounterDialog::onActionChanged(int /*index*/) {
+    updateActionControlsVisibility();
+}
 
-    Participant& attacker = participants_[static_cast<size_t>(turnOrder_[static_cast<size_t>(currentTurnIndex_)])];
-    int target_index = targetCombo_->currentData().toInt();
-    Participant& target = participants_[static_cast<size_t>(target_index)];
+void CombatEncounterDialog::updateActionControlsVisibility() {
+    bool is_attack = actionCombo_->currentIndex() == 0;
+    targetCombo_->setVisible(is_attack);
+    attackBonusSpin_->setVisible(is_attack);
+    damageDiceCountSpin_->setVisible(is_attack);
+    damageDiceSidesSpin_->setVisible(is_attack);
+    damageBonusSpin_->setVisible(is_attack);
+    for (auto* field : {static_cast<QWidget*>(targetCombo_), static_cast<QWidget*>(attackBonusSpin_),
+                         static_cast<QWidget*>(damageDiceCountSpin_), static_cast<QWidget*>(damageDiceSidesSpin_),
+                         static_cast<QWidget*>(damageBonusSpin_)}) {
+        if (auto* row_label = attackFormLayout_->labelForField(field)) row_label->setVisible(is_attack);
+    }
 
-    auto result = dnd::resolve_attack(dice_, attackBonusSpin_->value(), target.armor_class,
-                                       damageDiceCountSpin_->value(), damageDiceSidesSpin_->value(),
-                                       damageBonusSpin_->value());
-    QString outcome = applyDamage(target, result);
+    switch (actionCombo_->currentIndex()) {
+        case 1: takeActionButton_->setText("Take Dash Action"); break;
+        case 2: takeActionButton_->setText("Take Dodge Action"); break;
+        default: takeActionButton_->setText("Roll Attack"); break;
+    }
+}
 
-    log(QString("%1 attacks %2: d20(%3) %4 -> %5. %2 is now %6/%7 HP.")
-            .arg(attacker.name, target.name)
-            .arg(result.attack_roll)
-            .arg(formatModifier(attackBonusSpin_->value()), outcome)
-            .arg(target.current_hp)
-            .arg(target.max_hp));
+void CombatEncounterDialog::onTakeActionClicked() {
+    if (currentTurnIndex_ < 0 || turnOrder_.empty()) return;
+    Participant& actor = participants_[static_cast<size_t>(turnOrder_[static_cast<size_t>(currentTurnIndex_)])];
+
+    switch (actionCombo_->currentIndex()) {
+        case 1:  // Dash
+            log(QString("%1 takes the Dash action.").arg(actor.name));
+            break;
+
+        case 2:  // Dodge
+            actor.is_dodging = true;
+            log(QString("%1 takes the Dodge action (attacks against them have disadvantage until their next turn).")
+                    .arg(actor.name));
+            break;
+
+        default: {  // Attack
+            if (targetCombo_->count() == 0) return;
+
+            int target_index = targetCombo_->currentData().toInt();
+            Participant& target = participants_[static_cast<size_t>(target_index)];
+
+            auto mode = target.is_dodging ? dnd::RollMode::Disadvantage : dnd::RollMode::Normal;
+            auto result = dnd::resolve_attack(dice_, attackBonusSpin_->value(), target.armor_class,
+                                               damageDiceCountSpin_->value(), damageDiceSidesSpin_->value(),
+                                               damageBonusSpin_->value(), mode);
+            QString outcome = applyDamage(target, result);
+
+            log(QString("%1 attacks %2: d20(%3) %4 -> %5. %2 is now %6/%7 HP.")
+                    .arg(actor.name, target.name)
+                    .arg(result.attack_roll)
+                    .arg(formatModifier(attackBonusSpin_->value()), outcome)
+                    .arg(target.current_hp)
+                    .arg(target.max_hp));
+            break;
+        }
+    }
 
     refreshParticipantTable();
     checkForVictoryOrDefeat();
     // One action per turn -- Next Turn re-enables this for whoever acts next.
-    if (!encounterOver_) rollAttackButton_->setEnabled(false);
+    if (!encounterOver_) takeActionButton_->setEnabled(false);
 }
 
 QString CombatEncounterDialog::applyDamage(Participant& target, const dnd::AttackResult& result) {
@@ -328,7 +391,7 @@ void CombatEncounterDialog::checkForVictoryOrDefeat() {
         log("--- Victory! All enemies defeated. ---");
     }
 
-    if (encounterOver_) rollAttackButton_->setEnabled(false);
+    if (encounterOver_) takeActionButton_->setEnabled(false);
 }
 
 void CombatEncounterDialog::refreshParticipantTable() {
@@ -346,7 +409,9 @@ void CombatEncounterDialog::refreshParticipantTable() {
         participantTable_->setItem(row, 2, new QTableWidgetItem(QString::number(participant.armor_class)));
         participantTable_->setItem(
             row, 3, new QTableWidgetItem(QString("%1/%2").arg(participant.current_hp).arg(participant.max_hp)));
-        participantTable_->setItem(row, 4, new QTableWidgetItem(participant.current_hp > 0 ? "Up" : "Down"));
+        QString status = participant.current_hp > 0 ? "Up" : "Down";
+        if (participant.current_hp > 0 && participant.is_dodging) status += " (Dodging)";
+        participantTable_->setItem(row, 4, new QTableWidgetItem(status));
     }
 }
 

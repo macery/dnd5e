@@ -18,8 +18,9 @@ struct AttackResult {
 // damage dice count (not the flat bonus), per the 5e critical hit rule.
 // Otherwise a hit if attack_roll + attack_bonus >= target_ac. Fully generic
 // (no Character/Monster dependency) so it works for either side of a fight
-// and is directly testable.
+// and is directly testable. `mode` lets a caller apply advantage/disadvantage
+// (e.g. attacking a Dodging target) without changing anything else.
 AttackResult resolve_attack(const Dice& dice, int attack_bonus, int target_ac, int damage_dice_count,
-                             int damage_dice_sides, int damage_bonus);
+                             int damage_dice_sides, int damage_bonus, RollMode mode = RollMode::Normal);
 
 }  // namespace dnd
