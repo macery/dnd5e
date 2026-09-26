@@ -55,7 +55,7 @@ MainWindow::MainWindow(dnd::Repository& repository, QWidget* parent)
     connect(addCharacterButton_, &QPushButton::clicked, this, &MainWindow::onAddCharacterClicked);
     connect(characterTable_, &QTableView::doubleClicked, this, &MainWindow::onCharacterActivated);
 
-    reloadClasses();
+    reloadLookupTables();
     reloadPlayers();
 }
 
@@ -73,9 +73,13 @@ void MainWindow::reloadPlayers() {
     reloadCharactersForCurrentPlayer();
 }
 
-void MainWindow::reloadClasses() {
+void MainWindow::reloadLookupTables() {
     classes_ = repository_.get_classes();
+    races_ = repository_.get_races();
+    alignments_ = repository_.get_alignments();
     characterModel_->setClasses(classes_);
+    characterModel_->setRaces(races_);
+    characterModel_->setAlignments(alignments_);
 }
 
 void MainWindow::reloadCharactersForCurrentPlayer() {
@@ -105,7 +109,7 @@ void MainWindow::onAddCharacterClicked() {
         return;
     }
 
-    AddCharacterDialog dialog(classes_, this);
+    AddCharacterDialog dialog(classes_, races_, alignments_, this);
     if (dialog.exec() == QDialog::Accepted) {
         dnd::Character character = dialog.character();
         character.player_id = currentPlayerId();
@@ -118,6 +122,6 @@ void MainWindow::onCharacterActivated(const QModelIndex& index) {
     if (!index.isValid()) return;
 
     const dnd::Character& character = characterModel_->characterAt(index.row());
-    CharacterSheetDialog dialog(character, classes_, this);
+    CharacterSheetDialog dialog(character, classes_, races_, alignments_, this);
     dialog.exec();
 }

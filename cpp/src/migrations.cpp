@@ -18,7 +18,7 @@ using detail::Statement;
 // for future schema changes -- never edit an existing one, since a
 // migration's sql is exactly what already ran on every database that has it
 // recorded in SchemaMigrations.
-constexpr std::array<Migration, 3> kMigrations = {{
+constexpr std::array<Migration, 4> kMigrations = {{
     {1, "initial schema: Players, Classes, Characters", R"sql(
         CREATE TABLE IF NOT EXISTS Players (
             PlayerID INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -59,6 +59,26 @@ constexpr std::array<Migration, 3> kMigrations = {{
             ('Barbarian'), ('Bard'), ('Cleric'), ('Druid'),
             ('Fighter'), ('Monk'), ('Paladin'), ('Ranger'),
             ('Rogue'), ('Sorcerer'), ('Warlock'), ('Wizard');
+    )sql"},
+    {4, "add Races and Alignments lookup tables, seeded", R"sql(
+        CREATE TABLE IF NOT EXISTS Races (
+            RaceID INTEGER PRIMARY KEY AUTOINCREMENT,
+            RaceName TEXT NOT NULL UNIQUE
+        );
+
+        CREATE TABLE IF NOT EXISTS Alignments (
+            AlignmentID INTEGER PRIMARY KEY AUTOINCREMENT,
+            AlignmentName TEXT NOT NULL UNIQUE
+        );
+
+        INSERT INTO Races (RaceName) VALUES
+            ('Dragonborn'), ('Dwarf'), ('Elf'), ('Gnome'), ('Half-Elf'),
+            ('Half-Orc'), ('Halfling'), ('Human'), ('Tiefling');
+
+        INSERT INTO Alignments (AlignmentName) VALUES
+            ('Lawful Good'), ('Neutral Good'), ('Chaotic Good'),
+            ('Lawful Neutral'), ('True Neutral'), ('Chaotic Neutral'),
+            ('Lawful Evil'), ('Neutral Evil'), ('Chaotic Evil');
     )sql"},
 }};
 

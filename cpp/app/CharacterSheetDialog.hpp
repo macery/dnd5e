@@ -4,8 +4,8 @@
 #include <vector>
 
 #include "dnd/character.hpp"
-#include "dnd/character_class.hpp"
 #include "dnd/dice.hpp"
+#include "dnd/lookup_entry.hpp"
 
 class QLabel;
 
@@ -17,7 +17,8 @@ class CharacterSheetDialog : public QDialog {
     Q_OBJECT
 
 public:
-    CharacterSheetDialog(const dnd::Character& character, const std::vector<dnd::CharacterClass>& classes,
+    CharacterSheetDialog(const dnd::Character& character, const std::vector<dnd::LookupEntry>& classes,
+                          const std::vector<dnd::LookupEntry>& races, const std::vector<dnd::LookupEntry>& alignments,
                           QWidget* parent = nullptr);
 
 private:

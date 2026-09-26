@@ -5,7 +5,7 @@
 #include <vector>
 
 #include "dnd/character.hpp"
-#include "dnd/character_class.hpp"
+#include "dnd/lookup_entry.hpp"
 #include "dnd/rules.hpp"
 
 class QLineEdit;
@@ -17,20 +17,22 @@ class AddCharacterDialog : public QDialog {
     Q_OBJECT
 
 public:
-    explicit AddCharacterDialog(const std::vector<dnd::CharacterClass>& classes, QWidget* parent = nullptr);
+    AddCharacterDialog(const std::vector<dnd::LookupEntry>& classes, const std::vector<dnd::LookupEntry>& races,
+                        const std::vector<dnd::LookupEntry>& alignments, QWidget* parent = nullptr);
 
     // player_id is left at 0; the caller (MainWindow) fills it in.
     dnd::Character character() const;
 
 private:
-    QWidget* buildBasicsTab(const std::vector<dnd::CharacterClass>& classes);
+    QWidget* buildBasicsTab(const std::vector<dnd::LookupEntry>& classes, const std::vector<dnd::LookupEntry>& races,
+                            const std::vector<dnd::LookupEntry>& alignments);
     QWidget* buildAbilityScoresTab();
     QWidget* buildProficienciesTab();
 
     QLineEdit* nameEdit_ = nullptr;
     QComboBox* classCombo_ = nullptr;
-    QSpinBox* raceSpin_ = nullptr;
-    QSpinBox* alignmentSpin_ = nullptr;
+    QComboBox* raceCombo_ = nullptr;
+    QComboBox* alignmentCombo_ = nullptr;
     QSpinBox* levelSpin_ = nullptr;
     QSpinBox* currentHpSpin_ = nullptr;
     QSpinBox* maxHpSpin_ = nullptr;

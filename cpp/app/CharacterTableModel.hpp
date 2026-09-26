@@ -4,7 +4,7 @@
 #include <vector>
 
 #include "dnd/character.hpp"
-#include "dnd/character_class.hpp"
+#include "dnd/lookup_entry.hpp"
 
 class CharacterTableModel : public QAbstractTableModel {
     Q_OBJECT
@@ -13,7 +13,9 @@ public:
     explicit CharacterTableModel(QObject* parent = nullptr);
 
     void setCharacters(std::vector<dnd::Character> characters);
-    void setClasses(std::vector<dnd::CharacterClass> classes);
+    void setClasses(std::vector<dnd::LookupEntry> classes);
+    void setRaces(std::vector<dnd::LookupEntry> races);
+    void setAlignments(std::vector<dnd::LookupEntry> alignments);
     const dnd::Character& characterAt(int row) const;
 
     int rowCount(const QModelIndex& parent = QModelIndex()) const override;
@@ -23,5 +25,7 @@ public:
 
 private:
     std::vector<dnd::Character> characters_;
-    std::vector<dnd::CharacterClass> classes_;
+    std::vector<dnd::LookupEntry> classes_;
+    std::vector<dnd::LookupEntry> races_;
+    std::vector<dnd::LookupEntry> alignments_;
 };

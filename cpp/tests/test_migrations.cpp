@@ -48,14 +48,18 @@ TEST_CASE("run_migrations brings a fresh database to the latest schema", "[migra
 
     dnd::run_migrations(db.handle);
 
-    REQUIRE(dnd::current_schema_version(db.handle) == 3);
+    REQUIRE(dnd::current_schema_version(db.handle) == 4);
     REQUIRE(table_exists(db.handle, "Players"));
     REQUIRE(table_exists(db.handle, "Classes"));
     REQUIRE(table_exists(db.handle, "Characters"));
+    REQUIRE(table_exists(db.handle, "Races"));
+    REQUIRE(table_exists(db.handle, "Alignments"));
     // Column added by migration 2 -- this would fail to prepare if it were missing.
     REQUIRE(row_count(db.handle, "SELECT COUNT(*) FROM Characters WHERE Strength = 10;") == 0);
-    // Seeded by migration 3.
+    // Seeded by migrations 3 and 4.
     REQUIRE(row_count(db.handle, "SELECT COUNT(*) FROM Classes;") == 12);
+    REQUIRE(row_count(db.handle, "SELECT COUNT(*) FROM Races;") == 9);
+    REQUIRE(row_count(db.handle, "SELECT COUNT(*) FROM Alignments;") == 9);
 }
 
 TEST_CASE("run_migrations is a no-op the second time", "[migrations]") {
@@ -64,8 +68,9 @@ TEST_CASE("run_migrations is a no-op the second time", "[migrations]") {
     dnd::run_migrations(db.handle);
     dnd::run_migrations(db.handle);
 
-    REQUIRE(row_count(db.handle, "SELECT COUNT(*) FROM SchemaMigrations;") == 3);
+    REQUIRE(row_count(db.handle, "SELECT COUNT(*) FROM SchemaMigrations;") == 4);
     REQUIRE(row_count(db.handle, "SELECT COUNT(*) FROM Classes;") == 12);
+    REQUIRE(row_count(db.handle, "SELECT COUNT(*) FROM Races;") == 9);
 }
 
 TEST_CASE("Repository upgrades a real pre-migration database in place", "[migrations]") {

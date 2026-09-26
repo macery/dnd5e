@@ -17,17 +17,19 @@ QString formatModifier(int value) {
     return value >= 0 ? QString("+%1").arg(value) : QString::number(value);
 }
 
-QString classNameFor(const std::vector<dnd::CharacterClass>& classes, int classId) {
-    for (const auto& character_class : classes) {
-        if (character_class.class_id == classId) return QString::fromStdString(character_class.class_name);
+QString nameFor(const std::vector<dnd::LookupEntry>& entries, int id) {
+    for (const auto& entry : entries) {
+        if (entry.id == id) return QString::fromStdString(entry.name);
     }
-    return QString("Class #%1").arg(classId);
+    return QString("#%1").arg(id);
 }
 
 }  // namespace
 
 CharacterSheetDialog::CharacterSheetDialog(const dnd::Character& character,
-                                            const std::vector<dnd::CharacterClass>& classes, QWidget* parent)
+                                            const std::vector<dnd::LookupEntry>& classes,
+                                            const std::vector<dnd::LookupEntry>& races,
+                                            const std::vector<dnd::LookupEntry>& alignments, QWidget* parent)
     : QDialog(parent), dice_(randomSource_) {
     setWindowTitle(QString::fromStdString(character.character_name));
 
@@ -41,7 +43,9 @@ CharacterSheetDialog::CharacterSheetDialog(const dnd::Character& character,
 
     auto* summaryGroup = new QGroupBox("Summary", this);
     auto* summaryForm = new QFormLayout(summaryGroup);
-    summaryForm->addRow("Class", new QLabel(classNameFor(classes, character.class_id), summaryGroup));
+    summaryForm->addRow("Class", new QLabel(nameFor(classes, character.class_id), summaryGroup));
+    summaryForm->addRow("Race", new QLabel(nameFor(races, character.race), summaryGroup));
+    summaryForm->addRow("Alignment", new QLabel(nameFor(alignments, character.alignment), summaryGroup));
     summaryForm->addRow("Hit Points",
         new QLabel(QString("%1 / %2").arg(character.current_hp).arg(character.max_hp), summaryGroup));
     summaryForm->addRow("Armor Class", new QLabel(QString::number(character.armor_class), summaryGroup));

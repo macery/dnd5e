@@ -44,6 +44,22 @@ Character read_character_row(sqlite3_stmt* stmt) {
     return character;
 }
 
+std::vector<LookupEntry> get_lookup_entries(sqlite3* db, const char* table, const char* id_column,
+                                             const char* name_column) {
+    std::string sql =
+        std::string("SELECT ") + id_column + ", " + name_column + " FROM " + table + " ORDER BY " + name_column + ";";
+    Statement stmt(db, sql.c_str());
+    std::vector<LookupEntry> entries;
+    while (sqlite3_step(stmt.get()) == SQLITE_ROW) {
+        LookupEntry entry;
+        entry.id = sqlite3_column_int(stmt.get(), 0);
+        const unsigned char* name = sqlite3_column_text(stmt.get(), 1);
+        entry.name = name ? reinterpret_cast<const char*>(name) : "";
+        entries.push_back(std::move(entry));
+    }
+    return entries;
+}
+
 std::vector<Character> run_character_query(sqlite3* db, const std::string& sql, int bind_player_id = -1) {
     Statement stmt(db, sql.c_str());
     if (bind_player_id >= 0) {
@@ -98,17 +114,16 @@ std::vector<Player> Repository::get_players() const {
     return players;
 }
 
-std::vector<CharacterClass> Repository::get_classes() const {
-    Statement stmt(db_, "SELECT ClassID, ClassName FROM Classes ORDER BY ClassName;");
-    std::vector<CharacterClass> classes;
-    while (sqlite3_step(stmt.get()) == SQLITE_ROW) {
-        CharacterClass character_class;
-        character_class.class_id = sqlite3_column_int(stmt.get(), 0);
-        const unsigned char* name = sqlite3_column_text(stmt.get(), 1);
-        character_class.class_name = name ? reinterpret_cast<const char*>(name) : "";
-        classes.push_back(std::move(character_class));
-    }
-    return classes;
+std::vector<LookupEntry> Repository::get_classes() const {
+    return get_lookup_entries(db_, "Classes", "ClassID", "ClassName");
+}
+
+std::vector<LookupEntry> Repository::get_races() const {
+    return get_lookup_entries(db_, "Races", "RaceID", "RaceName");
+}
+
+std::vector<LookupEntry> Repository::get_alignments() const {
+    return get_lookup_entries(db_, "Alignments", "AlignmentID", "AlignmentName");
 }
 
 std::vector<Character> Repository::get_characters() const {

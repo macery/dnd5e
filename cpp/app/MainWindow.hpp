@@ -3,7 +3,7 @@
 #include <QMainWindow>
 #include <vector>
 
-#include "dnd/character_class.hpp"
+#include "dnd/lookup_entry.hpp"
 #include "dnd/repository.hpp"
 
 class QComboBox;
@@ -28,12 +28,14 @@ private slots:
 
 private:
     void reloadPlayers();
-    void reloadClasses();
+    void reloadLookupTables();
     void reloadCharactersForCurrentPlayer();
     int currentPlayerId() const;
 
     dnd::Repository& repository_;
-    std::vector<dnd::CharacterClass> classes_;
+    std::vector<dnd::LookupEntry> classes_;
+    std::vector<dnd::LookupEntry> races_;
+    std::vector<dnd::LookupEntry> alignments_;
 
     QComboBox* playerCombo_ = nullptr;
     QLineEdit* newPlayerName_ = nullptr;

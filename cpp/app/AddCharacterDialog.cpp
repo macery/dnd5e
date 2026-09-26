@@ -10,12 +10,14 @@
 #include <QTabWidget>
 #include <QVBoxLayout>
 
-AddCharacterDialog::AddCharacterDialog(const std::vector<dnd::CharacterClass>& classes, QWidget* parent)
+AddCharacterDialog::AddCharacterDialog(const std::vector<dnd::LookupEntry>& classes,
+                                        const std::vector<dnd::LookupEntry>& races,
+                                        const std::vector<dnd::LookupEntry>& alignments, QWidget* parent)
     : QDialog(parent) {
     setWindowTitle("Add Character");
 
     auto* tabs = new QTabWidget(this);
-    tabs->addTab(buildBasicsTab(classes), "Basics");
+    tabs->addTab(buildBasicsTab(classes, races, alignments), "Basics");
     tabs->addTab(buildAbilityScoresTab(), "Ability Scores");
     tabs->addTab(buildProficienciesTab(), "Proficiencies");
 
@@ -29,17 +31,27 @@ AddCharacterDialog::AddCharacterDialog(const std::vector<dnd::CharacterClass>& c
     resize(420, 360);
 }
 
-QWidget* AddCharacterDialog::buildBasicsTab(const std::vector<dnd::CharacterClass>& classes) {
+namespace {
+void populateLookupCombo(QComboBox* combo, const std::vector<dnd::LookupEntry>& entries) {
+    for (const auto& entry : entries) {
+        combo->addItem(QString::fromStdString(entry.name), entry.id);
+    }
+}
+}  // namespace
+
+QWidget* AddCharacterDialog::buildBasicsTab(const std::vector<dnd::LookupEntry>& classes,
+                                             const std::vector<dnd::LookupEntry>& races,
+                                             const std::vector<dnd::LookupEntry>& alignments) {
     auto* page = new QWidget(this);
     auto* form = new QFormLayout(page);
 
     nameEdit_ = new QLineEdit(page);
     classCombo_ = new QComboBox(page);
-    for (const auto& character_class : classes) {
-        classCombo_->addItem(QString::fromStdString(character_class.class_name), character_class.class_id);
-    }
-    raceSpin_ = new QSpinBox(page);
-    alignmentSpin_ = new QSpinBox(page);
+    populateLookupCombo(classCombo_, classes);
+    raceCombo_ = new QComboBox(page);
+    populateLookupCombo(raceCombo_, races);
+    alignmentCombo_ = new QComboBox(page);
+    populateLookupCombo(alignmentCombo_, alignments);
     levelSpin_ = new QSpinBox(page);
     levelSpin_->setRange(1, 20);
     levelSpin_->setValue(1);
@@ -53,8 +65,8 @@ QWidget* AddCharacterDialog::buildBasicsTab(const std::vector<dnd::CharacterClas
 
     form->addRow("Name", nameEdit_);
     form->addRow("Class", classCombo_);
-    form->addRow("Race (id)", raceSpin_);
-    form->addRow("Alignment (id)", alignmentSpin_);
+    form->addRow("Race", raceCombo_);
+    form->addRow("Alignment", alignmentCombo_);
     form->addRow("Level", levelSpin_);
     form->addRow("Current HP", currentHpSpin_);
     form->addRow("Max HP", maxHpSpin_);
@@ -115,8 +127,8 @@ dnd::Character AddCharacterDialog::character() const {
     dnd::Character character;
     character.character_name = nameEdit_->text().trimmed().toStdString();
     character.class_id = classCombo_->currentData().toInt();
-    character.race = raceSpin_->value();
-    character.alignment = alignmentSpin_->value();
+    character.race = raceCombo_->currentData().toInt();
+    character.alignment = alignmentCombo_->currentData().toInt();
     character.level = levelSpin_->value();
     character.current_hp = currentHpSpin_->value();
     character.max_hp = maxHpSpin_->value();

@@ -9,17 +9,37 @@ TEST_CASE("Repository bootstraps its schema on an empty database", "[repository]
     REQUIRE(repo.get_characters().empty());
 }
 
+namespace {
+bool contains_name(const std::vector<dnd::LookupEntry>& entries, const std::string& name) {
+    for (const auto& entry : entries) {
+        if (entry.name == name) return true;
+    }
+    return false;
+}
+}  // namespace
+
 TEST_CASE("get_classes returns the seeded 5e classes", "[repository]") {
     dnd::Repository repo(":memory:");
 
     auto classes = repo.get_classes();
     REQUIRE(classes.size() == 12);
+    REQUIRE(contains_name(classes, "Fighter"));
+}
 
-    bool found_fighter = false;
-    for (const auto& character_class : classes) {
-        if (character_class.class_name == "Fighter") found_fighter = true;
-    }
-    REQUIRE(found_fighter);
+TEST_CASE("get_races returns the seeded 5e races", "[repository]") {
+    dnd::Repository repo(":memory:");
+
+    auto races = repo.get_races();
+    REQUIRE(races.size() == 9);
+    REQUIRE(contains_name(races, "Human"));
+}
+
+TEST_CASE("get_alignments returns the seeded 5e alignments", "[repository]") {
+    dnd::Repository repo(":memory:");
+
+    auto alignments = repo.get_alignments();
+    REQUIRE(alignments.size() == 9);
+    REQUIRE(contains_name(alignments, "True Neutral"));
 }
 
 TEST_CASE("add_player and get_players round-trip", "[repository]") {

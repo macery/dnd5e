@@ -4,7 +4,7 @@
 #include <vector>
 
 #include "dnd/character.hpp"
-#include "dnd/character_class.hpp"
+#include "dnd/lookup_entry.hpp"
 #include "dnd/player.hpp"
 
 struct sqlite3;
@@ -25,7 +25,9 @@ public:
     Repository& operator=(Repository&& other) noexcept;
 
     std::vector<Player> get_players() const;
-    std::vector<CharacterClass> get_classes() const;
+    std::vector<LookupEntry> get_classes() const;
+    std::vector<LookupEntry> get_races() const;
+    std::vector<LookupEntry> get_alignments() const;
     std::vector<Character> get_characters() const;
     std::vector<Character> get_characters_by_player(int player_id) const;
 
