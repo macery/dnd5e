@@ -50,16 +50,22 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
     monsterCountSpin_->setRange(1, 20);
     monsterCountSpin_->setValue(1);
     addMonsterButton_ = new QPushButton("Add Monster", this);
-    rollInitiativeButton_ = new QPushButton("Roll Initiative", this);
     monsterRow->addWidget(monsterTypeCombo_, 1);
     monsterRow->addWidget(monsterCountSpin_);
     monsterRow->addWidget(addMonsterButton_);
-    monsterRow->addStretch(1);
-    monsterRow->addWidget(rollInitiativeButton_);
+
+    auto* turnRow = new QHBoxLayout();
+    rollInitiativeButton_ = new QPushButton("Roll Initiative", this);
+    nextTurnButton_ = new QPushButton("Next Turn", this);
+    currentTurnLabel_ = new QLabel("Current Turn: -", this);
+    currentTurnLabel_->setStyleSheet("font-weight: bold;");
+    turnRow->addWidget(rollInitiativeButton_);
+    turnRow->addWidget(nextTurnButton_);
+    turnRow->addStretch(1);
+    turnRow->addWidget(currentTurnLabel_);
 
     auto* attackGroup = new QGroupBox("Attack", this);
     auto* attackForm = new QFormLayout(attackGroup);
-    attackerCombo_ = new QComboBox(attackGroup);
     targetCombo_ = new QComboBox(attackGroup);
     attackBonusSpin_ = new QSpinBox(attackGroup);
     attackBonusSpin_->setRange(-10, 20);
@@ -70,8 +76,8 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
     damageBonusSpin_ = new QSpinBox(attackGroup);
     damageBonusSpin_->setRange(-10, 20);
     rollAttackButton_ = new QPushButton("Roll Attack", attackGroup);
+    rollAttackButton_->setEnabled(false);
 
-    attackForm->addRow("Attacker", attackerCombo_);
     attackForm->addRow("Target", targetCombo_);
     attackForm->addRow("Attack Bonus", attackBonusSpin_);
     attackForm->addRow("Damage Dice Count", damageDiceCountSpin_);
@@ -86,20 +92,19 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
     layout->addWidget(statusLabel_);
     layout->addWidget(participantTable_, 1);
     layout->addLayout(monsterRow);
+    layout->addLayout(turnRow);
     layout->addWidget(attackGroup);
     layout->addWidget(new QLabel("Log", this));
     layout->addWidget(logView_, 1);
-    resize(520, 640);
+    resize(520, 700);
 
     connect(addMonsterButton_, &QPushButton::clicked, this, &CombatEncounterDialog::onAddMonsterClicked);
     connect(rollInitiativeButton_, &QPushButton::clicked, this, &CombatEncounterDialog::onRollInitiativeClicked);
-    connect(attackerCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-            &CombatEncounterDialog::onAttackerChanged);
+    connect(nextTurnButton_, &QPushButton::clicked, this, &CombatEncounterDialog::onNextTurnClicked);
     connect(rollAttackButton_, &QPushButton::clicked, this, &CombatEncounterDialog::onRollAttackClicked);
 
     addCharacterParticipants(weapons);
     refreshParticipantTable();
-    refreshAttackCombos();
 }
 
 void CombatEncounterDialog::addCharacterParticipants(const std::vector<dnd::Weapon>& weapons) {
@@ -155,8 +160,10 @@ void CombatEncounterDialog::onAddMonsterClicked() {
         participants_.push_back(participant);
     }
 
+    log(QString("%1 x%2 joins the encounter.").arg(QString::fromStdString(monster->name)).arg(count) +
+        (turnOrder_.empty() ? "" : " (click Roll Initiative to include them in turn order)"));
+
     refreshParticipantTable();
-    refreshAttackCombos();
 }
 
 void CombatEncounterDialog::onRollInitiativeClicked() {
@@ -164,32 +171,112 @@ void CombatEncounterDialog::onRollInitiativeClicked() {
         int d20 = dice_.roll(20, 1).front();
         participant.initiative = d20 + participant.dex_modifier;
     }
+
+    turnOrder_.resize(participants_.size());
+    for (size_t i = 0; i < turnOrder_.size(); ++i) turnOrder_[i] = static_cast<int>(i);
+    std::sort(turnOrder_.begin(), turnOrder_.end(), [this](int a, int b) {
+        return participants_[static_cast<size_t>(a)].initiative > participants_[static_cast<size_t>(b)].initiative;
+    });
+    currentTurnIndex_ = turnOrder_.empty() ? -1 : 0;
+
+    log("--- Initiative rolled. Combat begins! ---");
     refreshParticipantTable();
+    advanceToActionableTurn();
 }
 
-void CombatEncounterDialog::onAttackerChanged(int index) {
-    if (index < 0 || index >= attackerCombo_->count()) return;
+void CombatEncounterDialog::onNextTurnClicked() {
+    if (turnOrder_.empty() || encounterOver_ || currentTurnIndex_ < 0) return;
+    currentTurnIndex_ = (currentTurnIndex_ + 1) % static_cast<int>(turnOrder_.size());
+    advanceToActionableTurn();
+}
 
-    int participant_index = attackerCombo_->itemData(index).toInt();
-    const auto& attacker = participants_[static_cast<size_t>(participant_index)];
-    attackBonusSpin_->setValue(attacker.attack_bonus);
-    damageDiceCountSpin_->setValue(attacker.damage_dice_count);
-    damageDiceSidesSpin_->setValue(attacker.damage_dice_sides);
-    damageBonusSpin_->setValue(attacker.damage_bonus);
+void CombatEncounterDialog::advanceToActionableTurn() {
+    if (turnOrder_.empty()) return;
+
+    // Bounded to one full lap: checkForVictoryOrDefeat() should always catch
+    // "everyone on one side is down" before this could loop forever, but the
+    // bound is a cheap defensive guard against that invariant ever slipping.
+    for (size_t guard = 0; guard < turnOrder_.size() && !encounterOver_; ++guard) {
+        Participant& current = participants_[static_cast<size_t>(turnOrder_[static_cast<size_t>(currentTurnIndex_)])];
+
+        if (current.current_hp <= 0) {
+            currentTurnIndex_ = (currentTurnIndex_ + 1) % static_cast<int>(turnOrder_.size());
+            continue;
+        }
+
+        if (!current.is_character) {
+            resolveMonsterTurn(current);
+            refreshParticipantTable();
+            checkForVictoryOrDefeat();
+            if (encounterOver_) break;
+            currentTurnIndex_ = (currentTurnIndex_ + 1) % static_cast<int>(turnOrder_.size());
+            continue;
+        }
+
+        // A living character's turn -- stop here and let the user act.
+        currentTurnLabel_->setText("Current Turn: " + current.name);
+        refreshTargetCombo();
+        updateAttackFieldsForCurrentTurn();
+        rollAttackButton_->setEnabled(true);
+        return;
+    }
+
+    if (encounterOver_) {
+        currentTurnLabel_->setText("Current Turn: -");
+        targetCombo_->clear();
+        rollAttackButton_->setEnabled(false);
+    }
+}
+
+void CombatEncounterDialog::resolveMonsterTurn(Participant& monster) {
+    std::vector<int> living_indices;
+    for (int i = 0; i < static_cast<int>(participants_.size()); ++i) {
+        const auto& candidate = participants_[static_cast<size_t>(i)];
+        if (candidate.is_character && candidate.current_hp > 0) living_indices.push_back(i);
+    }
+    if (living_indices.empty()) return;  // shouldn't happen; win/loss would already have caught it
+
+    int pick = dice_.roll(static_cast<int>(living_indices.size()), 1).front() - 1;
+    Participant& target = participants_[static_cast<size_t>(living_indices[static_cast<size_t>(pick)])];
+
+    auto result = dnd::resolve_attack(dice_, monster.attack_bonus, target.armor_class, monster.damage_dice_count,
+                                       monster.damage_dice_sides, monster.damage_bonus);
+    QString outcome = applyDamage(target, result);
+
+    log(QString("%1 attacks %2: d20(%3) %4 -> %5. %2 is now %6/%7 HP.")
+            .arg(monster.name, target.name)
+            .arg(result.attack_roll)
+            .arg(formatModifier(monster.attack_bonus), outcome)
+            .arg(target.current_hp)
+            .arg(target.max_hp));
 }
 
 void CombatEncounterDialog::onRollAttackClicked() {
-    if (attackerCombo_->count() == 0 || targetCombo_->count() == 0) return;
+    if (currentTurnIndex_ < 0 || turnOrder_.empty() || targetCombo_->count() == 0) return;
 
-    int attacker_index = attackerCombo_->currentData().toInt();
+    Participant& attacker = participants_[static_cast<size_t>(turnOrder_[static_cast<size_t>(currentTurnIndex_)])];
     int target_index = targetCombo_->currentData().toInt();
-    const Participant& attacker = participants_[static_cast<size_t>(attacker_index)];
     Participant& target = participants_[static_cast<size_t>(target_index)];
 
     auto result = dnd::resolve_attack(dice_, attackBonusSpin_->value(), target.armor_class,
                                        damageDiceCountSpin_->value(), damageDiceSidesSpin_->value(),
                                        damageBonusSpin_->value());
+    QString outcome = applyDamage(target, result);
 
+    log(QString("%1 attacks %2: d20(%3) %4 -> %5. %2 is now %6/%7 HP.")
+            .arg(attacker.name, target.name)
+            .arg(result.attack_roll)
+            .arg(formatModifier(attackBonusSpin_->value()), outcome)
+            .arg(target.current_hp)
+            .arg(target.max_hp));
+
+    refreshParticipantTable();
+    checkForVictoryOrDefeat();
+    // One action per turn -- Next Turn re-enables this for whoever acts next.
+    if (!encounterOver_) rollAttackButton_->setEnabled(false);
+}
+
+QString CombatEncounterDialog::applyDamage(Participant& target, const dnd::AttackResult& result) {
     QString outcome;
     if (!result.hit) {
         outcome = "miss";
@@ -198,13 +285,6 @@ void CombatEncounterDialog::onRollAttackClicked() {
         outcome = result.critical ? QString("CRITICAL HIT for %1").arg(result.damage_total)
                                    : QString("hit for %1").arg(result.damage_total);
     }
-
-    log(QString("%1 attacks %2: d20(%3) %4 -> %5. %2 is now %6/%7 HP.")
-            .arg(attacker.name, target.name)
-            .arg(result.attack_roll)
-            .arg(formatModifier(attackBonusSpin_->value()), outcome)
-            .arg(target.current_hp)
-            .arg(target.max_hp));
 
     if (target.is_character) {
         for (auto& character : characters_) {
@@ -216,8 +296,7 @@ void CombatEncounterDialog::onRollAttackClicked() {
         }
     }
 
-    refreshParticipantTable();
-    checkForVictoryOrDefeat();
+    return outcome;
 }
 
 void CombatEncounterDialog::checkForVictoryOrDefeat() {
@@ -271,16 +350,27 @@ void CombatEncounterDialog::refreshParticipantTable() {
     }
 }
 
-void CombatEncounterDialog::refreshAttackCombos() {
-    attackerCombo_->blockSignals(true);
-    attackerCombo_->clear();
+void CombatEncounterDialog::refreshTargetCombo() {
     targetCombo_->clear();
+    if (currentTurnIndex_ < 0 || turnOrder_.empty()) return;
+
+    const auto& current = participants_[static_cast<size_t>(turnOrder_[static_cast<size_t>(currentTurnIndex_)])];
     for (int i = 0; i < static_cast<int>(participants_.size()); ++i) {
-        attackerCombo_->addItem(participants_[static_cast<size_t>(i)].name, i);
-        targetCombo_->addItem(participants_[static_cast<size_t>(i)].name, i);
+        const auto& candidate = participants_[static_cast<size_t>(i)];
+        if (candidate.current_hp <= 0) continue;
+        if (candidate.is_character == current.is_character) continue;  // only the opposing side
+        targetCombo_->addItem(candidate.name, i);
     }
-    attackerCombo_->blockSignals(false);
-    if (!participants_.empty()) onAttackerChanged(0);
+}
+
+void CombatEncounterDialog::updateAttackFieldsForCurrentTurn() {
+    if (currentTurnIndex_ < 0 || turnOrder_.empty()) return;
+
+    const auto& current = participants_[static_cast<size_t>(turnOrder_[static_cast<size_t>(currentTurnIndex_)])];
+    attackBonusSpin_->setValue(current.attack_bonus);
+    damageDiceCountSpin_->setValue(current.damage_dice_count);
+    damageDiceSidesSpin_->setValue(current.damage_dice_sides);
+    damageBonusSpin_->setValue(current.damage_bonus);
 }
 
 void CombatEncounterDialog::log(const QString& line) {
