@@ -10,5 +10,6 @@ add_executable(dnd_app
     CharacterEditorDialog.cpp
     CharacterSheetDialog.cpp
     InitiativeTrackerDialog.cpp
+    MonsterListDialog.cpp
 )
 target_link_libraries(dnd_app PRIVATE dndcore Qt6::Widgets)

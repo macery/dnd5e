@@ -22,6 +22,7 @@
 #include "CharacterTableModel.hpp"
 #include "DiceRollerWidget.hpp"
 #include "InitiativeTrackerDialog.hpp"
+#include "MonsterListDialog.hpp"
 
 MainWindow::MainWindow(dnd::Repository& repository, QWidget* parent)
     : QMainWindow(parent), repository_(repository) {
@@ -67,11 +68,13 @@ MainWindow::MainWindow(dnd::Repository& repository, QWidget* parent)
     damageButton_ = new QPushButton("Damage", central);
     healButton_ = new QPushButton("Heal", central);
     initiativeTrackerButton_ = new QPushButton("Initiative Tracker", central);
+    monstersButton_ = new QPushButton("Monsters", central);
     combatRow->addWidget(hpAmountSpin_);
     combatRow->addWidget(damageButton_);
     combatRow->addWidget(healButton_);
     combatRow->addStretch(1);
     combatRow->addWidget(initiativeTrackerButton_);
+    combatRow->addWidget(monstersButton_);
     rootLayout->addLayout(combatRow);
 
     diceRoller_ = new DiceRollerWidget(central);
@@ -92,6 +95,7 @@ MainWindow::MainWindow(dnd::Repository& repository, QWidget* parent)
     connect(damageButton_, &QPushButton::clicked, this, &MainWindow::onDamageClicked);
     connect(healButton_, &QPushButton::clicked, this, &MainWindow::onHealClicked);
     connect(initiativeTrackerButton_, &QPushButton::clicked, this, &MainWindow::onInitiativeTrackerClicked);
+    connect(monstersButton_, &QPushButton::clicked, this, &MainWindow::onMonstersClicked);
 
     reloadLookupTables();
     reloadPlayers();
@@ -260,5 +264,10 @@ void MainWindow::onHealClicked() {
 
 void MainWindow::onInitiativeTrackerClicked() {
     InitiativeTrackerDialog dialog(repository_.get_characters(), this);
+    dialog.exec();
+}
+
+void MainWindow::onMonstersClicked() {
+    MonsterListDialog dialog(repository_.get_monsters(), this);
     dialog.exec();
 }

@@ -18,7 +18,7 @@ using detail::Statement;
 // for future schema changes -- never edit an existing one, since a
 // migration's sql is exactly what already ran on every database that has it
 // recorded in SchemaMigrations.
-constexpr std::array<Migration, 4> kMigrations = {{
+constexpr std::array<Migration, 5> kMigrations = {{
     {1, "initial schema: Players, Classes, Characters", R"sql(
         CREATE TABLE IF NOT EXISTS Players (
             PlayerID INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -79,6 +79,30 @@ constexpr std::array<Migration, 4> kMigrations = {{
             ('Lawful Good'), ('Neutral Good'), ('Chaotic Good'),
             ('Lawful Neutral'), ('True Neutral'), ('Chaotic Neutral'),
             ('Lawful Evil'), ('Neutral Evil'), ('Chaotic Evil');
+    )sql"},
+    {5, "add Monsters table, seeded with sample low-CR enemies", R"sql(
+        CREATE TABLE IF NOT EXISTS Monsters (
+            MonsterID INTEGER PRIMARY KEY AUTOINCREMENT,
+            Name TEXT NOT NULL UNIQUE,
+            ArmorClass INTEGER NOT NULL,
+            HitPoints INTEGER NOT NULL,
+            Strength INTEGER NOT NULL,
+            Dexterity INTEGER NOT NULL,
+            Constitution INTEGER NOT NULL,
+            Intelligence INTEGER NOT NULL,
+            Wisdom INTEGER NOT NULL,
+            Charisma INTEGER NOT NULL,
+            ChallengeRating REAL NOT NULL
+        );
+
+        INSERT INTO Monsters (Name, ArmorClass, HitPoints, Strength, Dexterity, Constitution,
+                               Intelligence, Wisdom, Charisma, ChallengeRating) VALUES
+            ('Kobold',   12, 5,  7, 15,  9, 8,  7, 8, 0.125),
+            ('Goblin',   15, 7,  8, 14, 10, 10, 8, 8, 0.25),
+            ('Skeleton', 13, 13, 10, 14, 15, 6,  8, 5, 0.25),
+            ('Wolf',     13, 11, 12, 15, 12, 3,  12, 6, 0.25),
+            ('Zombie',   8,  22, 13, 6,  16, 3,  6, 5, 0.25),
+            ('Orc',      13, 15, 16, 12, 16, 7,  11, 10, 0.5);
     )sql"},
 }};
 

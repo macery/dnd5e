@@ -42,6 +42,22 @@ TEST_CASE("get_alignments returns the seeded 5e alignments", "[repository]") {
     REQUIRE(contains_name(alignments, "True Neutral"));
 }
 
+TEST_CASE("get_monsters returns the seeded sample enemies", "[repository]") {
+    dnd::Repository repo(":memory:");
+
+    auto monsters = repo.get_monsters();
+    REQUIRE(monsters.size() == 6);
+
+    const dnd::Monster* goblin = nullptr;
+    for (const auto& monster : monsters) {
+        if (monster.name == "Goblin") goblin = &monster;
+    }
+    REQUIRE(goblin != nullptr);
+    REQUIRE(goblin->armor_class == 15);
+    REQUIRE(goblin->hit_points == 7);
+    REQUIRE(goblin->challenge_rating == 0.25);
+}
+
 TEST_CASE("add_player and get_players round-trip", "[repository]") {
     dnd::Repository repo(":memory:");
 
