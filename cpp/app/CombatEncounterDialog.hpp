@@ -54,16 +54,19 @@ private:
     void addCharacterParticipants(const std::vector<dnd::Weapon>& weapons);
     void refreshParticipantTable();
     void refreshAttackCombos();
+    void checkForVictoryOrDefeat();
     void log(const QString& line);
 
     dnd::Repository& repository_;
     std::vector<dnd::Character> characters_;
     std::vector<dnd::Monster> monsters_;
     std::vector<Participant> participants_;
+    bool encounterOver_ = false;
 
     dnd::SystemRandomSource randomSource_;
     dnd::Dice dice_;
 
+    QLabel* statusLabel_ = nullptr;
     QTableWidget* participantTable_ = nullptr;
     QComboBox* monsterTypeCombo_ = nullptr;
     QSpinBox* monsterCountSpin_ = nullptr;

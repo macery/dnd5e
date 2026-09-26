@@ -33,8 +33,11 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
       dice_(randomSource_) {
     setWindowTitle("Combat Encounter");
 
-    participantTable_ = new QTableWidget(0, 4, this);
-    participantTable_->setHorizontalHeaderLabels({"Name", "Initiative", "AC", "HP"});
+    statusLabel_ = new QLabel("Status: In Progress", this);
+    statusLabel_->setStyleSheet("font-weight: bold;");
+
+    participantTable_ = new QTableWidget(0, 5, this);
+    participantTable_->setHorizontalHeaderLabels({"Name", "Initiative", "AC", "HP", "Status"});
     participantTable_->horizontalHeader()->setStretchLastSection(true);
     participantTable_->setEditTriggers(QAbstractItemView::NoEditTriggers);
 
@@ -80,6 +83,7 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
     logView_->setReadOnly(true);
 
     auto* layout = new QVBoxLayout(this);
+    layout->addWidget(statusLabel_);
     layout->addWidget(participantTable_, 1);
     layout->addLayout(monsterRow);
     layout->addWidget(attackGroup);
@@ -213,6 +217,39 @@ void CombatEncounterDialog::onRollAttackClicked() {
     }
 
     refreshParticipantTable();
+    checkForVictoryOrDefeat();
+}
+
+void CombatEncounterDialog::checkForVictoryOrDefeat() {
+    if (encounterOver_) return;
+
+    bool has_characters = false;
+    bool has_monsters = false;
+    bool all_characters_down = true;
+    bool all_monsters_down = true;
+
+    for (const auto& participant : participants_) {
+        bool down = participant.current_hp <= 0;
+        if (participant.is_character) {
+            has_characters = true;
+            all_characters_down = all_characters_down && down;
+        } else {
+            has_monsters = true;
+            all_monsters_down = all_monsters_down && down;
+        }
+    }
+
+    if (has_characters && all_characters_down) {
+        encounterOver_ = true;
+        statusLabel_->setText("Status: Defeat! All characters have fallen.");
+        log("--- Defeat! All characters have fallen. ---");
+    } else if (has_monsters && all_monsters_down) {
+        encounterOver_ = true;
+        statusLabel_->setText("Status: Victory! All enemies defeated.");
+        log("--- Victory! All enemies defeated. ---");
+    }
+
+    if (encounterOver_) rollAttackButton_->setEnabled(false);
 }
 
 void CombatEncounterDialog::refreshParticipantTable() {
@@ -230,6 +267,7 @@ void CombatEncounterDialog::refreshParticipantTable() {
         participantTable_->setItem(row, 2, new QTableWidgetItem(QString::number(participant.armor_class)));
         participantTable_->setItem(
             row, 3, new QTableWidgetItem(QString("%1/%2").arg(participant.current_hp).arg(participant.max_hp)));
+        participantTable_->setItem(row, 4, new QTableWidgetItem(participant.current_hp > 0 ? "Up" : "Down"));
     }
 }
 
