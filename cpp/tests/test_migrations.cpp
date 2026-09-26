@@ -48,7 +48,7 @@ TEST_CASE("run_migrations brings a fresh database to the latest schema", "[migra
 
     dnd::run_migrations(db.handle);
 
-    REQUIRE(dnd::current_schema_version(db.handle) == 6);
+    REQUIRE(dnd::current_schema_version(db.handle) == 7);
     REQUIRE(table_exists(db.handle, "Players"));
     REQUIRE(table_exists(db.handle, "Classes"));
     REQUIRE(table_exists(db.handle, "Characters"));
@@ -64,6 +64,9 @@ TEST_CASE("run_migrations brings a fresh database to the latest schema", "[migra
     REQUIRE(row_count(db.handle, "SELECT COUNT(*) FROM Alignments;") == 9);
     REQUIRE(row_count(db.handle, "SELECT COUNT(*) FROM Monsters;") == 6);
     REQUIRE(row_count(db.handle, "SELECT COUNT(*) FROM Weapons;") == 8);
+    // Backfilled by migration 7.
+    REQUIRE(row_count(db.handle, "SELECT COUNT(*) FROM Monsters WHERE AttackName = 'Scimitar' AND Name = 'Goblin';") ==
+            1);
 }
 
 TEST_CASE("run_migrations is a no-op the second time", "[migrations]") {
@@ -72,7 +75,7 @@ TEST_CASE("run_migrations is a no-op the second time", "[migrations]") {
     dnd::run_migrations(db.handle);
     dnd::run_migrations(db.handle);
 
-    REQUIRE(row_count(db.handle, "SELECT COUNT(*) FROM SchemaMigrations;") == 6);
+    REQUIRE(row_count(db.handle, "SELECT COUNT(*) FROM SchemaMigrations;") == 7);
     REQUIRE(row_count(db.handle, "SELECT COUNT(*) FROM Classes;") == 12);
     REQUIRE(row_count(db.handle, "SELECT COUNT(*) FROM Races;") == 9);
     REQUIRE(row_count(db.handle, "SELECT COUNT(*) FROM Monsters;") == 6);
@@ -83,7 +86,9 @@ TEST_CASE("migration 6 equips existing characters with Unarmed Strike", "[migrat
     // Simulates the real scenario: a character that already existed before
     // Weapons/WeaponID were added. Manually builds a database recorded as
     // already at version 5 (migration 6's SQL only touches Characters and
-    // Weapons, so the other tables from migrations 1-5 aren't needed here).
+    // Weapons; migration 7 (Monsters attack columns) also runs after it since
+    // both are newer than the recorded version 5, so a minimal Monsters
+    // table is included too even though it's not this test's focus).
     RawDb db(":memory:");
 
     char* error = nullptr;
@@ -92,6 +97,10 @@ TEST_CASE("migration 6 equips existing characters with Unarmed Strike", "[migrat
         "CREATE TABLE Characters (CharacterId INTEGER PRIMARY KEY AUTOINCREMENT, "
         "CharacterName TEXT NOT NULL UNIQUE, Class INTEGER NOT NULL, Race INTEGER NOT NULL, "
         "Alignment INTEGER NOT NULL, PlayerID INTEGER NOT NULL, Level INTEGER NOT NULL DEFAULT 1);"
+        "CREATE TABLE Monsters (MonsterID INTEGER PRIMARY KEY AUTOINCREMENT, Name TEXT NOT NULL UNIQUE, "
+        "ArmorClass INTEGER NOT NULL, HitPoints INTEGER NOT NULL, Strength INTEGER NOT NULL, "
+        "Dexterity INTEGER NOT NULL, Constitution INTEGER NOT NULL, Intelligence INTEGER NOT NULL, "
+        "Wisdom INTEGER NOT NULL, Charisma INTEGER NOT NULL, ChallengeRating REAL NOT NULL);"
         "INSERT INTO Players (PlayerName) VALUES ('Aria');"
         "INSERT INTO Characters (CharacterName, Class, Race, Alignment, PlayerID) "
         "VALUES ('Aria''s Fighter', 1, 1, 1, 1);"
@@ -104,7 +113,7 @@ TEST_CASE("migration 6 equips existing characters with Unarmed Strike", "[migrat
 
     dnd::run_migrations(db.handle);
 
-    REQUIRE(dnd::current_schema_version(db.handle) == 6);
+    REQUIRE(dnd::current_schema_version(db.handle) == 7);
 
     sqlite3_stmt* stmt = nullptr;
     REQUIRE(sqlite3_prepare_v2(db.handle,

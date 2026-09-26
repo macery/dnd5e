@@ -35,6 +35,7 @@ private slots:
     void onHealClicked();
     void onInitiativeTrackerClicked();
     void onMonstersClicked();
+    void onCombatEncounterClicked();
 
 private:
     void reloadPlayers();
@@ -64,6 +65,7 @@ private:
     QPushButton* healButton_ = nullptr;
     QPushButton* initiativeTrackerButton_ = nullptr;
     QPushButton* monstersButton_ = nullptr;
+    QPushButton* combatEncounterButton_ = nullptr;
     CharacterTableModel* characterModel_ = nullptr;
     DiceRollerWidget* diceRoller_ = nullptr;
 };

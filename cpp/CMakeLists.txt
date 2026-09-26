@@ -17,6 +17,7 @@ else()
 endif()
 
 add_library(dndcore
+    src/combat.cpp
     src/dice.cpp
     src/migrations.cpp
     src/repository.cpp

@@ -56,6 +56,11 @@ TEST_CASE("get_monsters returns the seeded sample enemies", "[repository]") {
     REQUIRE(goblin->armor_class == 15);
     REQUIRE(goblin->hit_points == 7);
     REQUIRE(goblin->challenge_rating == 0.25);
+    REQUIRE(goblin->attack_name == "Scimitar");
+    REQUIRE(goblin->attack_bonus == 4);
+    REQUIRE(goblin->damage_dice_count == 1);
+    REQUIRE(goblin->damage_dice_sides == 6);
+    REQUIRE(goblin->damage_bonus == 2);
 }
 
 TEST_CASE("get_weapons returns the seeded weapon list", "[repository]") {

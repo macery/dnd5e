@@ -18,7 +18,7 @@ using detail::Statement;
 // for future schema changes -- never edit an existing one, since a
 // migration's sql is exactly what already ran on every database that has it
 // recorded in SchemaMigrations.
-constexpr std::array<Migration, 6> kMigrations = {{
+constexpr std::array<Migration, 7> kMigrations = {{
     {1, "initial schema: Players, Classes, Characters", R"sql(
         CREATE TABLE IF NOT EXISTS Players (
             PlayerID INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -127,6 +127,20 @@ constexpr std::array<Migration, 6> kMigrations = {{
         ALTER TABLE Characters ADD COLUMN WeaponID INTEGER;
 
         UPDATE Characters SET WeaponID = (SELECT WeaponID FROM Weapons WHERE Name = 'Unarmed Strike');
+    )sql"},
+    {7, "add attack data to Monsters", R"sql(
+        ALTER TABLE Monsters ADD COLUMN AttackName TEXT NOT NULL DEFAULT '';
+        ALTER TABLE Monsters ADD COLUMN AttackBonus INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE Monsters ADD COLUMN DamageDiceCount INTEGER NOT NULL DEFAULT 1;
+        ALTER TABLE Monsters ADD COLUMN DamageDiceSides INTEGER NOT NULL DEFAULT 4;
+        ALTER TABLE Monsters ADD COLUMN DamageBonus INTEGER NOT NULL DEFAULT 0;
+
+        UPDATE Monsters SET AttackName = 'Dagger',    AttackBonus = 4, DamageDiceCount = 1, DamageDiceSides = 4,  DamageBonus = 2 WHERE Name = 'Kobold';
+        UPDATE Monsters SET AttackName = 'Scimitar',  AttackBonus = 4, DamageDiceCount = 1, DamageDiceSides = 6,  DamageBonus = 2 WHERE Name = 'Goblin';
+        UPDATE Monsters SET AttackName = 'Shortsword',AttackBonus = 4, DamageDiceCount = 1, DamageDiceSides = 6,  DamageBonus = 2 WHERE Name = 'Skeleton';
+        UPDATE Monsters SET AttackName = 'Bite',      AttackBonus = 4, DamageDiceCount = 2, DamageDiceSides = 4,  DamageBonus = 2 WHERE Name = 'Wolf';
+        UPDATE Monsters SET AttackName = 'Slam',      AttackBonus = 3, DamageDiceCount = 1, DamageDiceSides = 6,  DamageBonus = 1 WHERE Name = 'Zombie';
+        UPDATE Monsters SET AttackName = 'Greataxe',  AttackBonus = 5, DamageDiceCount = 1, DamageDiceSides = 12, DamageBonus = 3 WHERE Name = 'Orc';
     )sql"},
 }};
 

@@ -9,6 +9,7 @@ FetchContent_MakeAvailable(Catch2)
 list(APPEND CMAKE_MODULE_PATH "${catch2_SOURCE_DIR}/extras")
 
 add_executable(dnd_tests
+    test_combat.cpp
     test_dice.cpp
     test_migrations.cpp
     test_repository.cpp

@@ -141,7 +141,8 @@ std::vector<Character> Repository::get_characters_by_player(int player_id) const
 std::vector<Monster> Repository::get_monsters() const {
     Statement stmt(db_,
         "SELECT MonsterID, Name, ArmorClass, HitPoints, Strength, Dexterity, Constitution, "
-        "Intelligence, Wisdom, Charisma, ChallengeRating FROM Monsters ORDER BY ChallengeRating, Name;");
+        "Intelligence, Wisdom, Charisma, ChallengeRating, AttackName, AttackBonus, "
+        "DamageDiceCount, DamageDiceSides, DamageBonus FROM Monsters ORDER BY ChallengeRating, Name;");
     std::vector<Monster> monsters;
     while (sqlite3_step(stmt.get()) == SQLITE_ROW) {
         Monster monster;
@@ -157,6 +158,12 @@ std::vector<Monster> Repository::get_monsters() const {
         monster.wisdom = sqlite3_column_int(stmt.get(), 8);
         monster.charisma = sqlite3_column_int(stmt.get(), 9);
         monster.challenge_rating = sqlite3_column_double(stmt.get(), 10);
+        const unsigned char* attack_name = sqlite3_column_text(stmt.get(), 11);
+        monster.attack_name = attack_name ? reinterpret_cast<const char*>(attack_name) : "";
+        monster.attack_bonus = sqlite3_column_int(stmt.get(), 12);
+        monster.damage_dice_count = sqlite3_column_int(stmt.get(), 13);
+        monster.damage_dice_sides = sqlite3_column_int(stmt.get(), 14);
+        monster.damage_bonus = sqlite3_column_int(stmt.get(), 15);
         monsters.push_back(std::move(monster));
     }
     return monsters;
