@@ -25,7 +25,7 @@ QString formatModifier(int value) {
 
 CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::vector<dnd::Character> characters,
                                               std::vector<dnd::Monster> monsters, std::vector<dnd::Weapon> weapons,
-                                              QWidget* parent)
+                                              QWidget* parent, const dnd::AdventureTemplate* adventure)
     : QDialog(parent),
       repository_(repository),
       characters_(std::move(characters)),
@@ -35,6 +35,13 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
 
     statusLabel_ = new QLabel("Status: In Progress", this);
     statusLabel_->setStyleSheet("font-weight: bold;");
+
+    if (adventure) {
+        victoryText_ = QString::fromStdString(adventure->victory_text);
+        objectiveLabel_ = new QLabel(
+            "Objective: " + QString::fromStdString(adventure->hook), this);
+        objectiveLabel_->setWordWrap(true);
+    }
 
     participantTable_ = new QTableWidget(0, 5, this);
     participantTable_->setHorizontalHeaderLabels({"Name", "Initiative", "AC", "HP", "Status"});
@@ -115,6 +122,7 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
 
     auto* layout = new QVBoxLayout(this);
     layout->addWidget(statusLabel_);
+    if (objectiveLabel_) layout->addWidget(objectiveLabel_);
     layout->addWidget(participantTable_, 1);
     layout->addLayout(monsterRow);
     layout->addLayout(turnRow);
@@ -132,6 +140,18 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
 
     updateActionControlsVisibility();
     addCharacterParticipants(weapons);
+
+    if (adventure) {
+        for (const auto& group : adventure->monster_groups) {
+            for (const auto& candidate : monsters_) {
+                if (candidate.name == group.monster_name) {
+                    addMonsterParticipants(candidate, group.count);
+                    break;
+                }
+            }
+        }
+    }
+
     refreshParticipantTable();
 }
 
@@ -161,6 +181,24 @@ void CombatEncounterDialog::addCharacterParticipants(const std::vector<dnd::Weap
     }
 }
 
+void CombatEncounterDialog::addMonsterParticipants(const dnd::Monster& monster, int count) {
+    for (int i = 1; i <= count; ++i) {
+        Participant participant;
+        participant.name = count > 1 ? QString("%1 #%2").arg(QString::fromStdString(monster.name)).arg(i)
+                                      : QString::fromStdString(monster.name);
+        participant.is_character = false;
+        participant.armor_class = monster.armor_class;
+        participant.current_hp = monster.hit_points;
+        participant.max_hp = monster.hit_points;
+        participant.dex_modifier = dnd::ability_modifier(monster.dexterity);
+        participant.attack_bonus = monster.attack_bonus;
+        participant.damage_dice_count = monster.damage_dice_count;
+        participant.damage_dice_sides = monster.damage_dice_sides;
+        participant.damage_bonus = monster.damage_bonus;
+        participants_.push_back(participant);
+    }
+}
+
 void CombatEncounterDialog::onAddMonsterClicked() {
     if (monsterTypeCombo_->count() == 0) return;
 
@@ -172,21 +210,7 @@ void CombatEncounterDialog::onAddMonsterClicked() {
     if (!monster) return;
 
     int count = monsterCountSpin_->value();
-    for (int i = 1; i <= count; ++i) {
-        Participant participant;
-        participant.name = count > 1 ? QString("%1 #%2").arg(QString::fromStdString(monster->name)).arg(i)
-                                      : QString::fromStdString(monster->name);
-        participant.is_character = false;
-        participant.armor_class = monster->armor_class;
-        participant.current_hp = monster->hit_points;
-        participant.max_hp = monster->hit_points;
-        participant.dex_modifier = dnd::ability_modifier(monster->dexterity);
-        participant.attack_bonus = monster->attack_bonus;
-        participant.damage_dice_count = monster->damage_dice_count;
-        participant.damage_dice_sides = monster->damage_dice_sides;
-        participant.damage_bonus = monster->damage_bonus;
-        participants_.push_back(participant);
-    }
+    addMonsterParticipants(*monster, count);
 
     log(QString("%1 x%2 joins the encounter.").arg(QString::fromStdString(monster->name)).arg(count) +
         (turnOrder_.empty() ? "" : " (click Roll Initiative to include them in turn order)"));
@@ -401,8 +425,10 @@ void CombatEncounterDialog::checkForVictoryOrDefeat() {
         log("--- Defeat! All characters have fallen. ---");
     } else if (has_monsters && all_monsters_down) {
         encounterOver_ = true;
-        statusLabel_->setText("Status: Victory! All enemies defeated.");
-        log("--- Victory! All enemies defeated. ---");
+        QString victoryMessage = "Victory! All enemies defeated.";
+        if (!victoryText_.isEmpty()) victoryMessage += " " + victoryText_;
+        statusLabel_->setText("Status: " + victoryMessage);
+        log("--- " + victoryMessage + " ---");
     }
 
     if (encounterOver_) takeActionButton_->setEnabled(false);

@@ -17,6 +17,7 @@
 
 #include <algorithm>
 
+#include "AdventurePickerDialog.hpp"
 #include "CharacterEditorDialog.hpp"
 #include "CharacterSheetDialog.hpp"
 #include "CharacterTableModel.hpp"
@@ -24,6 +25,8 @@
 #include "DiceRollerWidget.hpp"
 #include "InitiativeTrackerDialog.hpp"
 #include "MonsterListDialog.hpp"
+
+#include "dnd/adventure.hpp"
 
 MainWindow::MainWindow(dnd::Repository& repository, QWidget* parent)
     : QMainWindow(parent), repository_(repository) {
@@ -71,6 +74,7 @@ MainWindow::MainWindow(dnd::Repository& repository, QWidget* parent)
     initiativeTrackerButton_ = new QPushButton("Initiative Tracker", central);
     monstersButton_ = new QPushButton("Monsters", central);
     combatEncounterButton_ = new QPushButton("Combat Encounter", central);
+    soloAdventureButton_ = new QPushButton("Solo Adventure", central);
     combatRow->addWidget(hpAmountSpin_);
     combatRow->addWidget(damageButton_);
     combatRow->addWidget(healButton_);
@@ -78,6 +82,7 @@ MainWindow::MainWindow(dnd::Repository& repository, QWidget* parent)
     combatRow->addWidget(initiativeTrackerButton_);
     combatRow->addWidget(monstersButton_);
     combatRow->addWidget(combatEncounterButton_);
+    combatRow->addWidget(soloAdventureButton_);
     rootLayout->addLayout(combatRow);
 
     diceRoller_ = new DiceRollerWidget(central);
@@ -100,6 +105,7 @@ MainWindow::MainWindow(dnd::Repository& repository, QWidget* parent)
     connect(initiativeTrackerButton_, &QPushButton::clicked, this, &MainWindow::onInitiativeTrackerClicked);
     connect(monstersButton_, &QPushButton::clicked, this, &MainWindow::onMonstersClicked);
     connect(combatEncounterButton_, &QPushButton::clicked, this, &MainWindow::onCombatEncounterClicked);
+    connect(soloAdventureButton_, &QPushButton::clicked, this, &MainWindow::onSoloAdventureClicked);
 
     reloadLookupTables();
     reloadPlayers();
@@ -280,6 +286,20 @@ void MainWindow::onMonstersClicked() {
 void MainWindow::onCombatEncounterClicked() {
     CombatEncounterDialog dialog(repository_, repository_.get_characters(), repository_.get_monsters(), weapons_,
                                   this);
+    dialog.exec();
+    reloadCharactersForCurrentPlayer();
+}
+
+void MainWindow::onSoloAdventureClicked() {
+    AdventurePickerDialog picker(this);
+    if (picker.exec() != QDialog::Accepted) return;
+
+    const auto& templates = dnd::adventure_templates();
+    int index = picker.selectedIndex();
+    if (index < 0 || index >= static_cast<int>(templates.size())) return;
+
+    CombatEncounterDialog dialog(repository_, repository_.get_characters(), repository_.get_monsters(), weapons_,
+                                  this, &templates[static_cast<size_t>(index)]);
     dialog.exec();
     reloadCharactersForCurrentPlayer();
 }

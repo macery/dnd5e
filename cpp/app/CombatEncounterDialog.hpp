@@ -3,6 +3,7 @@
 #include <QDialog>
 #include <vector>
 
+#include "dnd/adventure.hpp"
 #include "dnd/character.hpp"
 #include "dnd/combat.hpp"
 #include "dnd/dice.hpp"
@@ -30,7 +31,7 @@ class CombatEncounterDialog : public QDialog {
 public:
     CombatEncounterDialog(dnd::Repository& repository, std::vector<dnd::Character> characters,
                            std::vector<dnd::Monster> monsters, std::vector<dnd::Weapon> weapons,
-                           QWidget* parent = nullptr);
+                           QWidget* parent = nullptr, const dnd::AdventureTemplate* adventure = nullptr);
 
 private slots:
     void onAddMonsterClicked();
@@ -59,6 +60,10 @@ private:
     };
 
     void addCharacterParticipants(const std::vector<dnd::Weapon>& weapons);
+    // Adds `count` copies of monster as participants (numbered "#1", "#2", ...
+    // when count > 1). Shared by the manual Add Monster control and adventure
+    // pre-population.
+    void addMonsterParticipants(const dnd::Monster& monster, int count);
     void refreshParticipantTable();
     void refreshTargetCombo();
     void updateAttackFieldsForCurrentTurn();
@@ -82,11 +87,15 @@ private:
     std::vector<int> turnOrder_;   // participant indices, sorted by initiative
     int currentTurnIndex_ = -1;    // index into turnOrder_; -1 = no active turn
     bool encounterOver_ = false;
+    // Appended to the Victory status line when this encounter came from a
+    // guided adventure; empty for a manually-assembled encounter.
+    QString victoryText_;
 
     dnd::SystemRandomSource randomSource_;
     dnd::Dice dice_;
 
     QLabel* statusLabel_ = nullptr;
+    QLabel* objectiveLabel_ = nullptr;  // only created when launched from an adventure
     QTableWidget* participantTable_ = nullptr;
     QComboBox* monsterTypeCombo_ = nullptr;
     QSpinBox* monsterCountSpin_ = nullptr;

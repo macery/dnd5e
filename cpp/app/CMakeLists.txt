@@ -12,5 +12,6 @@ add_executable(dnd_app
     InitiativeTrackerDialog.cpp
     MonsterListDialog.cpp
     CombatEncounterDialog.cpp
+    AdventurePickerDialog.cpp
 )
 target_link_libraries(dnd_app PRIVATE dndcore Qt6::Widgets)

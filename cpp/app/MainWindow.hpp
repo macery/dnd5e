@@ -36,6 +36,7 @@ private slots:
     void onInitiativeTrackerClicked();
     void onMonstersClicked();
     void onCombatEncounterClicked();
+    void onSoloAdventureClicked();
 
 private:
     void reloadPlayers();
@@ -66,6 +67,7 @@ private:
     QPushButton* initiativeTrackerButton_ = nullptr;
     QPushButton* monstersButton_ = nullptr;
     QPushButton* combatEncounterButton_ = nullptr;
+    QPushButton* soloAdventureButton_ = nullptr;
     CharacterTableModel* characterModel_ = nullptr;
     DiceRollerWidget* diceRoller_ = nullptr;
 };
