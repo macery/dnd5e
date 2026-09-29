@@ -12,6 +12,7 @@ add_executable(dnd_tests
     test_adventure.cpp
     test_combat.cpp
     test_dice.cpp
+    test_inventory.cpp
     test_migrations.cpp
     test_progression.cpp
     test_repository.cpp

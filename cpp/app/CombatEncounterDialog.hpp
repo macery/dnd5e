@@ -82,6 +82,12 @@ private:
     // Splits the defeated monsters' XP evenly across every character in the
     // encounter (the 5e rule), persisting any resulting level-ups.
     void awardVictoryExperience();
+    // Gives the adventure's loot (if any) to the first character still
+    // standing, persisted to their inventory.
+    void awardLoot();
+    // Fills potionCombo_ with the current character's healing items.
+    void refreshPotionCombo();
+    void drinkPotion(Participant& actor);
     void log(const QString& line);
 
     dnd::Repository& repository_;
@@ -95,6 +101,9 @@ private:
     // Appended to the Victory status line when this encounter came from a
     // guided adventure; empty for a manually-assembled encounter.
     QString victoryText_;
+    std::vector<dnd::AdventureLoot> loot_;
+    // The current character's healing items, parallel to potionCombo_.
+    std::vector<dnd::Item> actorPotions_;
 
     dnd::SystemRandomSource randomSource_;
     dnd::Dice dice_;
@@ -113,6 +122,7 @@ private:
     QLabel* bonusActionLabel_ = nullptr;
     QComboBox* actionCombo_ = nullptr;
     QComboBox* targetCombo_ = nullptr;
+    QComboBox* potionCombo_ = nullptr;
     QSpinBox* attackBonusSpin_ = nullptr;
     QSpinBox* damageDiceCountSpin_ = nullptr;
     QSpinBox* damageDiceSidesSpin_ = nullptr;

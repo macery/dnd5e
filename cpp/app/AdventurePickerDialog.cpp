@@ -4,6 +4,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QListWidget>
+#include <QStringList>
 #include <QVBoxLayout>
 
 #include "dnd/adventure.hpp"
@@ -47,5 +48,14 @@ void AdventurePickerDialog::onSelectionChanged(int index) {
         hookLabel_->clear();
         return;
     }
-    hookLabel_->setText(QString::fromStdString(templates[static_cast<size_t>(index)].hook));
+    const auto& adventure = templates[static_cast<size_t>(index)];
+    QString text = QString::fromStdString(adventure.hook);
+    if (!adventure.loot.empty()) {
+        QStringList rewards;
+        for (const auto& loot : adventure.loot) {
+            rewards << QString("%1 × %2").arg(loot.quantity).arg(QString::fromStdString(loot.item_name));
+        }
+        text += "\n\nReward: " + rewards.join(", ");
+    }
+    hookLabel_->setText(text);
 }

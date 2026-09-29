@@ -10,6 +10,7 @@ add_executable(dnd_app
     CharacterEditorDialog.cpp
     CharacterSheetDialog.cpp
     InitiativeTrackerDialog.cpp
+    InventoryDialog.cpp
     MonsterListDialog.cpp
     CombatEncounterDialog.cpp
     AdventurePickerDialog.cpp

@@ -15,6 +15,7 @@
 
 #include <algorithm>
 
+#include "dnd/inventory.hpp"
 #include "dnd/progression.hpp"
 #include "dnd/rules.hpp"
 
@@ -40,6 +41,7 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
 
     if (adventure) {
         victoryText_ = QString::fromStdString(adventure->victory_text);
+        loot_ = adventure->loot;
         objectiveLabel_ = new QLabel(
             "Objective: " + QString::fromStdString(adventure->hook), this);
         objectiveLabel_->setWordWrap(true);
@@ -96,7 +98,11 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
     actionCombo_->addItem("Dodge");
     actionCombo_->setItemData(2,
         "Until the start of your next turn, attacks against you have disadvantage.", Qt::ToolTipRole);
+    actionCombo_->addItem("Drink Potion");
+    actionCombo_->setItemData(3, "Drink a healing potion from your inventory to regain hit points.",
+                              Qt::ToolTipRole);
     targetCombo_ = new QComboBox(attackGroup);
+    potionCombo_ = new QComboBox(attackGroup);
     attackBonusSpin_ = new QSpinBox(attackGroup);
     attackBonusSpin_->setRange(-10, 20);
     damageDiceCountSpin_ = new QSpinBox(attackGroup);
@@ -112,6 +118,7 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
     attackForm->addRow(moveLabel_);
     attackForm->addRow("Action", actionCombo_);
     attackForm->addRow("Target", targetCombo_);
+    attackForm->addRow("Potion", potionCombo_);
     attackForm->addRow("Attack Bonus", attackBonusSpin_);
     attackForm->addRow("Damage Dice Count", damageDiceCountSpin_);
     attackForm->addRow("Damage Dice Sides", damageDiceSidesSpin_);
@@ -277,6 +284,7 @@ void CombatEncounterDialog::advanceToActionableTurn() {
         actionCombo_->setCurrentIndex(0);
         updateActionControlsVisibility();
         refreshTargetCombo();
+        refreshPotionCombo();
         updateAttackFieldsForCurrentTurn();
         takeActionButton_->setEnabled(true);
         return;
@@ -329,10 +337,14 @@ void CombatEncounterDialog::updateActionControlsVisibility() {
                          static_cast<QWidget*>(damageBonusSpin_)}) {
         if (auto* row_label = attackFormLayout_->labelForField(field)) row_label->setVisible(is_attack);
     }
+    bool is_potion = actionCombo_->currentIndex() == 3;
+    potionCombo_->setVisible(is_potion);
+    if (auto* row_label = attackFormLayout_->labelForField(potionCombo_)) row_label->setVisible(is_potion);
 
     switch (actionCombo_->currentIndex()) {
         case 1: takeActionButton_->setText("Take Dash Action"); break;
         case 2: takeActionButton_->setText("Take Dodge Action"); break;
+        case 3: takeActionButton_->setText("Drink Potion"); break;
         default: takeActionButton_->setText("Roll Attack"); break;
     }
 }
@@ -350,6 +362,14 @@ void CombatEncounterDialog::onTakeActionClicked() {
             actor.is_dodging = true;
             log(QString("%1 takes the Dodge action (attacks against them have disadvantage until their next turn).")
                     .arg(actor.name));
+            break;
+
+        case 3:  // Drink Potion
+            if (actorPotions_.empty()) {
+                log(QString("%1 has no healing potions -- choose another action.").arg(actor.name));
+                return;  // doesn't use up the turn's action
+            }
+            drinkPotion(actor);
             break;
 
         default: {  // Attack
@@ -433,6 +453,7 @@ void CombatEncounterDialog::checkForVictoryOrDefeat() {
         statusLabel_->setText("Status: " + victoryMessage);
         log("--- " + victoryMessage + " ---");
         awardVictoryExperience();
+        awardLoot();
     }
 
     if (encounterOver_) takeActionButton_->setEnabled(false);
@@ -468,6 +489,74 @@ void CombatEncounterDialog::awardVictoryExperience() {
         }
     }
     refreshParticipantTable();
+}
+
+void CombatEncounterDialog::awardLoot() {
+    if (loot_.empty() || characters_.empty()) return;
+
+    // First character still standing; everyone's down can't be a victory,
+    // but fall back to the first character rather than dropping the loot.
+    const dnd::Character* recipient = &characters_.front();
+    for (const auto& character : characters_) {
+        bool standing = std::any_of(participants_.begin(), participants_.end(), [&](const Participant& p) {
+            return p.is_character && p.character_id == character.character_id && p.current_hp > 0;
+        });
+        if (standing) {
+            recipient = &character;
+            break;
+        }
+    }
+
+    auto items = repository_.get_items();
+    QStringList found;
+    for (const auto& loot : loot_) {
+        auto item = std::find_if(items.begin(), items.end(),
+                                 [&](const dnd::Item& candidate) { return candidate.name == loot.item_name; });
+        if (item == items.end()) continue;
+        repository_.add_to_inventory(recipient->character_id, item->item_id, loot.quantity);
+        found << QString("%1 × %2").arg(loot.quantity).arg(QString::fromStdString(item->name));
+    }
+    if (!found.isEmpty()) {
+        log(QString("Loot! %1 takes: %2.").arg(QString::fromStdString(recipient->character_name), found.join(", ")));
+    }
+}
+
+void CombatEncounterDialog::refreshPotionCombo() {
+    potionCombo_->clear();
+    actorPotions_.clear();
+    if (currentTurnIndex_ < 0 || turnOrder_.empty()) return;
+
+    const auto& current = participants_[static_cast<size_t>(turnOrder_[static_cast<size_t>(currentTurnIndex_)])];
+    if (!current.is_character) return;
+
+    for (const auto& entry : repository_.get_inventory(current.character_id)) {
+        if (!dnd::is_healing_item(entry.item)) continue;
+        actorPotions_.push_back(entry.item);
+        potionCombo_->addItem(QString("%1 (×%2)").arg(QString::fromStdString(entry.item.name)).arg(entry.quantity));
+    }
+}
+
+void CombatEncounterDialog::drinkPotion(Participant& actor) {
+    int index = potionCombo_->currentIndex();
+    if (index < 0 || index >= static_cast<int>(actorPotions_.size())) return;
+    const dnd::Item item = actorPotions_[static_cast<size_t>(index)];
+
+    for (auto& character : characters_) {
+        if (character.character_id != actor.character_id) continue;
+
+        int regained = dnd::use_healing_item(character, dice_, item);
+        repository_.remove_from_inventory(character.character_id, item.item_id);
+        repository_.update_character(character);
+        actor.current_hp = character.current_hp;
+
+        log(QString("%1 drinks a %2 and regains %3 HP (now %4/%5).")
+                .arg(actor.name, QString::fromStdString(item.name))
+                .arg(regained)
+                .arg(actor.current_hp)
+                .arg(actor.max_hp));
+        break;
+    }
+    refreshPotionCombo();
 }
 
 void CombatEncounterDialog::refreshParticipantTable() {

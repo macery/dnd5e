@@ -20,11 +20,16 @@ It manages players and characters, computes a full character sheet from the 5e r
 - **Combat encounters**:
   - Real initiative order.
   - Monster turns resolve automatically.
-  - On each of your turns you pick Attack, Dash, or Dodge.
+  - On each of your turns you pick Attack, Dash, Dodge, or Drink Potion.
   - Natural 20s crit and natural 1s miss.
   - Dodge imposes disadvantage on attacks against you.
+  - Drink Potion heals from your inventory.
   - The encounter ends with a victory or a defeat.
-- **Solo adventures**: pre-built mini-encounters, each with a hook, its monsters, and a victory payoff.
+- **Solo adventures**: pre-built mini-encounters, each with a hook, its monsters, a victory payoff, and loot.
+- **Inventory**:
+  - **Carrying items:** each character carries stacks of seeded items: adventuring gear, rations, and Potions of Healing (2d4+2). The Inventory screen shows total weight and value.
+  - **Healing:** potions can be used from the Inventory screen, or drunk in combat with the **Drink Potion** action.
+  - **Loot:** adventure rewards go into the inventory of the first character still standing.
 - **Progression**:
   - **XP:** each monster's XP comes from its challenge rating. On a victory the total is split evenly across the party.
   - **Leveling up:** crossing an XP threshold levels the character up automatically. Each level adds fixed-average HP.
@@ -53,9 +58,10 @@ dnd5e/
 | `dice` / `rng` | The dice engine. Randomness comes from an injected `IRandomSource`, so tests are deterministic. |
 | `rules` | Pure 5e rules math: modifiers, proficiency, skills, saves, weapon attack bonuses. |
 | `combat` | Attack resolution (hit/miss, crits, advantage/disadvantage). Knows nothing about characters or monsters. |
+| `inventory` | The item model (`item.hpp`), healing consumables, weight and cost helpers. |
 | `progression` | XP tables, leveling, class hit dice, and short/long rests. |
 | `adventure` | Built-in solo adventure templates. |
-| `repository` | SQLite persistence for players, characters, and the lookup tables. |
+| `repository` | SQLite persistence for players, characters, inventories, and the lookup tables. |
 | `migrations` | Versioned, append-only schema migrations. They run automatically when the database is opened. |
 | `app/` | Qt dialogs and widgets. They sit on top of `dndcore` and hold no rules logic. |
 
@@ -109,7 +115,7 @@ Any pending schema migrations run on launch, so older save files are upgraded in
 2. Click **Add Character** and fill in their class, stats, HP, AC, and weapon.
 3. Double-click a character to open their **character sheet**.
 4. Click **Solo Adventure**, pick one, then **Roll Initiative** and fight. Use **Next Turn** to hand play back to the monsters.
-5. Win to earn XP. Afterwards, use **Short Rest** or **Long Rest** to recover before the next fight.
+5. Win to earn XP and loot. Use **Inventory** to see or use items. Afterwards, use **Short Rest** or **Long Rest** to recover before the next fight.
 
 ## Development notes
 
@@ -123,11 +129,11 @@ Any pending schema migrations run on launch, so older save files are upgraded in
 
 ### Inventory & items
 
-- [ ] **Inventory system**: an `Items` table plus a per-character `CharacterInventory` table (item, quantity, equipped flag), with the matching repository methods and a migration.
-- [ ] **Basic items**: seed common adventuring gear (rations, rope, torches, bedroll, waterskin, thieves' tools) and consumables (Potion of Healing: 2d4+2).
-- [ ] **Inventory UI**: an Inventory tab or dialog on the character sheet to add, remove, and equip items and change their quantities.
-- [ ] **Use items in combat**: drinking a potion as an action (or a bonus action, depending on the rules variant).
-- [ ] **Move weapons into the inventory**: make the equipped weapon one of the character's inventory items instead of the single `WeaponID` column.
+- [x] **Inventory system**: an `Items` table plus a per-character `CharacterInventory` table (item, quantity), with the matching repository methods and a migration.
+- [x] **Basic items**: seed common adventuring gear (rations, rope, torches, bedroll, waterskin, thieves' tools) and consumables (Potion of Healing: 2d4+2).
+- [x] **Inventory UI**: an Inventory dialog (opened from the main window) to add, drop, and use items.
+- [x] **Use items in combat**: drinking a potion as an action (or a bonus action, depending on the rules variant).
+- [ ] **Equipping & weapons in the inventory**: add an equipped flag to inventory entries, and make the equipped weapon one of the character's inventory items instead of the single `WeaponID` column.
 - [ ] **Armor & shields**: seed armor (light/medium/heavy) and calculate AC from the equipped armor, DEX (capped for medium armor), and a shield, instead of entering AC by hand.
 - [ ] **Currency**: track CP/SP/EP/GP/PP and have adventures award gold alongside XP.
 - [ ] **Encumbrance** (optional): item weights compared with carrying capacity (STR × 15).
@@ -171,7 +177,7 @@ Any pending schema migrations run on launch, so older save files are upgraded in
 - [ ] **Monster editor**: add and edit custom monsters in the UI.
 - [ ] **Multi-encounter adventures**: several fights in a row, with rests in between.
 - [ ] **Encounter difficulty**: rate encounters Easy/Medium/Hard/Deadly from party XP budgets, and scale adventures to the party's level.
-- [ ] **Loot**: adventure rewards that drop items into inventory (depends on the inventory system).
+- [x] **Loot**: adventure rewards that drop items into inventory (depends on the inventory system).
 
 ### Technical / housekeeping
 
@@ -180,7 +186,12 @@ Any pending schema migrations run on launch, so older save files are upgraded in
 - [ ] **Packaging**: release builds (AppImage/Flatpak for Linux, an installer for Windows) from CI.
 - [ ] **Code style**: add `clang-format` / `clang-tidy` configs and check them in CI.
 - [ ] **Legacy code**: decide whether to archive or remove the legacy `DND5EProject/` C# code.
-- [ ] **Backups**: export and import characters (e.g. as JSON) for backup and sharing.
+- [ ] **Per-player save/load**: export a player's characters (stats, XP, inventory) to a file and import them into another database, for backups, sharing, and moving between machines. It starts per-player, but the scope still needs working through. Open questions:
+  - **Scope:** per player, per character, or the whole database?
+  - **Format:** JSON (readable, diff-friendly), or a copy of the SQLite file (simpler, but all-or-nothing)?
+  - **Conflicts:** what happens on import when a name already exists? Rename, overwrite, or skip?
+  - **Stable IDs:** how to map class, race, item and weapon IDs between databases, for example by exporting names instead of IDs.
+  - **Versioning:** how to version the file format so older exports still load after schema changes.
 
 ## License
 

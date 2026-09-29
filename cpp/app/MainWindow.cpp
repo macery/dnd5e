@@ -24,6 +24,7 @@
 #include "CombatEncounterDialog.hpp"
 #include "DiceRollerWidget.hpp"
 #include "InitiativeTrackerDialog.hpp"
+#include "InventoryDialog.hpp"
 #include "MonsterListDialog.hpp"
 
 #include "dnd/adventure.hpp"
@@ -64,6 +65,9 @@ MainWindow::MainWindow(dnd::Repository& repository, QWidget* parent)
     characterRow->addWidget(addCharacterButton_);
     characterRow->addWidget(editCharacterButton_);
     characterRow->addWidget(deleteCharacterButton_);
+    inventoryButton_ = new QPushButton("Inventory", central);
+    inventoryButton_->setToolTip("View, add, drop, and use the selected character's items.");
+    characterRow->addWidget(inventoryButton_);
     rootLayout->addLayout(characterRow);
 
     auto* combatRow = new QHBoxLayout();
@@ -109,6 +113,7 @@ MainWindow::MainWindow(dnd::Repository& repository, QWidget* parent)
     connect(addCharacterButton_, &QPushButton::clicked, this, &MainWindow::onAddCharacterClicked);
     connect(editCharacterButton_, &QPushButton::clicked, this, &MainWindow::onEditCharacterClicked);
     connect(deleteCharacterButton_, &QPushButton::clicked, this, &MainWindow::onDeleteCharacterClicked);
+    connect(inventoryButton_, &QPushButton::clicked, this, &MainWindow::onInventoryClicked);
     connect(characterTable_, &QTableView::doubleClicked, this, &MainWindow::onCharacterActivated);
     connect(damageButton_, &QPushButton::clicked, this, &MainWindow::onDamageClicked);
     connect(healButton_, &QPushButton::clicked, this, &MainWindow::onHealClicked);
@@ -292,6 +297,15 @@ void MainWindow::onDamageClicked() {
 
 void MainWindow::onHealClicked() {
     adjustCurrentCharacterHp(hpAmountSpin_->value());
+}
+
+void MainWindow::onInventoryClicked() {
+    const dnd::Character* selected = selectedCharacter("Inventory");
+    if (!selected) return;
+
+    InventoryDialog dialog(repository_, *selected, this);
+    dialog.exec();
+    reloadCharactersForCurrentPlayer();  // using a potion changes HP
 }
 
 void MainWindow::onShortRestClicked() {

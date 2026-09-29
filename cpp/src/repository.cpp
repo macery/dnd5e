@@ -2,10 +2,12 @@
 
 #include <sqlite3.h>
 
+#include <algorithm>
 #include <stdexcept>
 #include <utility>
 
 #include "dnd/detail/statement.hpp"
+#include "dnd/inventory.hpp"
 #include "dnd/migrations.hpp"
 
 namespace dnd {
@@ -46,6 +48,30 @@ Character read_character_row(sqlite3_stmt* stmt) {
     character.experience = sqlite3_column_int(stmt, 19);
     character.hit_dice_used = sqlite3_column_int(stmt, 20);
     return character;
+}
+
+constexpr const char* kItemColumns =
+    "Items.ItemID, Items.Name, Items.Category, Items.Description, Items.WeightLb, Items.CostCp, "
+    "Items.HealDiceCount, Items.HealDiceSides, Items.HealBonus";
+
+std::string column_text(sqlite3_stmt* stmt, int column) {
+    const unsigned char* text = sqlite3_column_text(stmt, column);
+    return text ? reinterpret_cast<const char*>(text) : "";
+}
+
+// Reads kItemColumns starting at column 0.
+Item read_item_row(sqlite3_stmt* stmt) {
+    Item item;
+    item.item_id = sqlite3_column_int(stmt, 0);
+    item.name = column_text(stmt, 1);
+    item.category = item_category_from_name(column_text(stmt, 2));
+    item.description = column_text(stmt, 3);
+    item.weight_lb = sqlite3_column_double(stmt, 4);
+    item.cost_cp = sqlite3_column_int(stmt, 5);
+    item.heal_dice_count = sqlite3_column_int(stmt, 6);
+    item.heal_dice_sides = sqlite3_column_int(stmt, 7);
+    item.heal_bonus = sqlite3_column_int(stmt, 8);
+    return item;
 }
 
 std::vector<LookupEntry> get_lookup_entries(sqlite3* db, const char* table, const char* id_column,
@@ -189,6 +215,69 @@ std::vector<Weapon> Repository::get_weapons() const {
         weapons.push_back(std::move(weapon));
     }
     return weapons;
+}
+
+std::vector<Item> Repository::get_items() const {
+    std::string sql = std::string("SELECT ") + kItemColumns + " FROM Items ORDER BY Category, Name;";
+    Statement stmt(db_, sql.c_str());
+    std::vector<Item> items;
+    while (sqlite3_step(stmt.get()) == SQLITE_ROW) {
+        items.push_back(read_item_row(stmt.get()));
+    }
+    return items;
+}
+
+std::vector<InventoryEntry> Repository::get_inventory(int character_id) const {
+    std::string sql = std::string("SELECT ") + kItemColumns +
+                       ", CharacterInventory.Quantity FROM CharacterInventory "
+                       "JOIN Items ON Items.ItemID = CharacterInventory.ItemID "
+                       "WHERE CharacterInventory.CharacterID = ? ORDER BY Items.Name;";
+    Statement stmt(db_, sql.c_str());
+    sqlite3_bind_int(stmt.get(), 1, character_id);
+    std::vector<InventoryEntry> inventory;
+    while (sqlite3_step(stmt.get()) == SQLITE_ROW) {
+        InventoryEntry entry;
+        entry.item = read_item_row(stmt.get());
+        entry.quantity = sqlite3_column_int(stmt.get(), 9);
+        inventory.push_back(std::move(entry));
+    }
+    return inventory;
+}
+
+void Repository::add_to_inventory(int character_id, int item_id, int quantity) {
+    if (quantity <= 0) throw std::invalid_argument("quantity must be > 0");
+    Statement stmt(db_,
+        "INSERT INTO CharacterInventory (CharacterID, ItemID, Quantity) VALUES (?, ?, ?) "
+        "ON CONFLICT (CharacterID, ItemID) DO UPDATE SET Quantity = Quantity + excluded.Quantity;");
+    sqlite3_bind_int(stmt.get(), 1, character_id);
+    sqlite3_bind_int(stmt.get(), 2, item_id);
+    sqlite3_bind_int(stmt.get(), 3, quantity);
+    detail::run_and_expect_done(stmt, "add to inventory");
+}
+
+int Repository::remove_from_inventory(int character_id, int item_id, int quantity) {
+    if (quantity <= 0) throw std::invalid_argument("quantity must be > 0");
+
+    int held = 0;
+    {
+        Statement stmt(db_, "SELECT Quantity FROM CharacterInventory WHERE CharacterID = ? AND ItemID = ?;");
+        sqlite3_bind_int(stmt.get(), 1, character_id);
+        sqlite3_bind_int(stmt.get(), 2, item_id);
+        if (sqlite3_step(stmt.get()) == SQLITE_ROW) held = sqlite3_column_int(stmt.get(), 0);
+    }
+    if (held == 0) return 0;
+
+    int removed = std::min(held, quantity);
+    const char* sql = removed == held
+        ? "DELETE FROM CharacterInventory WHERE CharacterID = ? AND ItemID = ?;"
+        : "UPDATE CharacterInventory SET Quantity = Quantity - ? WHERE CharacterID = ? AND ItemID = ?;";
+    Statement stmt(db_, sql);
+    int index = 1;
+    if (removed != held) sqlite3_bind_int(stmt.get(), index++, removed);
+    sqlite3_bind_int(stmt.get(), index++, character_id);
+    sqlite3_bind_int(stmt.get(), index, item_id);
+    detail::run_and_expect_done(stmt, "remove from inventory");
+    return removed;
 }
 
 int Repository::add_player(const std::string& player_name) {

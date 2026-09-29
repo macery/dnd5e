@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "dnd/character.hpp"
+#include "dnd/item.hpp"
 #include "dnd/lookup_entry.hpp"
 #include "dnd/monster.hpp"
 #include "dnd/player.hpp"
@@ -34,6 +35,17 @@ public:
     std::vector<Character> get_characters_by_player(int player_id) const;
     std::vector<Monster> get_monsters() const;
     std::vector<Weapon> get_weapons() const;
+    std::vector<Item> get_items() const;
+
+    // The character's item stacks, ordered by item name. Deleting a
+    // character (or its player) removes its inventory too.
+    std::vector<InventoryEntry> get_inventory(int character_id) const;
+    // Adds `quantity` (> 0) of the item, stacking onto any existing entry.
+    void add_to_inventory(int character_id, int item_id, int quantity = 1);
+    // Removes up to `quantity` (> 0) of the item, deleting the entry once
+    // none are left. Returns how many were actually removed (0 if the
+    // character had none).
+    int remove_from_inventory(int character_id, int item_id, int quantity = 1);
 
     int add_player(const std::string& player_name);
     int add_character(const Character& character);

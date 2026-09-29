@@ -18,7 +18,7 @@ using detail::Statement;
 // for future schema changes -- never edit an existing one, since a
 // migration's sql is exactly what already ran on every database that has it
 // recorded in SchemaMigrations.
-constexpr std::array<Migration, 8> kMigrations = {{
+constexpr std::array<Migration, 9> kMigrations = {{
     {1, "initial schema: Players, Classes, Characters", R"sql(
         CREATE TABLE IF NOT EXISTS Players (
             PlayerID INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -145,6 +145,36 @@ constexpr std::array<Migration, 8> kMigrations = {{
     {8, "add experience and spent hit dice to Characters", R"sql(
         ALTER TABLE Characters ADD COLUMN Experience INTEGER NOT NULL DEFAULT 0;
         ALTER TABLE Characters ADD COLUMN HitDiceUsed INTEGER NOT NULL DEFAULT 0;
+    )sql"},
+    {9, "add Items (seeded) and CharacterInventory", R"sql(
+        CREATE TABLE IF NOT EXISTS Items (
+            ItemID INTEGER PRIMARY KEY AUTOINCREMENT,
+            Name TEXT NOT NULL UNIQUE,
+            Category TEXT NOT NULL,
+            Description TEXT NOT NULL DEFAULT '',
+            WeightLb REAL NOT NULL DEFAULT 0,
+            CostCp INTEGER NOT NULL DEFAULT 0,
+            HealDiceCount INTEGER NOT NULL DEFAULT 0,
+            HealDiceSides INTEGER NOT NULL DEFAULT 0,
+            HealBonus INTEGER NOT NULL DEFAULT 0
+        );
+
+        CREATE TABLE IF NOT EXISTS CharacterInventory (
+            CharacterID INTEGER NOT NULL REFERENCES Characters(CharacterId) ON DELETE CASCADE,
+            ItemID INTEGER NOT NULL REFERENCES Items(ItemID),
+            Quantity INTEGER NOT NULL CHECK (Quantity > 0),
+            PRIMARY KEY (CharacterID, ItemID)
+        );
+
+        INSERT INTO Items (Name, Category, Description, WeightLb, CostCp, HealDiceCount, HealDiceSides, HealBonus) VALUES
+            ('Potion of Healing', 'Consumable', 'A red, glimmering liquid. Drinking it restores 2d4 + 2 hit points.', 0.5, 5000, 2, 4, 2),
+            ('Rations (1 day)',   'Consumable', 'Dry, long-lasting food: jerky, dried fruit, hardtack, and nuts.', 2, 50, 0, 0, 0),
+            ('Waterskin',         'Gear', 'Holds 4 pints of liquid.', 5, 20, 0, 0, 0),
+            ('Torch',             'Gear', 'Burns for 1 hour, shedding bright light in a 20-foot radius.', 1, 1, 0, 0, 0),
+            ('Hempen Rope (50 feet)', 'Gear', 'Can be burst with a DC 17 Strength check.', 10, 100, 0, 0, 0),
+            ('Bedroll',           'Gear', 'For sleeping in the wild.', 7, 100, 0, 0, 0),
+            ('Healer''s Kit',     'Gear', 'Bandages, salves, and splints. Ten uses to stabilize a dying creature.', 3, 500, 0, 0, 0),
+            ('Thieves'' Tools',   'Gear', 'Picks, a file, and a small mirror, for disarming traps and opening locks.', 1, 2500, 0, 0, 0);
     )sql"},
 }};
 

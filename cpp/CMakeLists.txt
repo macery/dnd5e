@@ -20,6 +20,7 @@ add_library(dndcore
     src/adventure.cpp
     src/combat.cpp
     src/dice.cpp
+    src/inventory.cpp
     src/migrations.cpp
     src/progression.cpp
     src/repository.cpp
