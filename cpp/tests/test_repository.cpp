@@ -186,6 +186,8 @@ TEST_CASE("ability scores, HP/AC, and proficiency bitmasks round-trip", "[reposi
     character.armor_class = 15;
     character.skill_proficiencies = 0b101u;
     character.save_proficiencies = 0b10u;
+    character.experience = 7000;
+    character.hit_dice_used = 2;
     repo.add_character(character);
 
     auto characters = repo.get_characters();
@@ -204,6 +206,8 @@ TEST_CASE("ability scores, HP/AC, and proficiency bitmasks round-trip", "[reposi
     REQUIRE(loaded.armor_class == 15);
     REQUIRE(loaded.skill_proficiencies == 0b101u);
     REQUIRE(loaded.save_proficiencies == 0b10u);
+    REQUIRE(loaded.experience == 7000);
+    REQUIRE(loaded.hit_dice_used == 2);
 }
 
 TEST_CASE("adding a character without setting the new fields uses sane defaults", "[repository]") {
@@ -228,6 +232,8 @@ TEST_CASE("adding a character without setting the new fields uses sane defaults"
     REQUIRE(loaded.current_hp == 0);
     REQUIRE(loaded.skill_proficiencies == 0);
     REQUIRE(loaded.save_proficiencies == 0);
+    REQUIRE(loaded.experience == 0);
+    REQUIRE(loaded.hit_dice_used == 0);
 }
 
 TEST_CASE("update_player renames an existing player", "[repository]") {
@@ -263,6 +269,8 @@ TEST_CASE("update_character changes fields in place", "[repository]") {
     dnd::Character updated = loaded[0];
     updated.level = 4;
     updated.strength = 16;
+    updated.experience = 2700;
+    updated.hit_dice_used = 1;
     repo.update_character(updated);
 
     auto reloaded = repo.get_characters();
@@ -270,6 +278,8 @@ TEST_CASE("update_character changes fields in place", "[repository]") {
     REQUIRE(reloaded[0].character_id == character_id);
     REQUIRE(reloaded[0].level == 4);
     REQUIRE(reloaded[0].strength == 16);
+    REQUIRE(reloaded[0].experience == 2700);
+    REQUIRE(reloaded[0].hit_dice_used == 1);
 }
 
 TEST_CASE("delete_character removes only that character", "[repository]") {

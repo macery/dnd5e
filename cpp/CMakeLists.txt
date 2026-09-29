@@ -21,6 +21,7 @@ add_library(dndcore
     src/combat.cpp
     src/dice.cpp
     src/migrations.cpp
+    src/progression.cpp
     src/repository.cpp
     src/rules.cpp
 )

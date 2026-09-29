@@ -3,6 +3,7 @@
 #include <QMainWindow>
 #include <vector>
 
+#include "dnd/dice.hpp"
 #include "dnd/lookup_entry.hpp"
 #include "dnd/repository.hpp"
 #include "dnd/weapon.hpp"
@@ -33,6 +34,8 @@ private slots:
     void onCharacterActivated(const QModelIndex& index);
     void onDamageClicked();
     void onHealClicked();
+    void onShortRestClicked();
+    void onLongRestClicked();
     void onInitiativeTrackerClicked();
     void onMonstersClicked();
     void onCombatEncounterClicked();
@@ -43,6 +46,9 @@ private:
     void reloadLookupTables();
     void reloadCharactersForCurrentPlayer();
     void adjustCurrentCharacterHp(int delta);
+    // The selected character, or nullptr (after telling the user to pick
+    // one, titled `action`) if nothing is selected.
+    const dnd::Character* selectedCharacter(const QString& action);
     int currentPlayerId() const;
     QString currentPlayerName() const;
 
@@ -64,10 +70,15 @@ private:
     QSpinBox* hpAmountSpin_ = nullptr;
     QPushButton* damageButton_ = nullptr;
     QPushButton* healButton_ = nullptr;
+    QPushButton* shortRestButton_ = nullptr;
+    QPushButton* longRestButton_ = nullptr;
     QPushButton* initiativeTrackerButton_ = nullptr;
     QPushButton* monstersButton_ = nullptr;
     QPushButton* combatEncounterButton_ = nullptr;
     QPushButton* soloAdventureButton_ = nullptr;
+    dnd::SystemRandomSource randomSource_;
+    dnd::Dice dice_{randomSource_};
+
     CharacterTableModel* characterModel_ = nullptr;
     DiceRollerWidget* diceRoller_ = nullptr;
 };

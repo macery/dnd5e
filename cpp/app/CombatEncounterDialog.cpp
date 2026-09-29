@@ -15,6 +15,7 @@
 
 #include <algorithm>
 
+#include "dnd/progression.hpp"
 #include "dnd/rules.hpp"
 
 namespace {
@@ -30,6 +31,7 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
       repository_(repository),
       characters_(std::move(characters)),
       monsters_(std::move(monsters)),
+      classes_(repository.get_classes()),
       dice_(randomSource_) {
     setWindowTitle("Combat Encounter");
 
@@ -195,6 +197,7 @@ void CombatEncounterDialog::addMonsterParticipants(const dnd::Monster& monster, 
         participant.damage_dice_count = monster.damage_dice_count;
         participant.damage_dice_sides = monster.damage_dice_sides;
         participant.damage_bonus = monster.damage_bonus;
+        participant.xp = dnd::xp_for_challenge_rating(monster.challenge_rating);
         participants_.push_back(participant);
     }
 }
@@ -429,9 +432,42 @@ void CombatEncounterDialog::checkForVictoryOrDefeat() {
         if (!victoryText_.isEmpty()) victoryMessage += " " + victoryText_;
         statusLabel_->setText("Status: " + victoryMessage);
         log("--- " + victoryMessage + " ---");
+        awardVictoryExperience();
     }
 
     if (encounterOver_) takeActionButton_->setEnabled(false);
+}
+
+void CombatEncounterDialog::awardVictoryExperience() {
+    int total_xp = 0;
+    for (const auto& participant : participants_) {
+        if (!participant.is_character) total_xp += participant.xp;
+    }
+    if (characters_.empty() || total_xp == 0) return;
+
+    int share = total_xp / static_cast<int>(characters_.size());
+    log(QString("The party earns %1 XP (%2 each).").arg(total_xp).arg(share));
+
+    for (auto& character : characters_) {
+        int hit_die = dnd::hit_die_for_class_id(classes_, character.class_id);
+        int levels_gained = dnd::award_experience(character, share, hit_die);
+        repository_.update_character(character);
+
+        for (auto& participant : participants_) {
+            if (participant.is_character && participant.character_id == character.character_id) {
+                participant.current_hp = character.current_hp;
+                participant.max_hp = character.max_hp;
+            }
+        }
+
+        if (levels_gained > 0) {
+            log(QString("*** %1 reaches level %2! Max HP is now %3. ***")
+                    .arg(QString::fromStdString(character.character_name))
+                    .arg(character.level)
+                    .arg(character.max_hp));
+        }
+    }
+    refreshParticipantTable();
 }
 
 void CombatEncounterDialog::refreshParticipantTable() {

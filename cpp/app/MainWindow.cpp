@@ -27,6 +27,7 @@
 #include "MonsterListDialog.hpp"
 
 #include "dnd/adventure.hpp"
+#include "dnd/progression.hpp"
 
 MainWindow::MainWindow(dnd::Repository& repository, QWidget* parent)
     : QMainWindow(parent), repository_(repository) {
@@ -71,6 +72,13 @@ MainWindow::MainWindow(dnd::Repository& repository, QWidget* parent)
     hpAmountSpin_->setValue(1);
     damageButton_ = new QPushButton("Damage", central);
     healButton_ = new QPushButton("Heal", central);
+    shortRestButton_ = new QPushButton("Short Rest", central);
+    shortRestButton_->setToolTip(
+        "An hour's breather: spend one hit die (one per level, recovered on a long rest) to regain "
+        "that die's roll + your Constitution modifier in HP.");
+    longRestButton_ = new QPushButton("Long Rest", central);
+    longRestButton_->setToolTip(
+        "A full night's rest: regain all HP and up to half your spent hit dice.");
     initiativeTrackerButton_ = new QPushButton("Initiative Tracker", central);
     monstersButton_ = new QPushButton("Monsters", central);
     combatEncounterButton_ = new QPushButton("Combat Encounter", central);
@@ -78,6 +86,8 @@ MainWindow::MainWindow(dnd::Repository& repository, QWidget* parent)
     combatRow->addWidget(hpAmountSpin_);
     combatRow->addWidget(damageButton_);
     combatRow->addWidget(healButton_);
+    combatRow->addWidget(shortRestButton_);
+    combatRow->addWidget(longRestButton_);
     combatRow->addStretch(1);
     combatRow->addWidget(initiativeTrackerButton_);
     combatRow->addWidget(monstersButton_);
@@ -102,6 +112,8 @@ MainWindow::MainWindow(dnd::Repository& repository, QWidget* parent)
     connect(characterTable_, &QTableView::doubleClicked, this, &MainWindow::onCharacterActivated);
     connect(damageButton_, &QPushButton::clicked, this, &MainWindow::onDamageClicked);
     connect(healButton_, &QPushButton::clicked, this, &MainWindow::onHealClicked);
+    connect(shortRestButton_, &QPushButton::clicked, this, &MainWindow::onShortRestClicked);
+    connect(longRestButton_, &QPushButton::clicked, this, &MainWindow::onLongRestClicked);
     connect(initiativeTrackerButton_, &QPushButton::clicked, this, &MainWindow::onInitiativeTrackerClicked);
     connect(monstersButton_, &QPushButton::clicked, this, &MainWindow::onMonstersClicked);
     connect(combatEncounterButton_, &QPushButton::clicked, this, &MainWindow::onCombatEncounterClicked);
@@ -222,6 +234,9 @@ void MainWindow::onEditCharacterClicked() {
         dnd::Character updated = dialog.character();
         updated.character_id = existing.character_id;
         updated.player_id = existing.player_id;
+        // Not editable in the dialog -- earned/spent through play only.
+        updated.experience = existing.experience;
+        updated.hit_dice_used = existing.hit_dice_used;
         repository_.update_character(updated);
         reloadCharactersForCurrentPlayer();
     }
@@ -252,14 +267,20 @@ void MainWindow::onCharacterActivated(const QModelIndex& index) {
     dialog.exec();
 }
 
-void MainWindow::adjustCurrentCharacterHp(int delta) {
+const dnd::Character* MainWindow::selectedCharacter(const QString& action) {
     QModelIndex index = characterTable_->currentIndex();
     if (!index.isValid()) {
-        QMessageBox::information(this, "Adjust HP", "Select a character first.");
-        return;
+        QMessageBox::information(this, action, "Select a character first.");
+        return nullptr;
     }
+    return &characterModel_->characterAt(index.row());
+}
 
-    dnd::Character character = characterModel_->characterAt(index.row());
+void MainWindow::adjustCurrentCharacterHp(int delta) {
+    const dnd::Character* selected = selectedCharacter("Adjust HP");
+    if (!selected) return;
+
+    dnd::Character character = *selected;
     character.current_hp = std::clamp(character.current_hp + delta, 0, character.max_hp);
     repository_.update_character(character);
     reloadCharactersForCurrentPlayer();
@@ -271,6 +292,50 @@ void MainWindow::onDamageClicked() {
 
 void MainWindow::onHealClicked() {
     adjustCurrentCharacterHp(hpAmountSpin_->value());
+}
+
+void MainWindow::onShortRestClicked() {
+    const dnd::Character* selected = selectedCharacter("Short Rest");
+    if (!selected) return;
+
+    dnd::Character character = *selected;
+    QString name = QString::fromStdString(character.character_name);
+    int hit_die = dnd::hit_die_for_class_id(classes_, character.class_id);
+    int regained = dnd::spend_hit_die(character, dice_, hit_die);
+    if (regained < 0) {
+        QMessageBox::information(this, "Short Rest",
+            QString("%1 has no hit dice left. Take a long rest to recover them.").arg(name));
+        return;
+    }
+
+    repository_.update_character(character);
+    reloadCharactersForCurrentPlayer();
+    QMessageBox::information(this, "Short Rest",
+        QString("%1 spends a d%2 hit die and regains %3 HP (now %4/%5). Hit dice left: %6/%7.")
+            .arg(name)
+            .arg(hit_die)
+            .arg(regained)
+            .arg(character.current_hp)
+            .arg(character.max_hp)
+            .arg(dnd::hit_dice_remaining(character))
+            .arg(character.level));
+}
+
+void MainWindow::onLongRestClicked() {
+    const dnd::Character* selected = selectedCharacter("Long Rest");
+    if (!selected) return;
+
+    dnd::Character character = *selected;
+    dnd::take_long_rest(character);
+    repository_.update_character(character);
+    reloadCharactersForCurrentPlayer();
+    QMessageBox::information(this, "Long Rest",
+        QString("%1 is fully rested: %2/%3 HP, %4/%5 hit dice.")
+            .arg(QString::fromStdString(character.character_name))
+            .arg(character.current_hp)
+            .arg(character.max_hp)
+            .arg(dnd::hit_dice_remaining(character))
+            .arg(character.level));
 }
 
 void MainWindow::onInitiativeTrackerClicked() {

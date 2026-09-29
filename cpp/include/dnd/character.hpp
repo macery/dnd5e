@@ -26,6 +26,11 @@ struct Character {
     int armor_class = 10;
     int weapon_id = 0;
 
+    int experience = 0;
+    // Spent on short rests, partly recovered on a long rest; the total
+    // available is one per level (see dnd/progression.hpp).
+    int hit_dice_used = 0;
+
     // Bit index = static_cast<int>(dnd::Skill) / dnd::Ability. Kept as raw
     // bitmasks here (rather than a join table) because the set of skills and
     // abilities is fixed 5e rules data, not per-character data.

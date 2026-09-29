@@ -18,7 +18,8 @@ using detail::bind_text;
 constexpr const char* kCharacterColumns =
     "CharacterId, CharacterName, Class, Race, Alignment, PlayerID, Level, "
     "Strength, Dexterity, Constitution, Intelligence, Wisdom, Charisma, "
-    "CurrentHP, MaxHP, ArmorClass, SkillProficiencies, SaveProficiencies, WeaponID";
+    "CurrentHP, MaxHP, ArmorClass, SkillProficiencies, SaveProficiencies, WeaponID, "
+    "Experience, HitDiceUsed";
 
 Character read_character_row(sqlite3_stmt* stmt) {
     Character character;
@@ -42,6 +43,8 @@ Character read_character_row(sqlite3_stmt* stmt) {
     character.skill_proficiencies = static_cast<std::uint32_t>(sqlite3_column_int(stmt, 16));
     character.save_proficiencies = static_cast<std::uint32_t>(sqlite3_column_int(stmt, 17));
     character.weapon_id = sqlite3_column_int(stmt, 18);
+    character.experience = sqlite3_column_int(stmt, 19);
+    character.hit_dice_used = sqlite3_column_int(stmt, 20);
     return character;
 }
 
@@ -199,8 +202,9 @@ int Repository::add_character(const Character& character) {
     Statement stmt(db_,
         "INSERT INTO Characters (CharacterName, Class, Race, Alignment, PlayerID, Level, "
         "Strength, Dexterity, Constitution, Intelligence, Wisdom, Charisma, "
-        "CurrentHP, MaxHP, ArmorClass, SkillProficiencies, SaveProficiencies, WeaponID) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);");
+        "CurrentHP, MaxHP, ArmorClass, SkillProficiencies, SaveProficiencies, WeaponID, "
+        "Experience, HitDiceUsed) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);");
     bind_text(stmt, 1, character.character_name);
     sqlite3_bind_int(stmt.get(), 2, character.class_id);
     sqlite3_bind_int(stmt.get(), 3, character.race);
@@ -219,6 +223,8 @@ int Repository::add_character(const Character& character) {
     sqlite3_bind_int(stmt.get(), 16, static_cast<int>(character.skill_proficiencies));
     sqlite3_bind_int(stmt.get(), 17, static_cast<int>(character.save_proficiencies));
     sqlite3_bind_int(stmt.get(), 18, character.weapon_id);
+    sqlite3_bind_int(stmt.get(), 19, character.experience);
+    sqlite3_bind_int(stmt.get(), 20, character.hit_dice_used);
     detail::run_and_expect_done(stmt, "insert character");
     return static_cast<int>(sqlite3_last_insert_rowid(db_));
 }
@@ -254,8 +260,8 @@ void Repository::update_character(const Character& character) {
     Statement stmt(db_,
         "UPDATE Characters SET CharacterName = ?, Class = ?, Race = ?, Alignment = ?, Level = ?, "
         "Strength = ?, Dexterity = ?, Constitution = ?, Intelligence = ?, Wisdom = ?, Charisma = ?, "
-        "CurrentHP = ?, MaxHP = ?, ArmorClass = ?, SkillProficiencies = ?, SaveProficiencies = ?, WeaponID = ? "
-        "WHERE CharacterId = ?;");
+        "CurrentHP = ?, MaxHP = ?, ArmorClass = ?, SkillProficiencies = ?, SaveProficiencies = ?, WeaponID = ?, "
+        "Experience = ?, HitDiceUsed = ? WHERE CharacterId = ?;");
     bind_text(stmt, 1, character.character_name);
     sqlite3_bind_int(stmt.get(), 2, character.class_id);
     sqlite3_bind_int(stmt.get(), 3, character.race);
@@ -273,7 +279,9 @@ void Repository::update_character(const Character& character) {
     sqlite3_bind_int(stmt.get(), 15, static_cast<int>(character.skill_proficiencies));
     sqlite3_bind_int(stmt.get(), 16, static_cast<int>(character.save_proficiencies));
     sqlite3_bind_int(stmt.get(), 17, character.weapon_id);
-    sqlite3_bind_int(stmt.get(), 18, character.character_id);
+    sqlite3_bind_int(stmt.get(), 18, character.experience);
+    sqlite3_bind_int(stmt.get(), 19, character.hit_dice_used);
+    sqlite3_bind_int(stmt.get(), 20, character.character_id);
     detail::run_and_expect_done(stmt, "update character");
 }
 

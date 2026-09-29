@@ -57,6 +57,7 @@ private:
         // Set by the Dodge action; attacks against this participant are at
         // disadvantage until the start of their own next turn.
         bool is_dodging = false;
+        int xp = 0;  // monsters only: awarded to the party on victory
     };
 
     void addCharacterParticipants(const std::vector<dnd::Weapon>& weapons);
@@ -78,11 +79,15 @@ private:
     // string ("miss" / "hit for N" / "CRITICAL HIT for N") for logging.
     QString applyDamage(Participant& target, const dnd::AttackResult& result);
     void checkForVictoryOrDefeat();
+    // Splits the defeated monsters' XP evenly across every character in the
+    // encounter (the 5e rule), persisting any resulting level-ups.
+    void awardVictoryExperience();
     void log(const QString& line);
 
     dnd::Repository& repository_;
     std::vector<dnd::Character> characters_;
     std::vector<dnd::Monster> monsters_;
+    std::vector<dnd::LookupEntry> classes_;  // for each character's hit die on level-up
     std::vector<Participant> participants_;
     std::vector<int> turnOrder_;   // participant indices, sorted by initiative
     int currentTurnIndex_ = -1;    // index into turnOrder_; -1 = no active turn

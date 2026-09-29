@@ -18,7 +18,7 @@ using detail::Statement;
 // for future schema changes -- never edit an existing one, since a
 // migration's sql is exactly what already ran on every database that has it
 // recorded in SchemaMigrations.
-constexpr std::array<Migration, 7> kMigrations = {{
+constexpr std::array<Migration, 8> kMigrations = {{
     {1, "initial schema: Players, Classes, Characters", R"sql(
         CREATE TABLE IF NOT EXISTS Players (
             PlayerID INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -141,6 +141,10 @@ constexpr std::array<Migration, 7> kMigrations = {{
         UPDATE Monsters SET AttackName = 'Bite',      AttackBonus = 4, DamageDiceCount = 2, DamageDiceSides = 4,  DamageBonus = 2 WHERE Name = 'Wolf';
         UPDATE Monsters SET AttackName = 'Slam',      AttackBonus = 3, DamageDiceCount = 1, DamageDiceSides = 6,  DamageBonus = 1 WHERE Name = 'Zombie';
         UPDATE Monsters SET AttackName = 'Greataxe',  AttackBonus = 5, DamageDiceCount = 1, DamageDiceSides = 12, DamageBonus = 3 WHERE Name = 'Orc';
+    )sql"},
+    {8, "add experience and spent hit dice to Characters", R"sql(
+        ALTER TABLE Characters ADD COLUMN Experience INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE Characters ADD COLUMN HitDiceUsed INTEGER NOT NULL DEFAULT 0;
     )sql"},
 }};
 

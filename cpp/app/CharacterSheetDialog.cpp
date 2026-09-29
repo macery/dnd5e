@@ -10,6 +10,7 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
+#include "dnd/progression.hpp"
 #include "dnd/rules.hpp"
 
 namespace {
@@ -85,6 +86,21 @@ CharacterSheetDialog::CharacterSheetDialog(const dnd::Character& character,
     addExplainedRow(summaryForm, "Hit Points",
         new QLabel(QString("%1 / %2").arg(character.current_hp).arg(character.max_hp), summaryGroup),
         "How much damage this character can take before falling unconscious. Current / maximum.");
+    QString experienceText = character.level >= dnd::kMaxLevel
+        ? QString("%1 (max level)").arg(character.experience)
+        : QString("%1 / %2 for level %3")
+              .arg(character.experience)
+              .arg(dnd::xp_threshold_for_level(character.level + 1))
+              .arg(character.level + 1);
+    addExplainedRow(summaryForm, "Experience", new QLabel(experienceText, summaryGroup),
+        "Earned by defeating monsters, split evenly across the party. Reaching the next threshold levels "
+        "this character up, raising max HP and, every few levels, the proficiency bonus.");
+    int hitDie = dnd::hit_die_for_class_id(classes, character.class_id);
+    addExplainedRow(summaryForm, "Hit Dice",
+        new QLabel(QString("%1 / %2 (d%3)").arg(dnd::hit_dice_remaining(character)).arg(character.level).arg(hitDie),
+                   summaryGroup),
+        "Spent on a short rest to heal (roll the die + Constitution modifier). You have one per level; a long "
+        "rest recovers up to half of them.");
     addExplainedRow(summaryForm, "Armor Class",
         new QLabel(QString::number(character.armor_class), summaryGroup),
         "How hard this character is to hit. An attack roll must meet or beat this number to hit.");
