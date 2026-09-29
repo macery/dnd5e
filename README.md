@@ -100,6 +100,28 @@ ctest --test-dir cpp/build --output-on-failure
 
 On Windows, CI installs SQLite through vcpkg; see `.github/workflows/cpp-ci.yml` for the exact configure command.
 
+### Portable Linux build (AppImage)
+
+`cpp/packaging/build-appimage.sh` builds `DnD_Engine-x86_64.AppImage`, a single file that bundles Qt and runs without installing anything. It builds inside an Ubuntu 24.04 container so the result runs on Ubuntu 24.04 and newer distros. An AppImage only runs where glibc is at least as new as on the build system, and Ubuntu 24.04 also ships an older Qt than Fedora does. From the repo root:
+
+```sh
+podman run --rm -v "$PWD":/src:Z -w /src docker.io/library/ubuntu:24.04 cpp/packaging/build-appimage.sh
+```
+
+The script runs the tests, then writes the AppImage to `cpp/packaging/out/`. To use it on another machine:
+
+```sh
+scp cpp/packaging/out/DnD_Engine-x86_64.AppImage other-machine:~/
+# on the other machine:
+chmod +x DnD_Engine-x86_64.AppImage && ./DnD_Engine-x86_64.AppImage
+```
+
+Things to know:
+- **FUSE:** AppImages need FUSE 2. If it won't start on Ubuntu, either `sudo apt install libfuse2t64`, or run it with `APPIMAGE_EXTRACT_AND_RUN=1 ./DnD_Engine-x86_64.AppImage`.
+- **OpenGL:** it expects the desktop's graphics libraries. On a minimal install, `sudo apt install libopengl0` provides the one most likely to be missing.
+- **Display:** only the X11 platform plugin is bundled. On a Wayland session it runs through XWayland.
+- **Save data:** each machine has its own database. Characters don't move between machines yet; that's the save/load TODO.
+
 ### Where your data lives
 
 The app stores its SQLite database in the per-user data directory that Qt reports for this app, for example:
@@ -183,7 +205,9 @@ Any pending schema migrations run on launch, so older save files are upgraded in
 
 - [ ] **Stale comment in `app/main.cpp`**: it still says there's "no schema migration system yet", which is no longer true.
 - [ ] **Qt UI tests**: add some tests for the dialogs, or move more of their logic into `dndcore` where it can be tested.
-- [ ] **Packaging**: release builds (AppImage/Flatpak for Linux, an installer for Windows) from CI.
+- [x] **Linux AppImage**: a local build script (`cpp/packaging/build-appimage.sh`).
+- [ ] **Packaging in CI**: build the AppImage in CI and attach it to releases. Also a Windows installer, and maybe Flatpak.
+- [ ] **Wayland plugin**: bundle Qt's Wayland platform plugin so the app runs natively on Wayland instead of through XWayland.
 - [ ] **Code style**: add `clang-format` / `clang-tidy` configs and check them in CI.
 - [ ] **Legacy code**: decide whether to archive or remove the legacy `DND5EProject/` C# code.
 - [ ] **Per-player save/load**: export a player's characters (stats, XP, inventory) to a file and import them into another database, for backups, sharing, and moving between machines. It starts per-player, but the scope still needs working through. Open questions:

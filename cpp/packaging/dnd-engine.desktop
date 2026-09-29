@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=DnD Engine
+Comment=D&D 5e character manager and solo combat engine
+Exec=dnd_app
+Icon=dnd-engine
+Categories=Game;RolePlaying;
+Terminal=false
