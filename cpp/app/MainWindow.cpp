@@ -18,6 +18,7 @@
 #include <algorithm>
 
 #include "AdventurePickerDialog.hpp"
+#include "CharacterCreationWizard.hpp"
 #include "CharacterEditorDialog.hpp"
 #include "CharacterSheetDialog.hpp"
 #include "CharacterTableModel.hpp"
@@ -217,13 +218,8 @@ void MainWindow::onAddCharacterClicked() {
         return;
     }
 
-    CharacterEditorDialog dialog(classes_, races_, alignments_, weapons_, /*existing=*/nullptr, this);
-    if (dialog.exec() == QDialog::Accepted) {
-        dnd::Character character = dialog.character();
-        character.player_id = currentPlayerId();
-        repository_.add_character(character);
-        reloadCharactersForCurrentPlayer();
-    }
+    CharacterCreationWizard wizard(repository_, currentPlayerId(), weapons_, this);
+    if (wizard.exec() == QDialog::Accepted) reloadCharactersForCurrentPlayer();
 }
 
 void MainWindow::onEditCharacterClicked() {
@@ -242,6 +238,7 @@ void MainWindow::onEditCharacterClicked() {
         // Not editable in the dialog -- earned/spent through play only.
         updated.experience = existing.experience;
         updated.hit_dice_used = existing.hit_dice_used;
+        updated.background = existing.background;
         repository_.update_character(updated);
         reloadCharactersForCurrentPlayer();
     }

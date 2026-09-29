@@ -7,6 +7,7 @@ add_executable(dnd_app
     MainWindow.cpp
     CharacterTableModel.cpp
     DiceRollerWidget.cpp
+    CharacterCreationWizard.cpp
     CharacterEditorDialog.cpp
     CharacterSheetDialog.cpp
     InitiativeTrackerDialog.cpp

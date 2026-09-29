@@ -18,6 +18,7 @@ endif()
 
 add_library(dndcore
     src/adventure.cpp
+    src/character_creation.cpp
     src/combat.cpp
     src/dice.cpp
     src/inventory.cpp

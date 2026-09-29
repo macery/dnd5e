@@ -18,7 +18,7 @@ using detail::Statement;
 // for future schema changes -- never edit an existing one, since a
 // migration's sql is exactly what already ran on every database that has it
 // recorded in SchemaMigrations.
-constexpr std::array<Migration, 9> kMigrations = {{
+constexpr std::array<Migration, 10> kMigrations = {{
     {1, "initial schema: Players, Classes, Characters", R"sql(
         CREATE TABLE IF NOT EXISTS Players (
             PlayerID INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -175,6 +175,15 @@ constexpr std::array<Migration, 9> kMigrations = {{
             ('Bedroll',           'Gear', 'For sleeping in the wild.', 7, 100, 0, 0, 0),
             ('Healer''s Kit',     'Gear', 'Bandages, salves, and splints. Ten uses to stabilize a dying creature.', 3, 500, 0, 0, 0),
             ('Thieves'' Tools',   'Gear', 'Picks, a file, and a small mirror, for disarming traps and opening locks.', 1, 2500, 0, 0, 0);
+    )sql"},
+    {10, "add Background to Characters; seed the simple weapons classes start with", R"sql(
+        ALTER TABLE Characters ADD COLUMN Background TEXT NOT NULL DEFAULT '';
+
+        INSERT INTO Weapons (Name, DamageDiceCount, DamageDiceSides, IsFinesse, IsRanged) VALUES
+            ('Mace',           1, 6, 0, 0),
+            ('Quarterstaff',   1, 6, 0, 0),
+            ('Handaxe',        1, 6, 0, 0),
+            ('Light Crossbow', 1, 8, 0, 1);
     )sql"},
 }};
 

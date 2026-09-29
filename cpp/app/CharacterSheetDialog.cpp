@@ -10,6 +10,7 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
+#include "dnd/character_creation.hpp"
 #include "dnd/progression.hpp"
 #include "dnd/rules.hpp"
 
@@ -81,6 +82,15 @@ CharacterSheetDialog::CharacterSheetDialog(const dnd::Character& character,
     summaryForm->addRow("Class", new QLabel(nameFor(classes, character.class_id), summaryGroup));
     summaryForm->addRow("Race", new QLabel(nameFor(races, character.race), summaryGroup));
     summaryForm->addRow("Alignment", new QLabel(nameFor(alignments, character.alignment), summaryGroup));
+    if (!character.background.empty()) {
+        QString background = QString::fromStdString(character.background);
+        if (const dnd::BackgroundInfo* info = dnd::find_background_info(character.background)) {
+            addExplainedRow(summaryForm, "Background", new QLabel(background, summaryGroup),
+                             QString::fromStdString(info->summary));
+        } else {
+            summaryForm->addRow("Background", new QLabel(background, summaryGroup));
+        }
+    }
     addExplainedRow(summaryForm, "Weapon", new QLabel(weaponSummaryFor(character, weapons), summaryGroup),
                      "The weapon this character has equipped, its bonus to hit, and its damage roll.");
     addExplainedRow(summaryForm, "Hit Points",

@@ -25,6 +25,7 @@ struct Character {
     int max_hp = 0;
     int armor_class = 10;
     int weapon_id = 0;
+    std::string background;  // a dnd::BackgroundInfo name; empty if none
 
     int experience = 0;
     // Spent on short rests, partly recovered on a long rest; the total

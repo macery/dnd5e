@@ -6,6 +6,7 @@
 #include <stdexcept>
 #include <utility>
 
+#include "dnd/character_creation.hpp"
 #include "dnd/rules.hpp"
 
 namespace dnd {
@@ -29,16 +30,6 @@ constexpr std::array<int, kMaxLevel> kLevelThresholds = {
     85000, 100000, 120000, 140000, 165000, 195000, 225000, 265000, 305000, 355000,
 };
 
-struct ClassHitDie {
-    const char* class_name;
-    int hit_die;
-};
-
-constexpr std::array<ClassHitDie, 12> kClassHitDice = {{
-    {"Barbarian", 12}, {"Bard", 8},    {"Cleric", 8},   {"Druid", 8},
-    {"Fighter", 10},   {"Monk", 8},    {"Paladin", 10}, {"Ranger", 10},
-    {"Rogue", 8},      {"Sorcerer", 6}, {"Warlock", 8}, {"Wizard", 6},
-}};
 
 }  // namespace
 
@@ -65,18 +56,14 @@ int level_for_xp(int xp) {
 }
 
 int hit_die_for_class(const std::string& class_name) {
-    for (const auto& entry : kClassHitDice) {
-        if (class_name == entry.class_name) return entry.hit_die;
-    }
+    if (const ClassInfo* info = find_class_info(class_name)) return info->hit_die;
     throw std::invalid_argument("unknown class: " + class_name);
 }
 
 int hit_die_for_class_id(const std::vector<LookupEntry>& classes, int class_id) {
     for (const auto& entry : classes) {
         if (entry.id != class_id) continue;
-        for (const auto& known : kClassHitDice) {
-            if (entry.name == known.class_name) return known.hit_die;
-        }
+        if (const ClassInfo* info = find_class_info(entry.name)) return info->hit_die;
     }
     return 8;
 }

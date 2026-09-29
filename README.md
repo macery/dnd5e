@@ -10,7 +10,18 @@ It manages players and characters, computes a full character sheet from the 5e r
 
 ## Features
 
-- **Players & characters**: create, edit, and delete players and their characters (class, race, alignment, level, ability scores, HP, AC, proficiencies, equipped weapon).
+- **Players & characters**: create, edit, and delete players and their characters.
+- **Character creation wizard**: a step-by-step guide that builds a rules-valid level-1 character:
+  - **Class:** sets the hit die, saving throws, and skill choices.
+  - **Race:** adds ability bonuses, with a choice of +1s for Half-Elves.
+  - **Ability scores:** standard array, roll 4d6 drop the lowest, or 27-point buy.
+  - **Background:** grants two skill proficiencies.
+  - **Skills:** class picks and free picks, checked against the rules.
+  - **Name and alignment.**
+  - **Starting weapon and Explorer's Pack.**
+  - **Review:** the finished sheet, before saving. HP and AC (including Unarmored Defense) are calculated for you.
+
+  Editing an existing character still uses the free-form editor.
 - **Character sheet**: every derived stat is computed from the 5e rules, never stored: ability modifiers, proficiency bonus, saving throws, skills, initiative, passive Perception, and weapon attack/damage. Saves and skills can be rolled directly, with advantage or disadvantage.
 - **Dice roller**: any number of dice with any number of sides, plus d20 rolls with advantage/disadvantage.
 - **HP quick-adjust**: Damage and Heal buttons for the selected character.
@@ -59,6 +70,7 @@ dnd5e/
 | `rules` | Pure 5e rules math: modifiers, proficiency, skills, saves, weapon attack bonuses. |
 | `combat` | Attack resolution (hit/miss, crits, advantage/disadvantage). Knows nothing about characters or monsters. |
 | `inventory` | The item model (`item.hpp`), healing consumables, weight and cost helpers. |
+| `character_creation` | Class, race, and background rules data; ability score generation; skill plans; validation; and assembling a level-1 character. |
 | `progression` | XP tables, leveling, class hit dice, and short/long rests. |
 | `adventure` | Built-in solo adventure templates. |
 | `repository` | SQLite persistence for players, characters, inventories, and the lookup tables. |
@@ -142,7 +154,7 @@ Any pending schema migrations run on launch, so older save files are upgraded in
 ## Quick start (playing)
 
 1. Type a player name and click **Add Player**.
-2. Click **Add Character** and fill in their class, stats, HP, AC, and weapon.
+2. Click **Add Character** and follow the wizard: class, race, ability scores, background, skills, name, and equipment.
 3. Double-click a character to open their **character sheet**.
 4. Click **Solo Adventure**, pick one, then **Roll Initiative** and fight. Use **Next Turn** to hand play back to the monsters.
 5. Win to earn XP and loot. Use **Inventory** to see or use items. Afterwards, use **Short Rest** or **Long Rest** to recover before the next fight.
@@ -170,7 +182,7 @@ Any pending schema migrations run on launch, so older save files are upgraded in
 
 ### Magic system
 
-Planned after the character creation wizard. The wizard adds the per-class rules data this builds on, and it will gain a "Choose spells" step once spells exist.
+Next up. It builds on the per-class rules data from the character creation wizard, which will gain a "Choose spells" step once spells exist.
 
 - [ ] **Design the approach**: decide what needs to be data (a `Spells` table: level, school, casting time, range, components, duration, damage/healing dice, save ability, attack or save) and what needs code (special effects).
 - [ ] **Spellcasting stats**: each class's spellcasting ability, spell save DC (8 + proficiency + modifier), and spell attack bonus, added to `rules`.
@@ -184,7 +196,7 @@ Planned after the character creation wizard. The wizard adds the per-class rules
 
 ### Characters
 
-- [ ] **Character creation wizard** (next up): a step-by-step `QWizard` that builds a complete, rules-valid level-1 character, instead of the current single form where everything is typed by hand. Several items below are steps of it.
+- [x] **Character creation wizard**: a step-by-step `QWizard` that builds a complete, rules-valid level-1 character, instead of the current single form where everything is typed by hand. Several items below are steps of it.
   1. **Class:** sets the hit die and saving-throw proficiencies, and which skills you can choose from and how many (e.g. a Rogue picks 4).
   2. **Race:** ability score increases, speed, and traits.
   3. **Ability scores:** roll 4d6 drop the lowest, use point buy, or take the standard array, then assign each value to an ability, with racial bonuses shown.
@@ -194,15 +206,15 @@ Planned after the character creation wizard. The wizard adds the per-class rules
   7. **Equipment:** a starting weapon, plus a starting gear pack that goes straight into the inventory.
   8. **Review:** a preview of the finished character sheet (HP from hit die + CON, AC, all bonuses) before saving.
 
-  It needs new per-class rules data: saving throws, skill choices, hit die, and later the spellcasting ability. The existing editor can also use that data to check proficiencies.
-- [ ] **Ability score generation**: 4d6 drop the lowest, point buy, and the standard array in the character editor.
-- [ ] **Race traits**: ability score increases, speed, darkvision, and racial features.
+  The per-class rules data it added (saving throws, skill choices, hit die) lives in `dnd/character_creation.hpp`. Still to do: a spellcasting ability per class for the magic system, and using this data in the existing editor to check proficiencies.
+- [x] **Ability score generation**: 4d6 drop the lowest, point buy, and the standard array, in the wizard.
+- [ ] **Race traits**: ability score increases and racial skills are applied. Speed and traits (darkvision, Lucky, Relentless Endurance, etc.) are shown but not simulated. Subraces (Hill Dwarf, High Elf, ...) aren't modeled, and speed isn't stored on the character yet.
 - [ ] **Class features**: a few defining ones, e.g. Fighter's Second Wind and Action Surge, Rogue's Sneak Attack, Barbarian's Rage.
 - [ ] **Level-up choices**: Ability Score Improvements at levels 4/8/12/16/19, and an option to roll HP instead of taking the average.
-- [ ] **Starting HP**: calculate level-1 max HP from the class hit die plus CON instead of entering it by hand.
+- [x] **Starting HP**: level-1 max HP is the class hit die plus CON, calculated by the wizard.
 - [ ] **Keep level and XP in sync**: editing the level by hand in the editor can leave it out of step with XP.
 - [ ] **Weapon proficiencies**: attack bonuses currently assume the character is proficient with every weapon.
-- [ ] **Backgrounds**: skill proficiencies plus flavor.
+- [x] **Backgrounds**: 13 PHB backgrounds, each granting two skill proficiencies, stored on the character and shown on the sheet. Background features and tool proficiencies aren't modeled.
 
 ### Combat
 

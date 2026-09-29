@@ -67,7 +67,7 @@ TEST_CASE("get_weapons returns the seeded weapon list", "[repository]") {
     dnd::Repository repo(":memory:");
 
     auto weapons = repo.get_weapons();
-    REQUIRE(weapons.size() == 8);
+    REQUIRE(weapons.size() == 12);
 
     const dnd::Weapon* rapier = nullptr;
     for (const auto& weapon : weapons) {
