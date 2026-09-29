@@ -184,11 +184,11 @@ Any pending schema migrations run on launch, so older save files are upgraded in
 
 Next up. It builds on the per-class rules data from the character creation wizard, which will gain a "Choose spells" step once spells exist.
 
-- [ ] **Design the approach**: decide what needs to be data (a `Spells` table: level, school, casting time, range, components, duration, damage/healing dice, save ability, attack or save) and what needs code (special effects).
+- [x] **Design the approach**: see [docs/magic-system.md](docs/magic-system.md). It covers what's data and what's code, the `Spells` schema, class spellcasting rules, the starter spell list, three build phases, and the settled decisions (2014 PHB rules, "choose up to N targets" for area spells, spells cast as actions, no monster casters yet).
 - [ ] **Spellcasting stats**: each class's spellcasting ability, spell save DC (8 + proficiency + modifier), and spell attack bonus, added to `rules`.
 - [ ] **Spell slots**: slots per level by class and level, spent when casting and restored on a long rest (Warlock pact slots on a short rest).
 - [ ] **Known/prepared spells**: a per-character spell list, plus a spellbook UI on the character sheet.
-- [ ] **Starter spell list**: cantrips (Fire Bolt, Sacred Flame, Eldritch Blast) and level-1 spells (Magic Missile, Cure Wounds, Healing Word, Shield, Burning Hands).
+- [ ] **Starter spell list**: 18 spells covering every full caster; the list is in the design doc. *Shield* moves to phase 3 with reactions.
 - [ ] **Cast a Spell in combat**: a new action, covering spell attack rolls and saving throws (half damage on a successful save).
 - [ ] **Concentration**: at most one concentration spell at a time; taking damage forces a CON save to keep it.
 - [ ] **Scaling**: cantrip damage grows at levels 5, 11, and 17; casting with a higher-level slot increases the effect.
