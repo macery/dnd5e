@@ -111,6 +111,20 @@ Ability ability_from_name(const std::string& name) {
     throw std::invalid_argument("unknown ability: " + name);
 }
 
+std::string ordinal(int number) {
+    int last_two = number % 100;
+    const char* suffix = "th";
+    if (last_two < 11 || last_two > 13) {
+        switch (number % 10) {
+            case 1: suffix = "st"; break;
+            case 2: suffix = "nd"; break;
+            case 3: suffix = "rd"; break;
+            default: break;
+        }
+    }
+    return std::to_string(number) + suffix;
+}
+
 bool is_spellcaster(const ClassInfo& class_info) {
     return class_info.spellcasting.caster_type != CasterType::None;
 }
@@ -159,6 +173,58 @@ int prepared_spell_count(const Character& character, const ClassInfo& class_info
         levels = character.level / 2;
     }
     return std::max(1, spellcasting_modifier(character, class_info) + levels);
+}
+
+SpellAllowance spell_allowance(const Character& character, const ClassInfo& class_info) {
+    SpellAllowance allowance;
+    allowance.cantrips = cantrips_known(class_info, character.level);
+    allowance.spells = class_info.spellcasting.preparation == SpellPreparation::Known
+        ? spells_known(class_info, character.level)
+        : prepared_spell_count(character, class_info);
+
+    auto slots = spell_slots(class_info, character.level);
+    for (int level = kMaxSpellLevel; level >= 1; --level) {
+        if (slots[static_cast<size_t>(level - 1)] > 0) {
+            allowance.max_spell_level = level;
+            break;
+        }
+    }
+    if (allowance.max_spell_level == 0) allowance.spells = 0;
+    return allowance;
+}
+
+std::optional<std::string> validate_spell_selection(const Character& character, const ClassInfo& class_info,
+                                                    const std::vector<Spell>& chosen, bool require_full) {
+    SpellAllowance allowance = spell_allowance(character, class_info);
+    int cantrips = 0;
+    int spells = 0;
+    for (size_t i = 0; i < chosen.size(); ++i) {
+        const Spell& spell = chosen[i];
+        const auto& classes = spell.class_names;
+        if (std::find(classes.begin(), classes.end(), class_info.name) == classes.end()) {
+            return spell.name + " isn't on the " + class_info.name + " spell list.";
+        }
+        if (spell.level > allowance.max_spell_level) {
+            return spell.name + " is level " + std::to_string(spell.level) + "; you can cast up to level " +
+                   std::to_string(allowance.max_spell_level) + ".";
+        }
+        for (size_t j = i + 1; j < chosen.size(); ++j) {
+            if (chosen[j].spell_id == spell.spell_id && chosen[j].name == spell.name) {
+                return spell.name + " is chosen twice.";
+            }
+        }
+        (spell.level == 0 ? cantrips : spells) += 1;
+    }
+
+    auto describe = [](int count, const char* what) { return std::to_string(count) + " " + what; };
+    if (cantrips > allowance.cantrips || (require_full && cantrips != allowance.cantrips)) {
+        return "Choose " + describe(allowance.cantrips, "cantrips") + " (you have " + std::to_string(cantrips) + ").";
+    }
+    if (spells > allowance.spells || (require_full && spells != allowance.spells)) {
+        return "Choose " + describe(allowance.spells, "spells of 1st level or higher") + " (you have " +
+               std::to_string(spells) + ").";
+    }
+    return std::nullopt;
 }
 
 std::array<int, kMaxSpellLevel> spell_slots(const ClassInfo& class_info, int level) {

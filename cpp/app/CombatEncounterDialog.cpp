@@ -7,6 +7,7 @@
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLabel>
+#include <QListWidget>
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QSpinBox>
@@ -18,11 +19,23 @@
 #include "dnd/inventory.hpp"
 #include "dnd/progression.hpp"
 #include "dnd/rules.hpp"
+#include "dnd/spellcasting.hpp"
 
 namespace {
 QString formatModifier(int value) {
     return value >= 0 ? QString("+%1").arg(value) : QString::number(value);
 }
+
+QString ordinal(int level) {
+    return QString::fromStdString(dnd::ordinal(level));
+}
+
+// Short ability tag for log lines, e.g. "DEX".
+QString abilityTag(dnd::Ability ability) {
+    return QString(dnd::ability_name(ability)).left(3).toUpper();
+}
+
+constexpr int kCastSpellAction = 4;
 }  // namespace
 
 CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::vector<dnd::Character> characters,
@@ -101,8 +114,19 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
     actionCombo_->addItem("Drink Potion");
     actionCombo_->setItemData(3, "Drink a healing potion from your inventory to regain hit points.",
                               Qt::ToolTipRole);
+    actionCombo_->addItem("Cast a Spell");
+    actionCombo_->setItemData(kCastSpellAction,
+        "Cast one of your spells. Cantrips are free; other spells use a spell slot of their level or higher.",
+        Qt::ToolTipRole);
     targetCombo_ = new QComboBox(attackGroup);
     potionCombo_ = new QComboBox(attackGroup);
+    spellCombo_ = new QComboBox(attackGroup);
+    spellSlotCombo_ = new QComboBox(attackGroup);
+    spellSlotCombo_->setToolTip("A higher-level slot makes many spells stronger.");
+    spellTargetList_ = new QListWidget(attackGroup);
+    spellTargetList_->setMaximumHeight(90);
+    spellInfoLabel_ = new QLabel(attackGroup);
+    spellInfoLabel_->setWordWrap(true);
     attackBonusSpin_ = new QSpinBox(attackGroup);
     attackBonusSpin_->setRange(-10, 20);
     damageDiceCountSpin_ = new QSpinBox(attackGroup);
@@ -119,6 +143,10 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
     attackForm->addRow("Action", actionCombo_);
     attackForm->addRow("Target", targetCombo_);
     attackForm->addRow("Potion", potionCombo_);
+    attackForm->addRow("Spell", spellCombo_);
+    attackForm->addRow("Slot", spellSlotCombo_);
+    attackForm->addRow("Targets", spellTargetList_);
+    attackForm->addRow(spellInfoLabel_);
     attackForm->addRow("Attack Bonus", attackBonusSpin_);
     attackForm->addRow("Damage Dice Count", damageDiceCountSpin_);
     attackForm->addRow("Damage Dice Sides", damageDiceSidesSpin_);
@@ -146,6 +174,13 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
     connect(actionCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             &CombatEncounterDialog::onActionChanged);
     connect(takeActionButton_, &QPushButton::clicked, this, &CombatEncounterDialog::onTakeActionClicked);
+    connect(spellCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int) { onSpellChanged(); });
+    connect(spellSlotCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            [this](int) { refreshSpellInfo(); });
+
+    for (const auto& character : characters_) {
+        knownSpells_[character.character_id] = repository_.get_character_spells(character.character_id);
+    }
 
     updateActionControlsVisibility();
     addCharacterParticipants(weapons);
@@ -205,6 +240,8 @@ void CombatEncounterDialog::addMonsterParticipants(const dnd::Monster& monster, 
         participant.damage_dice_sides = monster.damage_dice_sides;
         participant.damage_bonus = monster.damage_bonus;
         participant.xp = dnd::xp_for_challenge_rating(monster.challenge_rating);
+        participant.ability_scores = {monster.strength, monster.dexterity, monster.constitution,
+                                      monster.intelligence, monster.wisdom, monster.charisma};
         participants_.push_back(participant);
     }
 }
@@ -285,6 +322,7 @@ void CombatEncounterDialog::advanceToActionableTurn() {
         updateActionControlsVisibility();
         refreshTargetCombo();
         refreshPotionCombo();
+        refreshSpellControls();
         updateAttackFieldsForCurrentTurn();
         takeActionButton_->setEnabled(true);
         return;
@@ -341,10 +379,21 @@ void CombatEncounterDialog::updateActionControlsVisibility() {
     potionCombo_->setVisible(is_potion);
     if (auto* row_label = attackFormLayout_->labelForField(potionCombo_)) row_label->setVisible(is_potion);
 
+    bool is_spell = actionCombo_->currentIndex() == kCastSpellAction;
+    const dnd::Spell* spell = is_spell ? selectedSpell() : nullptr;
+    bool show_slot = spell && spell->level > 0;
+    bool show_targets = spell && spell->resolution != dnd::SpellResolution::Utility;
+    for (auto [field, visible] : {std::pair<QWidget*, bool>{spellCombo_, is_spell}, {spellSlotCombo_, show_slot},
+                                  {spellTargetList_, show_targets}, {spellInfoLabel_, is_spell}}) {
+        field->setVisible(visible);
+        if (auto* row_label = attackFormLayout_->labelForField(field)) row_label->setVisible(visible);
+    }
+
     switch (actionCombo_->currentIndex()) {
         case 1: takeActionButton_->setText("Take Dash Action"); break;
         case 2: takeActionButton_->setText("Take Dodge Action"); break;
         case 3: takeActionButton_->setText("Drink Potion"); break;
+        case kCastSpellAction: takeActionButton_->setText("Cast Spell"); break;
         default: takeActionButton_->setText("Roll Attack"); break;
     }
 }
@@ -370,6 +419,10 @@ void CombatEncounterDialog::onTakeActionClicked() {
                 return;  // doesn't use up the turn's action
             }
             drinkPotion(actor);
+            break;
+
+        case kCastSpellAction:
+            if (!castSpell(actor)) return;  // explained in the log; the action isn't used up
             break;
 
         default: {  // Attack
@@ -486,6 +539,11 @@ void CombatEncounterDialog::awardVictoryExperience() {
                     .arg(QString::fromStdString(character.character_name))
                     .arg(character.level)
                     .arg(character.max_hp));
+            const dnd::ClassInfo* info = dnd::find_class_info_by_id(classes_, character.class_id);
+            if (info && dnd::is_spellcaster(*info)) {
+                log(QString("    %1 may be able to learn new spells -- open the Spellbook from the main window.")
+                        .arg(QString::fromStdString(character.character_name)));
+            }
         }
     }
     refreshParticipantTable();
@@ -557,6 +615,250 @@ void CombatEncounterDialog::drinkPotion(Participant& actor) {
         break;
     }
     refreshPotionCombo();
+}
+
+dnd::Character* CombatEncounterDialog::characterFor(int character_id) {
+    for (auto& character : characters_) {
+        if (character.character_id == character_id) return &character;
+    }
+    return nullptr;
+}
+
+void CombatEncounterDialog::persistCharacterHp(const Participant& participant) {
+    if (!participant.is_character) return;
+    if (dnd::Character* character = characterFor(participant.character_id)) {
+        character->current_hp = participant.current_hp;
+        repository_.update_character(*character);
+    }
+}
+
+const dnd::Spell* CombatEncounterDialog::selectedSpell() const {
+    if (currentTurnIndex_ < 0 || turnOrder_.empty() || spellCombo_->count() == 0) return nullptr;
+    const auto& current = participants_[static_cast<size_t>(turnOrder_[static_cast<size_t>(currentTurnIndex_)])];
+    auto known = knownSpells_.find(current.character_id);
+    if (known == knownSpells_.end()) return nullptr;
+    int spell_id = spellCombo_->currentData().toInt();
+    for (const auto& spell : known->second) {
+        if (spell.spell_id == spell_id) return &spell;
+    }
+    return nullptr;
+}
+
+void CombatEncounterDialog::refreshSpellControls() {
+    spellCombo_->blockSignals(true);
+    spellCombo_->clear();
+    if (currentTurnIndex_ >= 0 && !turnOrder_.empty()) {
+        const auto& current = participants_[static_cast<size_t>(turnOrder_[static_cast<size_t>(currentTurnIndex_)])];
+        dnd::Character* character = current.is_character ? characterFor(current.character_id) : nullptr;
+        const dnd::ClassInfo* info = character ? dnd::find_class_info_by_id(classes_, character->class_id) : nullptr;
+        if (character && info) {
+            for (const auto& spell : knownSpells_[character->character_id]) {
+                bool castable = spell.level == 0;
+                for (int level = std::max(1, spell.level); !castable && level <= dnd::kMaxSpellLevel; ++level) {
+                    castable = dnd::slots_remaining(*character, *info, level) > 0;
+                }
+                if (!castable) continue;
+                spellCombo_->addItem(QString("%1 (%2)").arg(QString::fromStdString(spell.name),
+                                                           spell.level == 0 ? "cantrip" : ordinal(spell.level)),
+                                     spell.spell_id);
+                spellCombo_->setItemData(spellCombo_->count() - 1, QString::fromStdString(spell.description),
+                                         Qt::ToolTipRole);
+            }
+        }
+    }
+    spellCombo_->blockSignals(false);
+    onSpellChanged();
+}
+
+void CombatEncounterDialog::onSpellChanged() {
+    spellSlotCombo_->blockSignals(true);
+    spellSlotCombo_->clear();
+    spellTargetList_->clear();
+
+    const dnd::Spell* spell = selectedSpell();
+    if (spell && currentTurnIndex_ >= 0) {
+        const auto& current = participants_[static_cast<size_t>(turnOrder_[static_cast<size_t>(currentTurnIndex_)])];
+        dnd::Character* character = characterFor(current.character_id);
+        const dnd::ClassInfo* info = character ? dnd::find_class_info_by_id(classes_, character->class_id) : nullptr;
+        if (spell->level > 0 && character && info) {
+            for (int level = spell->level; level <= dnd::kMaxSpellLevel; ++level) {
+                int remaining = dnd::slots_remaining(*character, *info, level);
+                if (remaining > 0) {
+                    spellSlotCombo_->addItem(QString("%1 level (%2 left)").arg(ordinal(level)).arg(remaining), level);
+                }
+            }
+        }
+
+        bool heals = spell->resolution == dnd::SpellResolution::Heal;
+        for (int i = 0; i < static_cast<int>(participants_.size()); ++i) {
+            const auto& candidate = participants_[static_cast<size_t>(i)];
+            // Heals go to the party (including anyone down); everything else at living enemies.
+            if (heals ? !candidate.is_character : (candidate.is_character || candidate.current_hp <= 0)) continue;
+            auto* item = new QListWidgetItem(
+                QString("%1 (%2/%3 HP)").arg(candidate.name).arg(candidate.current_hp).arg(candidate.max_hp),
+                spellTargetList_);
+            item->setData(Qt::UserRole, i);
+            item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
+            item->setCheckState(spellTargetList_->count() == 1 ? Qt::Checked : Qt::Unchecked);
+        }
+    }
+    spellSlotCombo_->blockSignals(false);
+    refreshSpellInfo();
+    updateActionControlsVisibility();
+}
+
+void CombatEncounterDialog::refreshSpellInfo() {
+    const dnd::Spell* spell = selectedSpell();
+    if (!spell) {
+        spellInfoLabel_->setText(spellCombo_->count() == 0 && actionCombo_->currentIndex() == kCastSpellAction
+                                     ? "No spells to cast (none known, or no slots left)."
+                                     : "");
+        return;
+    }
+    const auto& current = participants_[static_cast<size_t>(turnOrder_[static_cast<size_t>(currentTurnIndex_)])];
+    dnd::Character* character = characterFor(current.character_id);
+    const dnd::ClassInfo* info = character ? dnd::find_class_info_by_id(classes_, character->class_id) : nullptr;
+    if (!character || !info) return;
+
+    auto caster = dnd::caster_stats(*character, *info);
+    int slot = spell->level == 0 ? 0 : spellSlotCombo_->currentData().toInt();
+    int dice = dnd::spell_dice_count(*spell, caster.level, slot);
+    int projectiles = dnd::spell_projectiles(*spell, caster.level, slot);
+    QString roll = QString("%1d%2").arg(dice).arg(spell->dice_sides);
+    int bonus = spell->flat_bonus + (spell->adds_modifier ? caster.spellcasting_modifier : 0);
+    if (bonus) roll += formatModifier(bonus);
+    if (projectiles > 1) roll = QString("%1 × %2").arg(projectiles).arg(roll);
+
+    QString text;
+    switch (spell->resolution) {
+        case dnd::SpellResolution::Attack:
+            text = QString("%1 spell attack %2, %3 %4 damage.")
+                       .arg(spell->melee_attack ? "Melee" : "Ranged", formatModifier(caster.spell_attack_bonus), roll,
+                            QString::fromStdString(spell->damage_type));
+            break;
+        case dnd::SpellResolution::Save:
+            text = QString("Each target makes a %1 save vs DC %2: %3 %4 damage, %5 on a success.")
+                       .arg(abilityTag(spell->save_ability))
+                       .arg(caster.spell_save_dc)
+                       .arg(roll, QString::fromStdString(spell->damage_type),
+                            spell->save_halves ? "half" : "none");
+            break;
+        case dnd::SpellResolution::AutoHit:
+            text = QString("Always hits: %1 %2 damage.").arg(roll, QString::fromStdString(spell->damage_type));
+            break;
+        case dnd::SpellResolution::Heal:
+            text = QString("Heals %1.").arg(roll);
+            break;
+        case dnd::SpellResolution::Utility:
+            text = "No automated effect yet -- casting uses the action (and slot) and shows the description.";
+            break;
+    }
+    if (spell->resolution != dnd::SpellResolution::Utility) {
+        int max_targets = dnd::spell_max_targets(*spell, caster.level, slot);
+        text += max_targets > 1 ? QString(" Choose up to %1 targets.").arg(max_targets) : " Choose 1 target.";
+    }
+    spellInfoLabel_->setText(text);
+}
+
+bool CombatEncounterDialog::castSpell(Participant& actor) {
+    const dnd::Spell* selected = selectedSpell();
+    if (!selected) {
+        log(QString("%1 has no spell to cast -- choose another action.").arg(actor.name));
+        return false;
+    }
+    const dnd::Spell spell = *selected;
+    dnd::Character* character = characterFor(actor.character_id);
+    const dnd::ClassInfo* info = character ? dnd::find_class_info_by_id(classes_, character->class_id) : nullptr;
+    if (!character || !info) return false;
+
+    auto caster = dnd::caster_stats(*character, *info);
+    int slot = spell.level == 0 ? 0 : spellSlotCombo_->currentData().toInt();
+
+    std::vector<int> targetIndices;
+    for (int row = 0; row < spellTargetList_->count(); ++row) {
+        if (spellTargetList_->item(row)->checkState() == Qt::Checked) {
+            targetIndices.push_back(spellTargetList_->item(row)->data(Qt::UserRole).toInt());
+        }
+    }
+    if (spell.resolution != dnd::SpellResolution::Utility) {
+        int max_targets = dnd::spell_max_targets(spell, caster.level, slot);
+        if (targetIndices.empty() || static_cast<int>(targetIndices.size()) > max_targets) {
+            log(QString("%1 needs 1 to %2 targets checked.").arg(QString::fromStdString(spell.name)).arg(max_targets));
+            return false;
+        }
+    }
+    if (slot > 0 && !dnd::spend_spell_slot(*character, *info, slot)) {
+        log("No spell slots of that level left.");
+        return false;
+    }
+    repository_.update_character(*character);  // the spent slot
+
+    std::vector<dnd::SpellTarget> targets;
+    for (int index : targetIndices) {
+        const auto& target = participants_[static_cast<size_t>(index)];
+        dnd::SpellTarget spellTarget;
+        spellTarget.armor_class = target.armor_class;
+        spellTarget.save_bonus =
+            dnd::ability_modifier(target.ability_scores[static_cast<size_t>(spell.save_ability)]);
+        targets.push_back(spellTarget);
+    }
+
+    auto result = dnd::cast_spell(dice_, spell, caster, slot, targets);
+    QString spellName = QString::fromStdString(spell.name);
+    log(QString("%1 casts %2%3.").arg(actor.name, spellName,
+                                      slot > 0 ? QString(" (%1-level slot)").arg(ordinal(slot)) : QString()));
+    if (spell.resolution == dnd::SpellResolution::Utility) {
+        log("    " + QString::fromStdString(spell.description));
+        refreshSpellControls();
+        return true;
+    }
+    if (spell.resolution == dnd::SpellResolution::Save) {
+        QStringList dice;
+        for (int die : result.dice) dice << QString::number(die);
+        log(QString("    Damage roll: %1").arg(dice.join(" + ")));
+    }
+
+    for (const auto& effect : result.effects) {
+        Participant& target = participants_[static_cast<size_t>(targetIndices[static_cast<size_t>(effect.target)])];
+        QString outcome;
+        switch (spell.resolution) {
+            case dnd::SpellResolution::Attack:
+                outcome = QString("d20(%1) %2 -> %3")
+                              .arg(effect.attack_roll)
+                              .arg(formatModifier(caster.spell_attack_bonus))
+                              .arg(!effect.hit        ? QString("miss")
+                                   : effect.critical  ? QString("CRITICAL HIT for %1").arg(effect.amount)
+                                                      : QString("hit for %1").arg(effect.amount));
+                break;
+            case dnd::SpellResolution::Save:
+                outcome = QString("%1 save d20(%2) %3 vs DC %4 -> %5, takes %6")
+                              .arg(abilityTag(spell.save_ability))
+                              .arg(effect.save_roll)
+                              .arg(formatModifier(targets[static_cast<size_t>(effect.target)].save_bonus))
+                              .arg(caster.spell_save_dc)
+                              .arg(effect.saved ? "saved" : "failed")
+                              .arg(effect.amount);
+                break;
+            case dnd::SpellResolution::AutoHit:
+                outcome = QString("hit for %1").arg(effect.amount);
+                break;
+            case dnd::SpellResolution::Heal:
+                outcome = QString("regains %1 HP").arg(effect.amount);
+                break;
+            case dnd::SpellResolution::Utility:
+                break;
+        }
+
+        if (spell.resolution == dnd::SpellResolution::Heal) {
+            target.current_hp = std::min(target.max_hp, target.current_hp + effect.amount);
+        } else {
+            target.current_hp = std::max(0, target.current_hp - effect.amount);
+        }
+        persistCharacterHp(target);
+        log(QString("    %1: %2. Now %3/%4 HP.").arg(target.name, outcome).arg(target.current_hp).arg(target.max_hp));
+    }
+    refreshSpellControls();
+    return true;
 }
 
 void CombatEncounterDialog::refreshParticipantTable() {

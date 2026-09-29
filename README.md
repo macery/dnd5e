@@ -31,12 +31,19 @@ It manages players and characters, computes a full character sheet from the 5e r
 - **Combat encounters**:
   - Real initiative order.
   - Monster turns resolve automatically.
-  - On each of your turns you pick Attack, Dash, Dodge, or Drink Potion.
+  - On each of your turns you pick Attack, Dash, Dodge, Drink Potion, or Cast a Spell.
   - Natural 20s crit and natural 1s miss.
   - Dodge imposes disadvantage on attacks against you.
   - Drink Potion heals from your inventory.
   - The encounter ends with a victory or a defeat.
 - **Solo adventures**: pre-built mini-encounters, each with a hook, its monsters, a victory payoff, and loot.
+- **Spellcasting** (2014 PHB rules):
+  - **Spells:** 42 seeded spells. 18 are resolved automatically: spell attacks, saving throws (half or no damage on a success), always-hit spells, and heals. 24 are utility spells with no automated effect yet.
+  - **Creation:** Bards, Clerics, Druids, Sorcerers, Warlocks, and Wizards choose their cantrips and spells in the character creation wizard.
+  - **Character sheet:** shows the spellcasting ability, spell attack bonus, save DC, and remaining slots.
+  - **Spellbook:** learn and forget spells within your class's limits (this is also how you pick new spells after leveling up), and cast healing or utility spells on yourself outside combat.
+  - **Combat:** a **Cast a Spell** action with slot choice for upcasting, and multiple targets for area spells and Magic Missile.
+  - **Rests:** spell slots come back on a long rest; Warlock pact slots also come back on a short rest.
 - **Inventory**:
   - **Carrying items:** each character carries stacks of seeded items: adventuring gear, rations, and Potions of Healing (2d4+2). The Inventory screen shows total weight and value.
   - **Healing:** potions can be used from the Inventory screen, or drunk in combat with the **Drink Potion** action.
@@ -71,6 +78,7 @@ dnd5e/
 | `combat` | Attack resolution (hit/miss, crits, advantage/disadvantage). Knows nothing about characters or monsters. |
 | `inventory` | The item model (`item.hpp`), healing consumables, weight and cost helpers. |
 | `character_creation` | Class, race, and background rules data; ability score generation; skill plans; validation; and assembling a level-1 character. |
+| `spellcasting` | Spell model (`spell.hpp`), class spellcasting stats, spell counts, slot tables, and `cast_spell`. |
 | `progression` | XP tables, leveling, class hit dice, and short/long rests. |
 | `adventure` | Built-in solo adventure templates. |
 | `repository` | SQLite persistence for players, characters, inventories, and the lookup tables. |
@@ -185,11 +193,11 @@ Any pending schema migrations run on launch, so older save files are upgraded in
 Next up. It builds on the per-class rules data from the character creation wizard, which will gain a "Choose spells" step once spells exist.
 
 - [x] **Design the approach**: see [docs/magic-system.md](docs/magic-system.md). It covers what's data and what's code, the `Spells` schema, class spellcasting rules, the starter spell list, three build phases, and the settled decisions (2014 PHB rules, "choose up to N targets" for area spells, spells cast as actions, no monster casters yet).
-- [x] **Spellcasting stats**: each class's spellcasting ability, caster type, cantrip and spell counts, spell save DC, and spell attack bonus (`dnd/spellcasting.hpp`). Not shown on the sheet yet (phase 2).
-- [x] **Spell slots**: full, half, and pact slot tables for levels 1–20, and spending slots. A long rest restores every slot; `take_short_rest` restores Warlock pact slots. The rest buttons don't call it yet (phase 2).
-- [ ] **Known/prepared spells**: storage is done (`CharacterSpells`, repository methods). Still to do: the wizard's "Choose Spells" step and a spellbook on the character sheet (phase 2).
+- [x] **Spellcasting stats**: each class's spellcasting ability, caster type, cantrip and spell counts, spell save DC, and spell attack bonus (`dnd/spellcasting.hpp`), shown on the sheet and in the Spellbook.
+- [x] **Spell slots**: full, half, and pact slot tables for levels 1–20, spent by casting. Long Rest restores every slot; Short Rest restores Warlock pact slots.
+- [x] **Known/prepared spells**: the wizard's "Choose Spells" step, the Spellbook dialog (learn, forget, cast out of combat), and a Spellcasting section on the character sheet. Prepared casters keep the spells they picked; re-preparing after a long rest is phase 3.
 - [x] **Starter spell list**: 18 spells with automated effects (migration 11), plus 24 *Utility* spells with no automated effect yet (migration 12), so every caster can fill its PHB level-1 picks. *Shield* moves to phase 3 with reactions.
-- [ ] **Cast a Spell in combat**: the rules are done (`cast_spell` handles attack, save, auto-hit, and heal spells). The combat action itself is phase 2.
+- [x] **Cast a Spell in combat**: pick a spell, a slot level, and targets. Monsters make saving throws with their ability modifiers, and everything is logged. Dodge doesn't affect spell attacks or DEX saves yet.
 - [ ] **Concentration**: at most one concentration spell at a time; taking damage forces a CON save to keep it.
 - [x] **Scaling**: cantrips get extra dice (or extra beams, for Eldritch Blast) at levels 5, 11, and 17, and casting with a higher-level slot adds dice or darts.
 - [ ] **Magic items**: +1 weapons and armor, wands, scrolls, and so on, built on top of the inventory system.

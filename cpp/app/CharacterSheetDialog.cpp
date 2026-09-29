@@ -13,6 +13,7 @@
 #include "dnd/character_creation.hpp"
 #include "dnd/progression.hpp"
 #include "dnd/rules.hpp"
+#include "dnd/spellcasting.hpp"
 
 namespace {
 
@@ -48,7 +49,8 @@ CharacterSheetDialog::CharacterSheetDialog(const dnd::Character& character,
                                             const std::vector<dnd::LookupEntry>& classes,
                                             const std::vector<dnd::LookupEntry>& races,
                                             const std::vector<dnd::LookupEntry>& alignments,
-                                            const std::vector<dnd::Weapon>& weapons, QWidget* parent)
+                                            const std::vector<dnd::Weapon>& weapons,
+                                            const std::vector<dnd::Spell>& spells, QWidget* parent)
     : QDialog(parent), dice_(randomSource_) {
     setWindowTitle(QString::fromStdString(character.character_name));
 
@@ -180,6 +182,46 @@ CharacterSheetDialog::CharacterSheetDialog(const dnd::Character& character,
             dnd::skill_description(skill));
     }
 
+    QGroupBox* spellsGroup = nullptr;
+    const dnd::ClassInfo* classInfo = dnd::find_class_info_by_id(classes, character.class_id);
+    if (classInfo && dnd::is_spellcaster(*classInfo)) {
+        spellsGroup = new QGroupBox("Spellcasting", this);
+        auto* spellsForm = new QFormLayout(spellsGroup);
+        addExplainedRow(spellsForm, "Ability",
+            new QLabel(dnd::ability_name(classInfo->spellcasting.ability), spellsGroup),
+            "The ability this class casts spells with.");
+        addExplainedRow(spellsForm, "Spell Attack",
+            new QLabel(formatModifier(dnd::spell_attack_bonus(character, *classInfo)), spellsGroup),
+            "Added to a d20 for spells that make an attack roll: proficiency bonus + spellcasting modifier.");
+        addExplainedRow(spellsForm, "Spell Save DC",
+            new QLabel(QString::number(dnd::spell_save_dc(character, *classInfo)), spellsGroup),
+            "What a target must meet or beat on its saving throw to resist your spell: 8 + proficiency bonus + "
+            "spellcasting modifier.");
+
+        QStringList slotParts;
+        auto totals = dnd::spell_slots(*classInfo, character.level);
+        for (int level = 1; level <= dnd::kMaxSpellLevel; ++level) {
+            int total = totals[static_cast<size_t>(level - 1)];
+            if (total > 0) {
+                slotParts << QString("L%1: %2/%3")
+                                 .arg(level)
+                                 .arg(dnd::slots_remaining(character, *classInfo, level))
+                                 .arg(total);
+            }
+        }
+        addExplainedRow(spellsForm, "Spell Slots",
+            new QLabel(slotParts.isEmpty() ? "none yet" : slotParts.join(" · "), spellsGroup),
+            "Remaining / total slots per spell level. A long rest restores them (Warlocks: a short rest too).");
+
+        QStringList names;
+        for (const auto& spell : spells) names << QString::fromStdString(spell.name);
+        auto* spellList = new QLabel(names.isEmpty() ? "none -- use the Spellbook to learn some" : names.join(", "),
+                                     spellsGroup);
+        spellList->setWordWrap(true);
+        addExplainedRow(spellsForm, "Spells", spellList,
+            "Open the Spellbook from the main window for details, to learn spells, or to cast outside combat.");
+    }
+
     auto* skillsScroll = new QScrollArea(this);
     skillsScroll->setWidget(skillsGroup);
     skillsScroll->setWidgetResizable(true);
@@ -191,6 +233,7 @@ CharacterSheetDialog::CharacterSheetDialog(const dnd::Character& character,
     layout->addWidget(summaryGroup);
     layout->addWidget(abilitiesGroup);
     layout->addWidget(savesGroup);
+    if (spellsGroup) layout->addWidget(spellsGroup);
     layout->addWidget(skillsScroll, 1);
 
     resize(380, 640);

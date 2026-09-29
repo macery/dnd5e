@@ -1,6 +1,6 @@
 # Magic system design
 
-Status: **phase 1 (core and data) implemented;** phase 2 (UI) is next. The open questions were settled on 2026-09-29; see [Decisions](#decisions).
+Status: **phases 1 (core and data) and 2 (UI) implemented;** phase 3 (effects) is next. The open questions were settled on 2026-09-29; see [Decisions](#decisions).
 
 ### Phase 1 status
 

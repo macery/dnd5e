@@ -27,9 +27,11 @@
 #include "InitiativeTrackerDialog.hpp"
 #include "InventoryDialog.hpp"
 #include "MonsterListDialog.hpp"
+#include "SpellbookDialog.hpp"
 
 #include "dnd/adventure.hpp"
 #include "dnd/progression.hpp"
+#include "dnd/spellcasting.hpp"
 
 MainWindow::MainWindow(dnd::Repository& repository, QWidget* parent)
     : QMainWindow(parent), repository_(repository) {
@@ -69,6 +71,10 @@ MainWindow::MainWindow(dnd::Repository& repository, QWidget* parent)
     inventoryButton_ = new QPushButton("Inventory", central);
     inventoryButton_->setToolTip("View, add, drop, and use the selected character's items.");
     characterRow->addWidget(inventoryButton_);
+    spellbookButton_ = new QPushButton("Spellbook", central);
+    spellbookButton_->setToolTip("The selected character's spells and spell slots: learn spells, and cast healing "
+                                 "or utility spells outside combat.");
+    characterRow->addWidget(spellbookButton_);
     rootLayout->addLayout(characterRow);
 
     auto* combatRow = new QHBoxLayout();
@@ -80,10 +86,10 @@ MainWindow::MainWindow(dnd::Repository& repository, QWidget* parent)
     shortRestButton_ = new QPushButton("Short Rest", central);
     shortRestButton_->setToolTip(
         "An hour's breather: spend one hit die (one per level, recovered on a long rest) to regain "
-        "that die's roll + your Constitution modifier in HP.");
+        "that die's roll + your Constitution modifier in HP. Warlocks also regain their spell slots.");
     longRestButton_ = new QPushButton("Long Rest", central);
     longRestButton_->setToolTip(
-        "A full night's rest: regain all HP and up to half your spent hit dice.");
+        "A full night's rest: regain all HP, all spell slots, and up to half your spent hit dice.");
     initiativeTrackerButton_ = new QPushButton("Initiative Tracker", central);
     monstersButton_ = new QPushButton("Monsters", central);
     combatEncounterButton_ = new QPushButton("Combat Encounter", central);
@@ -115,6 +121,7 @@ MainWindow::MainWindow(dnd::Repository& repository, QWidget* parent)
     connect(editCharacterButton_, &QPushButton::clicked, this, &MainWindow::onEditCharacterClicked);
     connect(deleteCharacterButton_, &QPushButton::clicked, this, &MainWindow::onDeleteCharacterClicked);
     connect(inventoryButton_, &QPushButton::clicked, this, &MainWindow::onInventoryClicked);
+    connect(spellbookButton_, &QPushButton::clicked, this, &MainWindow::onSpellbookClicked);
     connect(characterTable_, &QTableView::doubleClicked, this, &MainWindow::onCharacterActivated);
     connect(damageButton_, &QPushButton::clicked, this, &MainWindow::onDamageClicked);
     connect(healButton_, &QPushButton::clicked, this, &MainWindow::onHealClicked);
@@ -265,7 +272,8 @@ void MainWindow::onCharacterActivated(const QModelIndex& index) {
     if (!index.isValid()) return;
 
     const dnd::Character& character = characterModel_->characterAt(index.row());
-    CharacterSheetDialog dialog(character, classes_, races_, alignments_, weapons_, this);
+    CharacterSheetDialog dialog(character, classes_, races_, alignments_, weapons_,
+                                repository_.get_character_spells(character.character_id), this);
     dialog.exec();
 }
 
@@ -305,15 +313,33 @@ void MainWindow::onInventoryClicked() {
     reloadCharactersForCurrentPlayer();  // using a potion changes HP
 }
 
+void MainWindow::onSpellbookClicked() {
+    const dnd::Character* selected = selectedCharacter("Spellbook");
+    if (!selected) return;
+
+    SpellbookDialog dialog(repository_, *selected, classes_, this);
+    dialog.exec();
+    reloadCharactersForCurrentPlayer();  // casting changes HP and slots
+}
+
 void MainWindow::onShortRestClicked() {
     const dnd::Character* selected = selectedCharacter("Short Rest");
     if (!selected) return;
 
     dnd::Character character = *selected;
     QString name = QString::fromStdString(character.character_name);
+
+    // A Warlock's pact slots come back on any short rest, hit dice or not.
+    bool slotsRestored = false;
+    if (const dnd::ClassInfo* info = dnd::find_class_info_by_id(classes_, character.class_id)) {
+        auto before = character.spell_slots_used;
+        dnd::take_short_rest(character, *info);
+        slotsRestored = character.spell_slots_used != before;
+    }
+
     int hit_die = dnd::hit_die_for_class_id(classes_, character.class_id);
     int regained = dnd::spend_hit_die(character, dice_, hit_die);
-    if (regained < 0) {
+    if (regained < 0 && !slotsRestored) {
         QMessageBox::information(this, "Short Rest",
             QString("%1 has no hit dice left. Take a long rest to recover them.").arg(name));
         return;
@@ -321,15 +347,19 @@ void MainWindow::onShortRestClicked() {
 
     repository_.update_character(character);
     reloadCharactersForCurrentPlayer();
-    QMessageBox::information(this, "Short Rest",
-        QString("%1 spends a d%2 hit die and regains %3 HP (now %4/%5). Hit dice left: %6/%7.")
-            .arg(name)
-            .arg(hit_die)
-            .arg(regained)
-            .arg(character.current_hp)
-            .arg(character.max_hp)
-            .arg(dnd::hit_dice_remaining(character))
-            .arg(character.level));
+
+    QString message = regained < 0
+        ? QString("%1 has no hit dice left to spend.").arg(name)
+        : QString("%1 spends a d%2 hit die and regains %3 HP (now %4/%5). Hit dice left: %6/%7.")
+              .arg(name)
+              .arg(hit_die)
+              .arg(regained)
+              .arg(character.current_hp)
+              .arg(character.max_hp)
+              .arg(dnd::hit_dice_remaining(character))
+              .arg(character.level);
+    if (slotsRestored) message += " Pact spell slots restored.";
+    QMessageBox::information(this, "Short Rest", message);
 }
 
 void MainWindow::onLongRestClicked() {
@@ -341,7 +371,7 @@ void MainWindow::onLongRestClicked() {
     repository_.update_character(character);
     reloadCharactersForCurrentPlayer();
     QMessageBox::information(this, "Long Rest",
-        QString("%1 is fully rested: %2/%3 HP, %4/%5 hit dice.")
+        QString("%1 is fully rested: %2/%3 HP, %4/%5 hit dice, all spell slots.")
             .arg(QString::fromStdString(character.character_name))
             .arg(character.current_hp)
             .arg(character.max_hp)

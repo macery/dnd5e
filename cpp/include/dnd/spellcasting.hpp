@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -25,6 +26,9 @@ Ability ability_from_name(const std::string& name);
 
 bool is_spellcaster(const ClassInfo& class_info);
 
+// "1st", "2nd", "3rd", "4th", ... -- for spell and slot levels.
+std::string ordinal(int number);
+
 // --- Caster stats ----------------------------------------------------------
 
 int spellcasting_modifier(const Character& character, const ClassInfo& class_info);
@@ -47,6 +51,26 @@ int spellbook_size(int level);
 // level (Paladin: + half level), minimum 1. 0 for other classes, and for a
 // Paladin before level 2.
 int prepared_spell_count(const Character& character, const ClassInfo& class_info);
+
+// How many spells a character may have, and of what level. For Known
+// classes `spells` is spells known; for Prepared and Spellbook classes it's
+// spells prepared (a Wizard's picks are its prepared list until spellbooks
+// are modeled -- see docs/magic-system.md, Decisions).
+struct SpellAllowance {
+    int cantrips = 0;
+    int spells = 0;
+    int max_spell_level = 0;  // highest slot level the character has; 0 = none
+};
+
+SpellAllowance spell_allowance(const Character& character, const ClassInfo& class_info);
+
+// Checks a set of chosen spells against the class list and the allowance:
+// every spell on the class's list, no duplicates, no spell above
+// max_spell_level, and no more cantrips/spells than allowed. With
+// `require_full`, the counts must be exactly the allowance (character
+// creation). Returns an error for the player, or nullopt.
+std::optional<std::string> validate_spell_selection(const Character& character, const ClassInfo& class_info,
+                                                    const std::vector<Spell>& chosen, bool require_full);
 
 // --- Slots -----------------------------------------------------------------
 

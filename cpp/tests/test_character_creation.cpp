@@ -65,6 +65,9 @@ TEST_CASE("class, race, and background data cover the seeded tables", "[creation
     REQUIRE(dnd::race_infos().size() == repo.get_races().size());
     REQUIRE(dnd::find_background_info("Sage") != nullptr);
     REQUIRE(dnd::find_class_info("Artificer") == nullptr);
+    auto classes = repo.get_classes();
+    REQUIRE(dnd::find_class_info_by_id(classes, classes.front().id)->name == classes.front().name);
+    REQUIRE(dnd::find_class_info_by_id(classes, 9999) == nullptr);
 
     // progression now reads hit dice from the same class data.
     REQUIRE(dnd::hit_die_for_class("Barbarian") == 12);

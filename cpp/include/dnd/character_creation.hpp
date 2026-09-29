@@ -7,6 +7,7 @@
 
 #include "dnd/character.hpp"
 #include "dnd/dice.hpp"
+#include "dnd/lookup_entry.hpp"
 #include "dnd/rules.hpp"
 
 namespace dnd {
@@ -70,6 +71,8 @@ const std::vector<BackgroundInfo>& background_infos();
 const ClassInfo* find_class_info(const std::string& name);
 const RaceInfo* find_race_info(const std::string& name);
 const BackgroundInfo* find_background_info(const std::string& name);
+// The ClassInfo for the Classes row with this id (looked up by its name).
+const ClassInfo* find_class_info_by_id(const std::vector<LookupEntry>& classes, int class_id);
 
 // --- Ability scores -------------------------------------------------------
 

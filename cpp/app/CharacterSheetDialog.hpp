@@ -6,6 +6,7 @@
 #include "dnd/character.hpp"
 #include "dnd/dice.hpp"
 #include "dnd/lookup_entry.hpp"
+#include "dnd/spell.hpp"
 #include "dnd/weapon.hpp"
 
 class QLabel;
@@ -13,7 +14,8 @@ class QComboBox;
 
 // Read-only view of a character's computed stats: ability modifiers,
 // saving throws, skills, HP/AC, proficiency bonus, passive perception, and
-// initiative -- all derived via dnd::rules, not stored directly. Each
+// initiative -- all derived via dnd::rules, not stored directly -- plus, for
+// casters, spellcasting stats, slots, and known spells. Each
 // saving throw and skill can also be rolled directly (d20 + its bonus),
 // under whichever roll mode (Normal/Advantage/Disadvantage) is selected.
 class CharacterSheetDialog : public QDialog {
@@ -22,7 +24,8 @@ class CharacterSheetDialog : public QDialog {
 public:
     CharacterSheetDialog(const dnd::Character& character, const std::vector<dnd::LookupEntry>& classes,
                           const std::vector<dnd::LookupEntry>& races, const std::vector<dnd::LookupEntry>& alignments,
-                          const std::vector<dnd::Weapon>& weapons, QWidget* parent = nullptr);
+                          const std::vector<dnd::Weapon>& weapons, const std::vector<dnd::Spell>& spells,
+                          QWidget* parent = nullptr);
 
 private:
     void rollAndShow(const QString& label, int bonus);

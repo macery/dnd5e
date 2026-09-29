@@ -1,6 +1,8 @@
 #pragma once
 
 #include <QDialog>
+#include <array>
+#include <map>
 #include <vector>
 
 #include "dnd/adventure.hpp"
@@ -9,11 +11,13 @@
 #include "dnd/dice.hpp"
 #include "dnd/monster.hpp"
 #include "dnd/repository.hpp"
+#include "dnd/spell.hpp"
 #include "dnd/weapon.hpp"
 
 class QComboBox;
 class QFormLayout;
 class QLabel;
+class QListWidget;
 class QPlainTextEdit;
 class QPushButton;
 class QSpinBox;
@@ -58,6 +62,8 @@ private:
         // disadvantage until the start of their own next turn.
         bool is_dodging = false;
         int xp = 0;  // monsters only: awarded to the party on victory
+        // Monsters only: STR..CHA, for saving throws against spells.
+        std::array<int, 6> ability_scores{10, 10, 10, 10, 10, 10};
     };
 
     void addCharacterParticipants(const std::vector<dnd::Weapon>& weapons);
@@ -88,6 +94,19 @@ private:
     // Fills potionCombo_ with the current character's healing items.
     void refreshPotionCombo();
     void drinkPotion(Participant& actor);
+
+    // Fills the spell controls for the current character's turn: castable
+    // known spells, then (via onSpellChanged) slots and targets.
+    void refreshSpellControls();
+    void onSpellChanged();
+    void refreshSpellInfo();
+    // Casts the selected spell. Returns false -- leaving the action unused --
+    // if it can't be cast as chosen (no targets, too many, no slot).
+    bool castSpell(Participant& actor);
+    const dnd::Spell* selectedSpell() const;
+    dnd::Character* characterFor(int character_id);
+    // Copies a character participant's HP onto its Character and saves it.
+    void persistCharacterHp(const Participant& participant);
     void log(const QString& line);
 
     dnd::Repository& repository_;
@@ -104,6 +123,8 @@ private:
     std::vector<dnd::AdventureLoot> loot_;
     // The current character's healing items, parallel to potionCombo_.
     std::vector<dnd::Item> actorPotions_;
+    // Each character's known spells, loaded once per encounter.
+    std::map<int, std::vector<dnd::Spell>> knownSpells_;
 
     dnd::SystemRandomSource randomSource_;
     dnd::Dice dice_;
@@ -123,6 +144,10 @@ private:
     QComboBox* actionCombo_ = nullptr;
     QComboBox* targetCombo_ = nullptr;
     QComboBox* potionCombo_ = nullptr;
+    QComboBox* spellCombo_ = nullptr;
+    QComboBox* spellSlotCombo_ = nullptr;
+    QListWidget* spellTargetList_ = nullptr;
+    QLabel* spellInfoLabel_ = nullptr;
     QSpinBox* attackBonusSpin_ = nullptr;
     QSpinBox* damageDiceCountSpin_ = nullptr;
     QSpinBox* damageDiceSidesSpin_ = nullptr;

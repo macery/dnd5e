@@ -370,3 +370,68 @@ TEST_CASE("cast_spell resolves each kind", "[spellcasting]") {
         REQUIRE_THROWS_AS(dnd::cast_spell(dice, burning, caster, 1, {{}, {}, {}, {}}), std::invalid_argument);
     }
 }
+
+TEST_CASE("spell_allowance and validate_spell_selection", "[spellcasting]") {
+    dnd::Repository repo(":memory:");
+    auto spells = repo.get_spells();
+
+    dnd::Character wizard;
+    wizard.level = 1;
+    wizard.intelligence = 16;  // +3
+    auto allowance = dnd::spell_allowance(wizard, cls("Wizard"));
+    REQUIRE(allowance.cantrips == 3);
+    REQUIRE(allowance.spells == 4);  // prepared: +3 + level 1
+    REQUIRE(allowance.max_spell_level == 1);
+
+    dnd::Character bard;
+    bard.level = 1;
+    REQUIRE(dnd::spell_allowance(bard, cls("Bard")).spells == 4);  // known
+
+    dnd::Character paladin;
+    paladin.level = 1;
+    paladin.charisma = 16;
+    allowance = dnd::spell_allowance(paladin, cls("Paladin"));
+    REQUIRE(allowance.cantrips == 0);
+    REQUIRE(allowance.spells == 0);
+    REQUIRE(allowance.max_spell_level == 0);
+    paladin.level = 2;
+    REQUIRE(dnd::spell_allowance(paladin, cls("Paladin")).spells == 4);  // +3 + 1
+
+    dnd::Character warlock;
+    warlock.level = 3;
+    REQUIRE(dnd::spell_allowance(warlock, cls("Warlock")).max_spell_level == 2);  // pact slots are 2nd level
+    REQUIRE(dnd::spell_allowance(warlock, cls("Fighter")).max_spell_level == 0);
+
+    std::vector<dnd::Spell> picks = {spell_named(spells, "Fire Bolt"), spell_named(spells, "Light"),
+                                     spell_named(spells, "Mage Hand"), spell_named(spells, "Magic Missile"),
+                                     spell_named(spells, "Mage Armor"), spell_named(spells, "Detect Magic"),
+                                     spell_named(spells, "Burning Hands")};
+    REQUIRE_FALSE(dnd::validate_spell_selection(wizard, cls("Wizard"), picks, true));
+
+    auto fewer = picks;
+    fewer.pop_back();
+    REQUIRE(dnd::validate_spell_selection(wizard, cls("Wizard"), fewer, true));         // must be full at creation
+    REQUIRE_FALSE(dnd::validate_spell_selection(wizard, cls("Wizard"), fewer, false));  // fine when learning
+
+    auto wrong_list = picks;
+    wrong_list.back() = spell_named(spells, "Cure Wounds");
+    REQUIRE(dnd::validate_spell_selection(wizard, cls("Wizard"), wrong_list, true));
+
+    auto duplicate = picks;
+    duplicate.back() = picks.front();
+    REQUIRE(dnd::validate_spell_selection(wizard, cls("Wizard"), duplicate, false));
+
+    auto too_many = picks;
+    too_many.push_back(spell_named(spells, "Thunderwave"));
+    REQUIRE(dnd::validate_spell_selection(wizard, cls("Wizard"), too_many, false));
+}
+
+TEST_CASE("ordinal", "[spellcasting]") {
+    REQUIRE(dnd::ordinal(1) == "1st");
+    REQUIRE(dnd::ordinal(2) == "2nd");
+    REQUIRE(dnd::ordinal(3) == "3rd");
+    REQUIRE(dnd::ordinal(4) == "4th");
+    REQUIRE(dnd::ordinal(9) == "9th");
+    REQUIRE(dnd::ordinal(11) == "11th");
+    REQUIRE(dnd::ordinal(21) == "21st");
+}

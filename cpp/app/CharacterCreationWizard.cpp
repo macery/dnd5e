@@ -24,6 +24,7 @@
 #include <stdexcept>
 
 #include "dnd/rules.hpp"
+#include "dnd/spellcasting.hpp"
 
 namespace {
 
@@ -66,6 +67,53 @@ QString bonusList(const dnd::RaceInfo& race) {
     }
     if (race.flexible_bonus_count > 0) parts << QString("+1 to %1 others of your choice").arg(race.flexible_bonus_count);
     return parts.join(", ");
+}
+
+enum PageId { ClassPageId, RacePageId, AbilitiesPageId, BackgroundPageId, SkillsPageId, SpellsPageId,
+              DetailsPageId, EquipmentPageId, ReviewPageId };
+
+// The character as chosen so far -- level 1, final ability scores -- for
+// rules that depend on scores before the whole character can be built.
+dnd::Character previewCharacter(const CharacterCreationContext& context) {
+    dnd::Character character;
+    character.level = 1;
+    auto scores = dnd::final_ability_scores(context.choices);
+    character.strength = scores[0];
+    character.dexterity = scores[1];
+    character.constitution = scores[2];
+    character.intelligence = scores[3];
+    character.wisdom = scores[4];
+    character.charisma = scores[5];
+    return character;
+}
+
+// True if the chosen class picks spells at level 1.
+bool picksSpellsAtCreation(const CharacterCreationContext& context) {
+    const dnd::ClassInfo* info = dnd::find_class_info(context.choices.class_name);
+    if (!info) return false;
+    auto allowance = dnd::spell_allowance(previewCharacter(context), *info);
+    return allowance.cantrips + allowance.spells > 0;
+}
+
+QString spellKindText(const dnd::Spell& spell) {
+    auto dice = QString("%1d%2").arg(spell.dice_count).arg(spell.dice_sides);
+    if (spell.flat_bonus) dice += formatModifier(spell.flat_bonus);
+    switch (spell.resolution) {
+        case dnd::SpellResolution::Attack:
+            return QString("%1 spell attack, %2 %3").arg(spell.melee_attack ? "melee" : "ranged", dice,
+                                                         q(spell.damage_type));
+        case dnd::SpellResolution::Save:
+            return QString("%1 save (%2), %3 %4")
+                .arg(dnd::ability_name(spell.save_ability), spell.save_halves ? "half on success" : "none on success",
+                     dice, q(spell.damage_type));
+        case dnd::SpellResolution::AutoHit:
+            return QString("%1 × %2 %3, always hits").arg(spell.projectiles).arg(dice, q(spell.damage_type));
+        case dnd::SpellResolution::Heal:
+            return QString("heals %1%2").arg(dice, spell.adds_modifier ? " + modifier" : "");
+        case dnd::SpellResolution::Utility:
+            return "utility (no automated effect yet)";
+    }
+    return "";
 }
 
 // Shared by every page: an inline error label and the common context.
@@ -513,6 +561,8 @@ public:
         return accepted(dnd::validate_skills(context_.choices));
     }
 
+    int nextId() const override { return picksSpellsAtCreation(context_) ? SpellsPageId : DetailsPageId; }
+
 private:
     static bool contains(const std::vector<Skill>& skills, Skill skill) {
         return std::find(skills.begin(), skills.end(), skill) != skills.end();
@@ -539,6 +589,127 @@ private:
     QLabel* statusLabel_ = nullptr;
     std::array<QCheckBox*, dnd::kSkillCount> boxes_{};
     dnd::SkillPlan plan_;
+};
+
+// ---------------------------------------------------------------- Spells
+
+class SpellsPage : public CreationPage {
+public:
+    explicit SpellsPage(CharacterCreationContext& context)
+        : CreationPage(context, "Choose Spells",
+                       "Cantrips can be cast at will. Spells of 1st level and up each use a spell slot, which "
+                       "comes back after a long rest.") {
+        statsLabel_ = new QLabel(this);
+        statsLabel_->setWordWrap(true);
+        cantripsLabel_ = new QLabel(this);
+        spellsLabel_ = new QLabel(this);
+        cantripList_ = new QListWidget(this);
+        spellList_ = new QListWidget(this);
+
+        auto* columns = new QHBoxLayout();
+        auto* left = new QVBoxLayout();
+        left->addWidget(cantripsLabel_);
+        left->addWidget(cantripList_, 1);
+        auto* right = new QVBoxLayout();
+        right->addWidget(spellsLabel_);
+        right->addWidget(spellList_, 1);
+        columns->addLayout(left, 1);
+        columns->addLayout(right, 1);
+
+        auto* note = new QLabel("<i>Hover a spell for its description. Utility spells have no automated effect "
+                                "yet -- casting one just uses the slot.</i>", this);
+        note->setWordWrap(true);
+
+        auto* layout = new QVBoxLayout(this);
+        layout->addWidget(statsLabel_);
+        layout->addLayout(columns, 1);
+        layout->addWidget(note);
+        layout->addWidget(errorLabel_);
+
+        for (auto* list : {cantripList_, spellList_}) {
+            connect(list, &QListWidget::itemChanged, this, [this](QListWidgetItem*) { refreshCounts(); });
+        }
+    }
+
+    void initializePage() override {
+        const dnd::ClassInfo* info = dnd::find_class_info(context_.choices.class_name);
+        if (!info) return;
+        character_ = previewCharacter(context_);
+        allowance_ = dnd::spell_allowance(character_, *info);
+
+        statsLabel_->setText(
+            QString("<b>%1</b> casts with <b>%2</b>: spell attack %3, spell save DC %4. %5")
+                .arg(q(info->name), dnd::ability_name(info->spellcasting.ability))
+                .arg(formatModifier(dnd::spell_attack_bonus(character_, *info)))
+                .arg(dnd::spell_save_dc(character_, *info))
+                .arg(info->spellcasting.preparation == dnd::SpellPreparation::Known
+                         ? "You know these spells permanently."
+                         : "These are your prepared spells (changing them after a long rest comes later)."));
+
+        // Rebuild the lists for this class, keeping earlier picks that still apply.
+        const auto& previous = context_.chosen_spell_ids;
+        for (auto* list : {cantripList_, spellList_}) {
+            list->blockSignals(true);
+            list->clear();
+        }
+        for (const auto& spell : context_.spells) {
+            const auto& classes = spell.class_names;
+            if (std::find(classes.begin(), classes.end(), info->name) == classes.end()) continue;
+            if (spell.level > allowance_.max_spell_level) continue;
+            auto* list = spell.level == 0 ? cantripList_ : spellList_;
+            auto* item = new QListWidgetItem(QString("%1 — %2").arg(q(spell.name), spellKindText(spell)), list);
+            item->setData(Qt::UserRole, spell.spell_id);
+            item->setToolTip(QString("<b>%1</b> (%2 %3)<br>%4<br><i>Range: %5 · Duration: %6</i>")
+                                 .arg(q(spell.name), spell.level == 0 ? "cantrip," : "1st-level", q(spell.school),
+                                      q(spell.description), q(spell.range_text), q(spell.duration_text)));
+            item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
+            bool wasChosen = std::find(previous.begin(), previous.end(), spell.spell_id) != previous.end();
+            item->setCheckState(wasChosen ? Qt::Checked : Qt::Unchecked);
+        }
+        for (auto* list : {cantripList_, spellList_}) list->blockSignals(false);
+        refreshCounts();
+    }
+
+    bool validatePage() override {
+        std::vector<dnd::Spell> chosen;
+        context_.chosen_spell_ids.clear();
+        for (auto* list : {cantripList_, spellList_}) {
+            for (int row = 0; row < list->count(); ++row) {
+                if (list->item(row)->checkState() != Qt::Checked) continue;
+                int id = list->item(row)->data(Qt::UserRole).toInt();
+                context_.chosen_spell_ids.push_back(id);
+                for (const auto& spell : context_.spells) {
+                    if (spell.spell_id == id) chosen.push_back(spell);
+                }
+            }
+        }
+        const dnd::ClassInfo* info = dnd::find_class_info(context_.choices.class_name);
+        if (!info) return accepted(std::string("Choose a class."));
+        return accepted(dnd::validate_spell_selection(character_, *info, chosen, /*require_full=*/true));
+    }
+
+private:
+    static int checkedCount(const QListWidget* list) {
+        int count = 0;
+        for (int row = 0; row < list->count(); ++row) count += list->item(row)->checkState() == Qt::Checked;
+        return count;
+    }
+
+    void refreshCounts() {
+        cantripsLabel_->setText(
+            QString("<b>Cantrips</b>: %1 / %2").arg(checkedCount(cantripList_)).arg(allowance_.cantrips));
+        spellsLabel_->setText(
+            QString("<b>1st-level spells</b>: %1 / %2").arg(checkedCount(spellList_)).arg(allowance_.spells));
+        errorLabel_->clear();
+    }
+
+    QLabel* statsLabel_ = nullptr;
+    QLabel* cantripsLabel_ = nullptr;
+    QLabel* spellsLabel_ = nullptr;
+    QListWidget* cantripList_ = nullptr;
+    QListWidget* spellList_ = nullptr;
+    dnd::Character character_;
+    dnd::SpellAllowance allowance_;
 };
 
 // ---------------------------------------------------------------- Details
@@ -724,7 +895,7 @@ private:
                        "<b>Proficiency</b> %10 · <b>Passive Perception</b> %11</p>"
                        "<table cellspacing='4'>%12</table>"
                        "<p><b>Skills:</b> %13</p>"
-                       "<p><b>Weapon:</b> %14<br><b>Gear:</b> %15</p>")
+                       "<p><b>Weapon:</b> %14<br><b>Gear:</b> %15</p>%16")
             .arg(q(character.character_name), q(choices.race_name), q(choices.class_name),
                  q(choices.background_name), nameFor(context_.alignments, character.alignment))
             .arg(character.max_hp)
@@ -734,7 +905,25 @@ private:
             .arg(formatModifier(dnd::proficiency_bonus(character.level)))
             .arg(dnd::passive_perception(character))
             .arg(abilities, skills.join(", "), weaponText,
-                 context_.take_explorers_pack ? "Explorer's Pack" : "none");
+                 context_.take_explorers_pack ? "Explorer's Pack" : "none", spellsText(character));
+    }
+
+    QString spellsText(const dnd::Character& character) const {
+        const dnd::ClassInfo* info = dnd::find_class_info(context_.choices.class_name);
+        if (!info || !picksSpellsAtCreation(context_)) return "";
+        QStringList names;
+        for (int id : context_.chosen_spell_ids) {
+            for (const auto& spell : context_.spells) {
+                if (spell.spell_id == id) names << q(spell.name);
+            }
+        }
+        return QString("<p><b>Spellcasting:</b> %1, spell attack %2, save DC %3, %4 × 1st-level slots<br>"
+                       "<b>Spells:</b> %5</p>")
+            .arg(dnd::ability_name(info->spellcasting.ability),
+                 formatModifier(dnd::spell_attack_bonus(character, *info)))
+            .arg(dnd::spell_save_dc(character, *info))
+            .arg(dnd::spell_slots(*info, 1)[0])
+            .arg(names.join(", "));
     }
 
     QLabel* summary_ = nullptr;
@@ -752,16 +941,18 @@ CharacterCreationWizard::CharacterCreationWizard(dnd::Repository& repository, in
     context_->races = repository_.get_races();
     context_->alignments = repository_.get_alignments();
     context_->weapons = weapons;
+    context_->spells = repository_.get_spells();
     for (const auto& character : repository_.get_characters()) context_->existing_names.push_back(character.character_name);
 
-    addPage(new ClassPage(*context_));
-    addPage(new RacePage(*context_));
-    addPage(new AbilityScoresPage(*context_));
-    addPage(new BackgroundPage(*context_));
-    addPage(new SkillsPage(*context_));
-    addPage(new DetailsPage(*context_));
-    addPage(new EquipmentPage(*context_));
-    addPage(new ReviewPage(*context_));
+    setPage(ClassPageId, new ClassPage(*context_));
+    setPage(RacePageId, new RacePage(*context_));
+    setPage(AbilitiesPageId, new AbilityScoresPage(*context_));
+    setPage(BackgroundPageId, new BackgroundPage(*context_));
+    setPage(SkillsPageId, new SkillsPage(*context_));
+    setPage(SpellsPageId, new SpellsPage(*context_));
+    setPage(DetailsPageId, new DetailsPage(*context_));
+    setPage(EquipmentPageId, new EquipmentPage(*context_));
+    setPage(ReviewPageId, new ReviewPage(*context_));
 
     resize(680, 560);
 }
@@ -778,6 +969,9 @@ void CharacterCreationWizard::accept() {
     }
 
     int character_id = repository_.add_character(character);
+    if (picksSpellsAtCreation(*context_)) {
+        for (int spell_id : context_->chosen_spell_ids) repository_.add_character_spell(character_id, spell_id);
+    }
     if (context_->take_explorers_pack) {
         auto items = repository_.get_items();
         for (const auto& starting : dnd::explorers_pack()) {

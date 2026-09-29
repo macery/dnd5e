@@ -118,6 +118,13 @@ const ClassInfo* find_class_info(const std::string& name) {
     return nullptr;
 }
 
+const ClassInfo* find_class_info_by_id(const std::vector<LookupEntry>& classes, int class_id) {
+    for (const auto& entry : classes) {
+        if (entry.id == class_id) return find_class_info(entry.name);
+    }
+    return nullptr;
+}
+
 const RaceInfo* find_race_info(const std::string& name) {
     for (const auto& info : race_infos()) {
         if (info.name == name) return &info;
