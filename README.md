@@ -1,1 +1,187 @@
 # dnd5e
+
+A desktop companion and solo-play engine for **Dungeons & Dragons 5th Edition**, written in C++20 with a Qt 6 UI and a SQLite save file.
+
+It manages players and characters, computes a full character sheet from the 5e rules, and runs turn-based combat. You play your own characters; the monsters take their turns automatically. Short pre-built solo adventures give you something to jump straight into, and characters earn XP, level up, and rest between fights.
+
+> This is a learning/practice project. There's no fixed spec, so expect features to grow in experimental steps.
+
+---
+
+## Features
+
+- **Players & characters**: create, edit, and delete players and their characters (class, race, alignment, level, ability scores, HP, AC, proficiencies, equipped weapon).
+- **Character sheet**: every derived stat is computed from the 5e rules, never stored: ability modifiers, proficiency bonus, saving throws, skills, initiative, passive Perception, and weapon attack/damage. Saves and skills can be rolled directly, with advantage or disadvantage.
+- **Dice roller**: any number of dice with any number of sides, plus d20 rolls with advantage/disadvantage.
+- **HP quick-adjust**: Damage and Heal buttons for the selected character.
+- **Initiative tracker**: a standalone turn-order tracker.
+- **Monsters**: a seeded list of low-CR enemies (Kobold, Goblin, Skeleton, Wolf, Zombie, Orc) with stat blocks and attacks.
+- **Weapons**: a seeded weapon list with finesse/ranged handling (finesse weapons use the better of STR or DEX).
+- **Combat encounters**:
+  - Real initiative order.
+  - Monster turns resolve automatically.
+  - On each of your turns you pick Attack, Dash, or Dodge.
+  - Natural 20s crit and natural 1s miss.
+  - Dodge imposes disadvantage on attacks against you.
+  - The encounter ends with a victory or a defeat.
+- **Solo adventures**: pre-built mini-encounters, each with a hook, its monsters, and a victory payoff.
+- **Progression**:
+  - **XP:** each monster's XP comes from its challenge rating. On a victory the total is split evenly across the party.
+  - **Leveling up:** crossing an XP threshold levels the character up automatically. Each level adds fixed-average HP.
+  - **Short rest:** spend a hit die to heal.
+  - **Long rest:** restore all HP and recover up to half the spent hit dice.
+- **In-app rules help**: tooltips explain abilities, skills, and combat terms for new players.
+
+## Repository layout
+
+```
+dnd5e/
+├── cpp/                  # The current application (C++20 / Qt 6 / SQLite)
+│   ├── include/dnd/      # dndcore public headers (UI-agnostic rules & data)
+│   ├── src/              # dndcore implementation
+│   ├── app/              # Qt Widgets desktop app (dnd_app)
+│   ├── tests/            # Catch2 unit tests for dndcore
+│   └── CMakeLists.txt
+├── DND5EProject/         # Legacy C# / .NET (WPF, MvvmCross, MAUI) version, no longer developed
+└── .github/workflows/    # CI: builds and tests cpp/ on Linux and Windows
+```
+
+### Architecture (`cpp/`)
+
+| Module | Purpose |
+|---|---|
+| `dice` / `rng` | The dice engine. Randomness comes from an injected `IRandomSource`, so tests are deterministic. |
+| `rules` | Pure 5e rules math: modifiers, proficiency, skills, saves, weapon attack bonuses. |
+| `combat` | Attack resolution (hit/miss, crits, advantage/disadvantage). Knows nothing about characters or monsters. |
+| `progression` | XP tables, leveling, class hit dice, and short/long rests. |
+| `adventure` | Built-in solo adventure templates. |
+| `repository` | SQLite persistence for players, characters, and the lookup tables. |
+| `migrations` | Versioned, append-only schema migrations. They run automatically when the database is opened. |
+| `app/` | Qt dialogs and widgets. They sit on top of `dndcore` and hold no rules logic. |
+
+`dndcore` has no Qt dependency. The library and its tests build even on a machine without Qt; in that case the UI target is skipped.
+
+## Building
+
+### Requirements
+
+- CMake ≥ 3.16
+- A C++20 compiler (GCC, Clang, or MSVC)
+- SQLite3 development headers
+- Qt 6 Widgets, needed only for the desktop app
+- An internet connection on first configure, because Catch2 is fetched automatically
+
+On Fedora:
+
+```sh
+sudo dnf install cmake gcc-c++ sqlite-devel qt6-qtbase-devel
+```
+
+On Ubuntu/Debian:
+
+```sh
+sudo apt install cmake g++ libsqlite3-dev qt6-base-dev
+```
+
+### Build, test, run
+
+```sh
+cmake -S cpp -B cpp/build -DCMAKE_BUILD_TYPE=Release
+cmake --build cpp/build --parallel
+ctest --test-dir cpp/build --output-on-failure
+./cpp/build/app/dnd_app
+```
+
+On Windows, CI installs SQLite through vcpkg; see `.github/workflows/cpp-ci.yml` for the exact configure command.
+
+### Where your data lives
+
+The app stores its SQLite database in the per-user data directory that Qt reports for this app, for example:
+
+- Linux: `~/.local/share/dnd5e/DnD Engine/dnd.db`
+- Windows: `%APPDATA%\dnd5e\DnD Engine\dnd.db`
+
+Any pending schema migrations run on launch, so older save files are upgraded in place.
+
+## Quick start (playing)
+
+1. Type a player name and click **Add Player**.
+2. Click **Add Character** and fill in their class, stats, HP, AC, and weapon.
+3. Double-click a character to open their **character sheet**.
+4. Click **Solo Adventure**, pick one, then **Roll Initiative** and fight. Use **Next Turn** to hand play back to the monsters.
+5. Win to earn XP. Afterwards, use **Short Rest** or **Long Rest** to recover before the next fight.
+
+## Development notes
+
+- **Schema changes:** append a new entry to `kMigrations` in `cpp/src/migrations.cpp`. Never edit an existing migration, because it has already run on real databases.
+- **Rules logic:** put it in `dndcore`, not in `app/`, and cover it with a Catch2 test. Pass a fake `IRandomSource` to get deterministic dice.
+- **Tests:** tests use `Repository(":memory:")` for a throwaway database.
+
+---
+
+## TODO
+
+### Inventory & items
+
+- [ ] **Inventory system**: an `Items` table plus a per-character `CharacterInventory` table (item, quantity, equipped flag), with the matching repository methods and a migration.
+- [ ] **Basic items**: seed common adventuring gear (rations, rope, torches, bedroll, waterskin, thieves' tools) and consumables (Potion of Healing: 2d4+2).
+- [ ] **Inventory UI**: an Inventory tab or dialog on the character sheet to add, remove, and equip items and change their quantities.
+- [ ] **Use items in combat**: drinking a potion as an action (or a bonus action, depending on the rules variant).
+- [ ] **Move weapons into the inventory**: make the equipped weapon one of the character's inventory items instead of the single `WeaponID` column.
+- [ ] **Armor & shields**: seed armor (light/medium/heavy) and calculate AC from the equipped armor, DEX (capped for medium armor), and a shield, instead of entering AC by hand.
+- [ ] **Currency**: track CP/SP/EP/GP/PP and have adventures award gold alongside XP.
+- [ ] **Encumbrance** (optional): item weights compared with carrying capacity (STR × 15).
+
+### Magic system
+
+- [ ] **Design the approach**: decide what needs to be data (a `Spells` table: level, school, casting time, range, components, duration, damage/healing dice, save ability, attack or save) and what needs code (special effects).
+- [ ] **Spellcasting stats**: each class's spellcasting ability, spell save DC (8 + proficiency + modifier), and spell attack bonus, added to `rules`.
+- [ ] **Spell slots**: slots per level by class and level, spent when casting and restored on a long rest (Warlock pact slots on a short rest).
+- [ ] **Known/prepared spells**: a per-character spell list, plus a spellbook UI on the character sheet.
+- [ ] **Starter spell list**: cantrips (Fire Bolt, Sacred Flame, Eldritch Blast) and level-1 spells (Magic Missile, Cure Wounds, Healing Word, Shield, Burning Hands).
+- [ ] **Cast a Spell in combat**: a new action, covering spell attack rolls and saving throws (half damage on a successful save).
+- [ ] **Concentration**: at most one concentration spell at a time; taking damage forces a CON save to keep it.
+- [ ] **Scaling**: cantrip damage grows at levels 5, 11, and 17; casting with a higher-level slot increases the effect.
+- [ ] **Magic items**: +1 weapons and armor, wands, scrolls, and so on, built on top of the inventory system.
+
+### Characters
+
+- [ ] **Ability score generation**: 4d6 drop the lowest, point buy, and the standard array in the character editor.
+- [ ] **Race traits**: ability score increases, speed, darkvision, and racial features.
+- [ ] **Class features**: a few defining ones, e.g. Fighter's Second Wind and Action Surge, Rogue's Sneak Attack, Barbarian's Rage.
+- [ ] **Level-up choices**: Ability Score Improvements at levels 4/8/12/16/19, and an option to roll HP instead of taking the average.
+- [ ] **Starting HP**: calculate level-1 max HP from the class hit die plus CON instead of entering it by hand.
+- [ ] **Keep level and XP in sync**: editing the level by hand in the editor can leave it out of step with XP.
+- [ ] **Weapon proficiencies**: attack bonuses currently assume the character is proficient with every weapon.
+- [ ] **Backgrounds**: skill proficiencies plus flavor.
+
+### Combat
+
+- [ ] **Conditions**: prone, poisoned, frightened, restrained, stunned, etc., wired into advantage and disadvantage.
+- [ ] **Death saving throws**: characters at 0 HP roll death saves, get stabilized, or die, instead of simply being "Down".
+- [ ] **More actions**: Disengage, Help, Hide, Ready, and Use an Object (for potions).
+- [ ] **Monsters with several attacks**: Multiattack and more than one attack per stat block.
+- [ ] **Smarter monster AI**: target selection better than a random living character (lowest HP, closest, etc.).
+- [ ] **Damage types**: resistances, vulnerabilities, and immunities (e.g. skeletons are vulnerable to bludgeoning).
+- [ ] **Save log**: save the combat log or an encounter summary when the encounter ends.
+
+### Content
+
+- [ ] **More monsters**: more stat blocks, including CR 1–5 enemies for higher-level parties.
+- [ ] **Monster editor**: add and edit custom monsters in the UI.
+- [ ] **Multi-encounter adventures**: several fights in a row, with rests in between.
+- [ ] **Encounter difficulty**: rate encounters Easy/Medium/Hard/Deadly from party XP budgets, and scale adventures to the party's level.
+- [ ] **Loot**: adventure rewards that drop items into inventory (depends on the inventory system).
+
+### Technical / housekeeping
+
+- [ ] **Stale comment in `app/main.cpp`**: it still says there's "no schema migration system yet", which is no longer true.
+- [ ] **Qt UI tests**: add some tests for the dialogs, or move more of their logic into `dndcore` where it can be tested.
+- [ ] **Packaging**: release builds (AppImage/Flatpak for Linux, an installer for Windows) from CI.
+- [ ] **Code style**: add `clang-format` / `clang-tidy` configs and check them in CI.
+- [ ] **Legacy code**: decide whether to archive or remove the legacy `DND5EProject/` C# code.
+- [ ] **Backups**: export and import characters (e.g. as JSON) for backup and sharing.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
