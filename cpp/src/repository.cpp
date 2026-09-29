@@ -8,6 +8,7 @@
 
 #include "dnd/detail/statement.hpp"
 #include "dnd/inventory.hpp"
+#include "dnd/spellcasting.hpp"
 #include "dnd/migrations.hpp"
 
 namespace dnd {
@@ -21,11 +22,35 @@ constexpr const char* kCharacterColumns =
     "CharacterId, CharacterName, Class, Race, Alignment, PlayerID, Level, "
     "Strength, Dexterity, Constitution, Intelligence, Wisdom, Charisma, "
     "CurrentHP, MaxHP, ArmorClass, SkillProficiencies, SaveProficiencies, WeaponID, "
-    "Experience, HitDiceUsed, Background";
+    "Experience, HitDiceUsed, Background, SpellSlotsUsed";
 
 std::string column_text(sqlite3_stmt* stmt, int column) {
     const unsigned char* text = sqlite3_column_text(stmt, column);
     return text ? reinterpret_cast<const char*>(text) : "";
+}
+
+// SpellSlotsUsed is stored as nine comma-separated counts ("0,1,0,...").
+std::string format_spell_slots(const std::array<int, 9>& slots) {
+    std::string text;
+    for (size_t i = 0; i < slots.size(); ++i) {
+        if (i > 0) text += ',';
+        text += std::to_string(slots[i]);
+    }
+    return text;
+}
+
+std::array<int, 9> parse_spell_slots(const std::string& text) {
+    std::array<int, 9> slots{};
+    size_t index = 0;
+    size_t start = 0;
+    while (index < slots.size() && start <= text.size()) {
+        size_t end = text.find(',', start);
+        if (end == std::string::npos) end = text.size();
+        if (end > start) slots[index] = std::stoi(text.substr(start, end - start));
+        ++index;
+        start = end + 1;
+    }
+    return slots;
 }
 
 Character read_character_row(sqlite3_stmt* stmt) {
@@ -53,6 +78,7 @@ Character read_character_row(sqlite3_stmt* stmt) {
     character.experience = sqlite3_column_int(stmt, 19);
     character.hit_dice_used = sqlite3_column_int(stmt, 20);
     character.background = column_text(stmt, 21);
+    character.spell_slots_used = parse_spell_slots(column_text(stmt, 22));
     return character;
 }
 
@@ -73,6 +99,63 @@ Item read_item_row(sqlite3_stmt* stmt) {
     item.heal_dice_sides = sqlite3_column_int(stmt, 7);
     item.heal_bonus = sqlite3_column_int(stmt, 8);
     return item;
+}
+
+constexpr const char* kSpellColumns =
+    "Spells.SpellID, Spells.Name, Spells.Level, Spells.School, Spells.Description, Spells.CastingTime, "
+    "Spells.RangeText, Spells.DurationText, Spells.Concentration, Spells.Resolution, Spells.MeleeAttack, "
+    "Spells.SaveAbility, Spells.SaveHalves, Spells.DiceCount, Spells.DiceSides, Spells.FlatBonus, "
+    "Spells.AddsModifier, Spells.DamageType, Spells.Projectiles, Spells.MaxTargets, Spells.UpcastDice, "
+    "Spells.UpcastProjectiles, Spells.CantripScaling";
+
+Spell read_spell_row(sqlite3_stmt* stmt) {
+    Spell spell;
+    spell.spell_id = sqlite3_column_int(stmt, 0);
+    spell.name = column_text(stmt, 1);
+    spell.level = sqlite3_column_int(stmt, 2);
+    spell.school = column_text(stmt, 3);
+    spell.description = column_text(stmt, 4);
+    spell.casting_time = casting_time_from_name(column_text(stmt, 5));
+    spell.range_text = column_text(stmt, 6);
+    spell.duration_text = column_text(stmt, 7);
+    spell.concentration = sqlite3_column_int(stmt, 8) != 0;
+    spell.resolution = spell_resolution_from_name(column_text(stmt, 9));
+    spell.melee_attack = sqlite3_column_int(stmt, 10) != 0;
+    std::string save_ability = column_text(stmt, 11);
+    if (!save_ability.empty()) spell.save_ability = ability_from_name(save_ability);
+    spell.save_halves = sqlite3_column_int(stmt, 12) != 0;
+    spell.dice_count = sqlite3_column_int(stmt, 13);
+    spell.dice_sides = sqlite3_column_int(stmt, 14);
+    spell.flat_bonus = sqlite3_column_int(stmt, 15);
+    spell.adds_modifier = sqlite3_column_int(stmt, 16) != 0;
+    spell.damage_type = column_text(stmt, 17);
+    spell.projectiles = sqlite3_column_int(stmt, 18);
+    spell.max_targets = sqlite3_column_int(stmt, 19);
+    spell.upcast_dice = sqlite3_column_int(stmt, 20);
+    spell.upcast_projectiles = sqlite3_column_int(stmt, 21);
+    spell.cantrip_scaling = cantrip_scaling_from_name(column_text(stmt, 22));
+    return spell;
+}
+
+// Runs a spell query (selecting kSpellColumns, optionally binding one int)
+// and fills each spell's class_names from ClassSpells.
+std::vector<Spell> run_spell_query(sqlite3* db, const std::string& sql, int bind_id = -1) {
+    std::vector<Spell> spells;
+    {
+        Statement stmt(db, sql.c_str());
+        if (bind_id >= 0) sqlite3_bind_int(stmt.get(), 1, bind_id);
+        while (sqlite3_step(stmt.get()) == SQLITE_ROW) spells.push_back(read_spell_row(stmt.get()));
+    }
+
+    Statement classes(db,
+        "SELECT Classes.ClassName FROM ClassSpells JOIN Classes ON Classes.ClassID = ClassSpells.ClassID "
+        "WHERE ClassSpells.SpellID = ? ORDER BY Classes.ClassName;");
+    for (auto& spell : spells) {
+        sqlite3_reset(classes.get());
+        sqlite3_bind_int(classes.get(), 1, spell.spell_id);
+        while (sqlite3_step(classes.get()) == SQLITE_ROW) spell.class_names.push_back(column_text(classes.get(), 0));
+    }
+    return spells;
 }
 
 std::vector<LookupEntry> get_lookup_entries(sqlite3* db, const char* table, const char* id_column,
@@ -281,6 +364,32 @@ int Repository::remove_from_inventory(int character_id, int item_id, int quantit
     return removed;
 }
 
+std::vector<Spell> Repository::get_spells() const {
+    return run_spell_query(db_, std::string("SELECT ") + kSpellColumns + " FROM Spells ORDER BY Level, Name;");
+}
+
+std::vector<Spell> Repository::get_character_spells(int character_id) const {
+    return run_spell_query(db_,
+        std::string("SELECT ") + kSpellColumns +
+            " FROM CharacterSpells JOIN Spells ON Spells.SpellID = CharacterSpells.SpellID "
+            "WHERE CharacterSpells.CharacterID = ? ORDER BY Spells.Level, Spells.Name;",
+        character_id);
+}
+
+void Repository::add_character_spell(int character_id, int spell_id) {
+    Statement stmt(db_, "INSERT OR IGNORE INTO CharacterSpells (CharacterID, SpellID) VALUES (?, ?);");
+    sqlite3_bind_int(stmt.get(), 1, character_id);
+    sqlite3_bind_int(stmt.get(), 2, spell_id);
+    detail::run_and_expect_done(stmt, "add character spell");
+}
+
+void Repository::remove_character_spell(int character_id, int spell_id) {
+    Statement stmt(db_, "DELETE FROM CharacterSpells WHERE CharacterID = ? AND SpellID = ?;");
+    sqlite3_bind_int(stmt.get(), 1, character_id);
+    sqlite3_bind_int(stmt.get(), 2, spell_id);
+    detail::run_and_expect_done(stmt, "remove character spell");
+}
+
 int Repository::add_player(const std::string& player_name) {
     Statement stmt(db_, "INSERT INTO Players (PlayerName) VALUES (?);");
     bind_text(stmt, 1, player_name);
@@ -293,8 +402,8 @@ int Repository::add_character(const Character& character) {
         "INSERT INTO Characters (CharacterName, Class, Race, Alignment, PlayerID, Level, "
         "Strength, Dexterity, Constitution, Intelligence, Wisdom, Charisma, "
         "CurrentHP, MaxHP, ArmorClass, SkillProficiencies, SaveProficiencies, WeaponID, "
-        "Experience, HitDiceUsed, Background) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);");
+        "Experience, HitDiceUsed, Background, SpellSlotsUsed) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);");
     bind_text(stmt, 1, character.character_name);
     sqlite3_bind_int(stmt.get(), 2, character.class_id);
     sqlite3_bind_int(stmt.get(), 3, character.race);
@@ -316,6 +425,7 @@ int Repository::add_character(const Character& character) {
     sqlite3_bind_int(stmt.get(), 19, character.experience);
     sqlite3_bind_int(stmt.get(), 20, character.hit_dice_used);
     bind_text(stmt, 21, character.background);
+    bind_text(stmt, 22, format_spell_slots(character.spell_slots_used));
     detail::run_and_expect_done(stmt, "insert character");
     return static_cast<int>(sqlite3_last_insert_rowid(db_));
 }
@@ -352,7 +462,7 @@ void Repository::update_character(const Character& character) {
         "UPDATE Characters SET CharacterName = ?, Class = ?, Race = ?, Alignment = ?, Level = ?, "
         "Strength = ?, Dexterity = ?, Constitution = ?, Intelligence = ?, Wisdom = ?, Charisma = ?, "
         "CurrentHP = ?, MaxHP = ?, ArmorClass = ?, SkillProficiencies = ?, SaveProficiencies = ?, WeaponID = ?, "
-        "Experience = ?, HitDiceUsed = ?, Background = ? WHERE CharacterId = ?;");
+        "Experience = ?, HitDiceUsed = ?, Background = ?, SpellSlotsUsed = ? WHERE CharacterId = ?;");
     bind_text(stmt, 1, character.character_name);
     sqlite3_bind_int(stmt.get(), 2, character.class_id);
     sqlite3_bind_int(stmt.get(), 3, character.race);
@@ -373,7 +483,8 @@ void Repository::update_character(const Character& character) {
     sqlite3_bind_int(stmt.get(), 18, character.experience);
     sqlite3_bind_int(stmt.get(), 19, character.hit_dice_used);
     bind_text(stmt, 20, character.background);
-    sqlite3_bind_int(stmt.get(), 21, character.character_id);
+    bind_text(stmt, 21, format_spell_slots(character.spell_slots_used));
+    sqlite3_bind_int(stmt.get(), 22, character.character_id);
     detail::run_and_expect_done(stmt, "update character");
 }
 

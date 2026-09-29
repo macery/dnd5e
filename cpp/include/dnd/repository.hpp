@@ -8,6 +8,7 @@
 #include "dnd/lookup_entry.hpp"
 #include "dnd/monster.hpp"
 #include "dnd/player.hpp"
+#include "dnd/spell.hpp"
 #include "dnd/weapon.hpp"
 
 struct sqlite3;
@@ -46,6 +47,16 @@ public:
     // none are left. Returns how many were actually removed (0 if the
     // character had none).
     int remove_from_inventory(int character_id, int item_id, int quantity = 1);
+
+    // Every seeded spell, ordered by level then name, with class_names
+    // filled from ClassSpells.
+    std::vector<Spell> get_spells() const;
+    // The character's known (castable) spells, same order and detail.
+    std::vector<Spell> get_character_spells(int character_id) const;
+    // Adding a spell the character already knows is a no-op. Spells are
+    // deleted with their character.
+    void add_character_spell(int character_id, int spell_id);
+    void remove_character_spell(int character_id, int spell_id);
 
     int add_player(const std::string& player_name);
     int add_character(const Character& character);

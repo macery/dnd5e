@@ -26,6 +26,7 @@ add_library(dndcore
     src/progression.cpp
     src/repository.cpp
     src/rules.cpp
+    src/spellcasting.cpp
 )
 target_include_directories(dndcore PUBLIC include)
 target_link_libraries(dndcore PUBLIC ${sqlite3_target})

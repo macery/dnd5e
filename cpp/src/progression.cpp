@@ -105,6 +105,11 @@ void take_long_rest(Character& character) {
     character.current_hp = character.max_hp;
     int recovered = std::max(1, character.level / 2);
     character.hit_dice_used = std::max(0, character.hit_dice_used - recovered);
+    character.spell_slots_used.fill(0);
+}
+
+void take_short_rest(Character& character, const ClassInfo& class_info) {
+    if (class_info.spellcasting.caster_type == CasterType::Pact) character.spell_slots_used.fill(0);
 }
 
 }  // namespace dnd

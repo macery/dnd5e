@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "dnd/character.hpp"
+#include "dnd/character_creation.hpp"
 #include "dnd/dice.hpp"
 #include "dnd/lookup_entry.hpp"
 
@@ -53,8 +54,12 @@ int hit_dice_remaining(const Character& character);
 // -1 without changing anything if no hit dice remain.
 int spend_hit_die(Character& character, const Dice& dice, int hit_die);
 
-// Long rest: restores HP to max and recovers spent hit dice, up to half the
-// character's total (minimum one), per the 5e rule.
+// Long rest: restores HP to max, recovers spent hit dice (up to half the
+// character's total, minimum one), and restores every spell slot.
 void take_long_rest(Character& character);
+
+// The automatic part of a short rest: a Warlock regains its pact slots.
+// (Spending hit dice is the player's choice -- see spend_hit_die.)
+void take_short_rest(Character& character, const ClassInfo& class_info);
 
 }  // namespace dnd

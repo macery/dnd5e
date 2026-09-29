@@ -15,6 +15,24 @@ namespace dnd {
 // match the seeded Classes/Races tables, which only store id + name; the
 // rules themselves live here, like the progression tables.
 
+// Which spell slot table a class uses (see dnd/spellcasting.hpp).
+enum class CasterType { None, Full, Half, Pact };
+
+// How a caster decides which spells it can cast.
+enum class SpellPreparation {
+    None,
+    Known,      // learns a fixed number (Bard, Ranger, Sorcerer, Warlock)
+    Prepared,   // prepares from the whole class list (Cleric, Druid, Paladin)
+    Spellbook,  // prepares from spells copied into a spellbook (Wizard)
+};
+
+struct SpellcastingInfo {
+    CasterType caster_type = CasterType::None;
+    Ability ability = Ability::Intelligence;
+    SpellPreparation preparation = SpellPreparation::None;
+    int base_cantrips = 0;  // cantrips known at level 1 (+1 at 4, +1 at 10)
+};
+
 struct ClassInfo {
     std::string name;
     int hit_die = 8;
@@ -23,6 +41,7 @@ struct ClassInfo {
     std::vector<Skill> skill_options;  // pick skill_choice_count of these
     std::string suggested_weapon;      // a seeded Weapon.name
     std::string summary;               // one line for the wizard
+    SpellcastingInfo spellcasting;     // caster_type None for non-casters
 };
 
 struct RaceInfo {

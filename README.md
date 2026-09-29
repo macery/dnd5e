@@ -185,13 +185,13 @@ Any pending schema migrations run on launch, so older save files are upgraded in
 Next up. It builds on the per-class rules data from the character creation wizard, which will gain a "Choose spells" step once spells exist.
 
 - [x] **Design the approach**: see [docs/magic-system.md](docs/magic-system.md). It covers what's data and what's code, the `Spells` schema, class spellcasting rules, the starter spell list, three build phases, and the settled decisions (2014 PHB rules, "choose up to N targets" for area spells, spells cast as actions, no monster casters yet).
-- [ ] **Spellcasting stats**: each class's spellcasting ability, spell save DC (8 + proficiency + modifier), and spell attack bonus, added to `rules`.
-- [ ] **Spell slots**: slots per level by class and level, spent when casting and restored on a long rest (Warlock pact slots on a short rest).
-- [ ] **Known/prepared spells**: a per-character spell list, plus a spellbook UI on the character sheet.
-- [ ] **Starter spell list**: 18 spells covering every full caster; the list is in the design doc. *Shield* moves to phase 3 with reactions.
-- [ ] **Cast a Spell in combat**: a new action, covering spell attack rolls and saving throws (half damage on a successful save).
+- [x] **Spellcasting stats**: each class's spellcasting ability, caster type, cantrip and spell counts, spell save DC, and spell attack bonus (`dnd/spellcasting.hpp`). Not shown on the sheet yet (phase 2).
+- [x] **Spell slots**: full, half, and pact slot tables for levels 1–20, and spending slots. A long rest restores every slot; `take_short_rest` restores Warlock pact slots. The rest buttons don't call it yet (phase 2).
+- [ ] **Known/prepared spells**: storage is done (`CharacterSpells`, repository methods). Still to do: the wizard's "Choose Spells" step and a spellbook on the character sheet (phase 2).
+- [x] **Starter spell list**: 18 spells with automated effects (migration 11), plus 24 *Utility* spells with no automated effect yet (migration 12), so every caster can fill its PHB level-1 picks. *Shield* moves to phase 3 with reactions.
+- [ ] **Cast a Spell in combat**: the rules are done (`cast_spell` handles attack, save, auto-hit, and heal spells). The combat action itself is phase 2.
 - [ ] **Concentration**: at most one concentration spell at a time; taking damage forces a CON save to keep it.
-- [ ] **Scaling**: cantrip damage grows at levels 5, 11, and 17; casting with a higher-level slot increases the effect.
+- [x] **Scaling**: cantrips get extra dice (or extra beams, for Eldritch Blast) at levels 5, 11, and 17, and casting with a higher-level slot adds dice or darts.
 - [ ] **Magic items**: +1 weapons and armor, wands, scrolls, and so on, built on top of the inventory system.
 
 ### Characters

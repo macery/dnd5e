@@ -48,7 +48,7 @@ TEST_CASE("run_migrations brings a fresh database to the latest schema", "[migra
 
     dnd::run_migrations(db.handle);
 
-    REQUIRE(dnd::current_schema_version(db.handle) == 10);
+    REQUIRE(dnd::current_schema_version(db.handle) == 12);
     REQUIRE(table_exists(db.handle, "Players"));
     REQUIRE(table_exists(db.handle, "Classes"));
     REQUIRE(table_exists(db.handle, "Characters"));
@@ -77,7 +77,7 @@ TEST_CASE("run_migrations is a no-op the second time", "[migrations]") {
     dnd::run_migrations(db.handle);
     dnd::run_migrations(db.handle);
 
-    REQUIRE(row_count(db.handle, "SELECT COUNT(*) FROM SchemaMigrations;") == 10);
+    REQUIRE(row_count(db.handle, "SELECT COUNT(*) FROM SchemaMigrations;") == 12);
     REQUIRE(row_count(db.handle, "SELECT COUNT(*) FROM Classes;") == 12);
     REQUIRE(row_count(db.handle, "SELECT COUNT(*) FROM Races;") == 9);
     REQUIRE(row_count(db.handle, "SELECT COUNT(*) FROM Monsters;") == 6);
@@ -90,7 +90,8 @@ TEST_CASE("migration 6 equips existing characters with Unarmed Strike", "[migrat
     // already at version 5 (migration 6's SQL only touches Characters and
     // Weapons; migration 7 (Monsters attack columns) also runs after it since
     // both are newer than the recorded version 5, so a minimal Monsters
-    // table is included too even though it's not this test's focus).
+    // table is included too even though it's not this test's focus; likewise
+    // a Classes table, which migration 11 reads to seed class spell lists).
     RawDb db(":memory:");
 
     char* error = nullptr;
@@ -99,6 +100,7 @@ TEST_CASE("migration 6 equips existing characters with Unarmed Strike", "[migrat
         "CREATE TABLE Characters (CharacterId INTEGER PRIMARY KEY AUTOINCREMENT, "
         "CharacterName TEXT NOT NULL UNIQUE, Class INTEGER NOT NULL, Race INTEGER NOT NULL, "
         "Alignment INTEGER NOT NULL, PlayerID INTEGER NOT NULL, Level INTEGER NOT NULL DEFAULT 1);"
+        "CREATE TABLE Classes (ClassID INTEGER PRIMARY KEY AUTOINCREMENT, ClassName TEXT NOT NULL UNIQUE);"
         "CREATE TABLE Monsters (MonsterID INTEGER PRIMARY KEY AUTOINCREMENT, Name TEXT NOT NULL UNIQUE, "
         "ArmorClass INTEGER NOT NULL, HitPoints INTEGER NOT NULL, Strength INTEGER NOT NULL, "
         "Dexterity INTEGER NOT NULL, Constitution INTEGER NOT NULL, Intelligence INTEGER NOT NULL, "
@@ -115,7 +117,7 @@ TEST_CASE("migration 6 equips existing characters with Unarmed Strike", "[migrat
 
     dnd::run_migrations(db.handle);
 
-    REQUIRE(dnd::current_schema_version(db.handle) == 10);
+    REQUIRE(dnd::current_schema_version(db.handle) == 12);
 
     sqlite3_stmt* stmt = nullptr;
     REQUIRE(sqlite3_prepare_v2(db.handle,

@@ -1,8 +1,10 @@
 # Magic system design
 
-Status: **approved, ready for phase 1.** Nothing here is implemented yet. The open questions were settled on 2026-09-29; see [Decisions](#decisions).
+Status: **phase 1 (core and data) implemented;** phase 2 (UI) is next. The open questions were settled on 2026-09-29; see [Decisions](#decisions).
 
-This document covers the first TODO item under *Magic system* ("Design the approach") and plans the rest of that section.
+### Phase 1 status
+
+The starter list alone left several classes short of their level-1 picks, e.g. a Cleric needs 3 cantrips and the PHB's only damaging Cleric cantrip is *Sacred Flame*. **Decision (2026-09-29):** add a fifth resolution kind, **`Utility`**. These spells have no automated effect yet: casting one spends the slot and shows its description. 24 PHB utility spells are seeded by migration 12, such as *Light*, *Guidance*, *Detect Magic*, *Mage Armor*, *Bless*, and *Charm Person*. A test checks that every caster can fill its level-1 picks, even with a 20 in its casting ability. Utility spells gain real effects over time, e.g. *Mage Armor* once armor and AC are modeled, and *Bless* with phase 3 effects.
 
 ## Goals
 
@@ -31,6 +33,7 @@ The engine interprets a small, fixed set of **resolution kinds**. Anything that 
 | `Save` | Each target makes a saving throw against the spell save DC. On a success they take half damage or none, depending on the spell. | Sacred Flame, Burning Hands, Thunderwave |
 | `AutoHit` | No roll; each projectile always hits. | Magic Missile |
 | `Heal` | Heals a friendly target by the dice plus the spellcasting modifier, capped at max HP. | Cure Wounds, Healing Word |
+| `Utility` | No automated effect yet; casting spends the slot and shows the description. | Light, Detect Magic, Bless |
 
 "Code only" effects are anything that changes state over time or reacts to events: concentration, conditions, reactions, temporary HP, summons, or HP-pool effects like *Sleep*. They wait for phase 3.
 

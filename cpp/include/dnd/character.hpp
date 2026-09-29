@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <string>
 
@@ -31,6 +32,9 @@ struct Character {
     // Spent on short rests, partly recovered on a long rest; the total
     // available is one per level (see dnd/progression.hpp).
     int hit_dice_used = 0;
+    // Spell slots spent since they were last restored, indexed by slot
+    // level - 1. Totals come from class + level (see dnd/spellcasting.hpp).
+    std::array<int, 9> spell_slots_used{};
 
     // Bit index = static_cast<int>(dnd::Skill) / dnd::Ability. Kept as raw
     // bitmasks here (rather than a join table) because the set of skills and

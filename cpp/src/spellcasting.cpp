@@ -1,0 +1,291 @@
+#include "dnd/spellcasting.hpp"
+
+#include <algorithm>
+#include <stdexcept>
+
+#include "dnd/combat.hpp"
+#include "dnd/rules.hpp"
+
+namespace dnd {
+
+namespace {
+
+using SlotRow = std::array<int, kMaxSpellLevel>;
+
+// PHB full-caster Spell Slots per Spell Level, levels 1-20.
+constexpr std::array<SlotRow, 20> kFullCasterSlots = {{
+    {2, 0, 0, 0, 0, 0, 0, 0, 0},
+    {3, 0, 0, 0, 0, 0, 0, 0, 0},
+    {4, 2, 0, 0, 0, 0, 0, 0, 0},
+    {4, 3, 0, 0, 0, 0, 0, 0, 0},
+    {4, 3, 2, 0, 0, 0, 0, 0, 0},
+    {4, 3, 3, 0, 0, 0, 0, 0, 0},
+    {4, 3, 3, 1, 0, 0, 0, 0, 0},
+    {4, 3, 3, 2, 0, 0, 0, 0, 0},
+    {4, 3, 3, 3, 1, 0, 0, 0, 0},
+    {4, 3, 3, 3, 2, 0, 0, 0, 0},
+    {4, 3, 3, 3, 2, 1, 0, 0, 0},
+    {4, 3, 3, 3, 2, 1, 0, 0, 0},
+    {4, 3, 3, 3, 2, 1, 1, 0, 0},
+    {4, 3, 3, 3, 2, 1, 1, 0, 0},
+    {4, 3, 3, 3, 2, 1, 1, 1, 0},
+    {4, 3, 3, 3, 2, 1, 1, 1, 0},
+    {4, 3, 3, 3, 2, 1, 1, 1, 1},
+    {4, 3, 3, 3, 3, 1, 1, 1, 1},
+    {4, 3, 3, 3, 3, 2, 1, 1, 1},
+    {4, 3, 3, 3, 3, 2, 2, 1, 1},
+}};
+
+// Spells Known columns of the PHB class tables, levels 1-20.
+constexpr std::array<int, 20> kBardSpellsKnown = {4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 15, 15, 16, 18, 19, 19, 20, 22, 22, 22};
+constexpr std::array<int, 20> kRangerSpellsKnown = {0, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11};
+constexpr std::array<int, 20> kSorcererSpellsKnown = {2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 12, 13, 13, 14, 14, 15, 15, 15, 15};
+constexpr std::array<int, 20> kWarlockSpellsKnown = {2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 11, 11, 12, 12, 13, 13, 14, 14, 15, 15};
+
+void require_level(int level) {
+    if (level < 1 || level > 20) throw std::invalid_argument("level must be in [1, 20]");
+}
+
+size_t level_index(int level) {
+    require_level(level);
+    return static_cast<size_t>(level - 1);
+}
+
+}  // namespace
+
+const char* spell_resolution_name(SpellResolution resolution) {
+    switch (resolution) {
+        case SpellResolution::Attack: return "Attack";
+        case SpellResolution::Save: return "Save";
+        case SpellResolution::AutoHit: return "AutoHit";
+        case SpellResolution::Heal: return "Heal";
+        case SpellResolution::Utility: return "Utility";
+    }
+    throw std::invalid_argument("unknown spell resolution");
+}
+
+SpellResolution spell_resolution_from_name(const std::string& name) {
+    for (auto resolution : {SpellResolution::Attack, SpellResolution::Save, SpellResolution::AutoHit,
+                            SpellResolution::Heal, SpellResolution::Utility}) {
+        if (name == spell_resolution_name(resolution)) return resolution;
+    }
+    throw std::invalid_argument("unknown spell resolution: " + name);
+}
+
+const char* casting_time_name(CastingTime casting_time) {
+    switch (casting_time) {
+        case CastingTime::Action: return "Action";
+        case CastingTime::BonusAction: return "BonusAction";
+        case CastingTime::Reaction: return "Reaction";
+    }
+    throw std::invalid_argument("unknown casting time");
+}
+
+CastingTime casting_time_from_name(const std::string& name) {
+    for (auto casting_time : {CastingTime::Action, CastingTime::BonusAction, CastingTime::Reaction}) {
+        if (name == casting_time_name(casting_time)) return casting_time;
+    }
+    throw std::invalid_argument("unknown casting time: " + name);
+}
+
+const char* cantrip_scaling_name(CantripScaling scaling) {
+    switch (scaling) {
+        case CantripScaling::Dice: return "Dice";
+        case CantripScaling::Projectiles: return "Projectiles";
+    }
+    throw std::invalid_argument("unknown cantrip scaling");
+}
+
+CantripScaling cantrip_scaling_from_name(const std::string& name) {
+    for (auto scaling : {CantripScaling::Dice, CantripScaling::Projectiles}) {
+        if (name == cantrip_scaling_name(scaling)) return scaling;
+    }
+    throw std::invalid_argument("unknown cantrip scaling: " + name);
+}
+
+Ability ability_from_name(const std::string& name) {
+    for (int i = 0; i < kAbilityCount; ++i) {
+        auto ability = static_cast<Ability>(i);
+        if (name == ability_name(ability)) return ability;
+    }
+    throw std::invalid_argument("unknown ability: " + name);
+}
+
+bool is_spellcaster(const ClassInfo& class_info) {
+    return class_info.spellcasting.caster_type != CasterType::None;
+}
+
+int spellcasting_modifier(const Character& character, const ClassInfo& class_info) {
+    return ability_modifier(ability_score(character, class_info.spellcasting.ability));
+}
+
+int spell_save_dc(const Character& character, const ClassInfo& class_info) {
+    return 8 + spell_attack_bonus(character, class_info);
+}
+
+int spell_attack_bonus(const Character& character, const ClassInfo& class_info) {
+    return proficiency_bonus(character.level) + spellcasting_modifier(character, class_info);
+}
+
+int cantrips_known(const ClassInfo& class_info, int level) {
+    require_level(level);
+    int base = class_info.spellcasting.base_cantrips;
+    if (base == 0) return 0;
+    return base + (level >= 4 ? 1 : 0) + (level >= 10 ? 1 : 0);
+}
+
+int spells_known(const ClassInfo& class_info, int level) {
+    size_t index = level_index(level);
+    if (class_info.spellcasting.preparation != SpellPreparation::Known) return 0;
+    if (class_info.name == "Bard") return kBardSpellsKnown[index];
+    if (class_info.name == "Ranger") return kRangerSpellsKnown[index];
+    if (class_info.name == "Sorcerer") return kSorcererSpellsKnown[index];
+    if (class_info.name == "Warlock") return kWarlockSpellsKnown[index];
+    return 0;
+}
+
+int spellbook_size(int level) {
+    require_level(level);
+    return 6 + 2 * (level - 1);
+}
+
+int prepared_spell_count(const Character& character, const ClassInfo& class_info) {
+    auto preparation = class_info.spellcasting.preparation;
+    if (preparation != SpellPreparation::Prepared && preparation != SpellPreparation::Spellbook) return 0;
+
+    int levels = character.level;
+    if (class_info.spellcasting.caster_type == CasterType::Half) {
+        if (character.level < 2) return 0;
+        levels = character.level / 2;
+    }
+    return std::max(1, spellcasting_modifier(character, class_info) + levels);
+}
+
+std::array<int, kMaxSpellLevel> spell_slots(const ClassInfo& class_info, int level) {
+    size_t index = level_index(level);
+    SlotRow slots{};
+    switch (class_info.spellcasting.caster_type) {
+        case CasterType::None:
+            break;
+        case CasterType::Full:
+            slots = kFullCasterSlots[index];
+            break;
+        case CasterType::Half:
+            if (level >= 2) slots = kFullCasterSlots[static_cast<size_t>((level + 1) / 2 - 1)];
+            break;
+        case CasterType::Pact: {
+            int count = level >= 17 ? 4 : level >= 11 ? 3 : level >= 2 ? 2 : 1;
+            int slot_level = std::min(5, (level + 1) / 2);
+            slots[static_cast<size_t>(slot_level - 1)] = count;
+            break;
+        }
+    }
+    return slots;
+}
+
+int slots_remaining(const Character& character, const ClassInfo& class_info, int slot_level) {
+    if (slot_level < 1 || slot_level > kMaxSpellLevel) throw std::invalid_argument("slot level must be in [1, 9]");
+    auto index = static_cast<size_t>(slot_level - 1);
+    return std::max(0, spell_slots(class_info, character.level)[index] - character.spell_slots_used[index]);
+}
+
+bool spend_spell_slot(Character& character, const ClassInfo& class_info, int slot_level) {
+    if (slots_remaining(character, class_info, slot_level) == 0) return false;
+    ++character.spell_slots_used[static_cast<size_t>(slot_level - 1)];
+    return true;
+}
+
+int cantrip_tier(int level) {
+    require_level(level);
+    return 1 + (level >= 5 ? 1 : 0) + (level >= 11 ? 1 : 0) + (level >= 17 ? 1 : 0);
+}
+
+CasterStats caster_stats(const Character& character, const ClassInfo& class_info) {
+    CasterStats stats;
+    stats.level = character.level;
+    stats.spell_attack_bonus = spell_attack_bonus(character, class_info);
+    stats.spell_save_dc = spell_save_dc(character, class_info);
+    stats.spellcasting_modifier = spellcasting_modifier(character, class_info);
+    return stats;
+}
+
+int spell_projectiles(const Spell& spell, int caster_level, int slot_level) {
+    if (spell.level == 0) {
+        if (spell.cantrip_scaling == CantripScaling::Projectiles) {
+            return spell.projectiles + cantrip_tier(caster_level) - 1;
+        }
+        return spell.projectiles;
+    }
+    return spell.projectiles + spell.upcast_projectiles * std::max(0, slot_level - spell.level);
+}
+
+int spell_dice_count(const Spell& spell, int caster_level, int slot_level) {
+    if (spell.level == 0) {
+        if (spell.cantrip_scaling == CantripScaling::Dice) return spell.dice_count * cantrip_tier(caster_level);
+        return spell.dice_count;
+    }
+    return spell.dice_count + spell.upcast_dice * std::max(0, slot_level - spell.level);
+}
+
+int spell_max_targets(const Spell& spell, int caster_level, int slot_level) {
+    int projectiles = spell_projectiles(spell, caster_level, slot_level);
+    return projectiles > 1 ? projectiles : spell.max_targets;
+}
+
+SpellCastResult cast_spell(const Dice& dice, const Spell& spell, const CasterStats& caster, int slot_level,
+                           const std::vector<SpellTarget>& targets) {
+    if (spell.level == 0 && slot_level != 0) throw std::invalid_argument("cantrips don't use a spell slot");
+    if (spell.level > 0 && (slot_level < spell.level || slot_level > kMaxSpellLevel)) {
+        throw std::invalid_argument("slot level must be between the spell's level and 9");
+    }
+
+    SpellCastResult result;
+    result.slot_level = slot_level;
+    if (spell.resolution == SpellResolution::Utility) return result;  // nothing to roll or target
+
+    int max_targets = spell_max_targets(spell, caster.level, slot_level);
+    if (targets.empty() || static_cast<int>(targets.size()) > max_targets) {
+        throw std::invalid_argument("choose between 1 and " + std::to_string(max_targets) + " targets");
+    }
+
+    result.projectiles = spell_projectiles(spell, caster.level, slot_level);
+    int dice_count = spell_dice_count(spell, caster.level, slot_level);
+    int bonus = spell.flat_bonus + (spell.adds_modifier ? caster.spellcasting_modifier : 0);
+
+    if (spell.resolution == SpellResolution::Save) {
+        // Area damage is rolled once for everyone caught in it.
+        result.dice = dice.roll(spell.dice_sides, dice_count);
+        int full = std::max(0, Dice::sum(result.dice) + bonus);
+        for (size_t i = 0; i < targets.size(); ++i) {
+            SpellEffectRoll effect;
+            effect.target = static_cast<int>(i);
+            effect.save_roll = dice.roll_d20(RollMode::Normal).result;
+            effect.saved = effect.save_roll + targets[i].save_bonus >= caster.spell_save_dc;
+            effect.amount = effect.saved ? (spell.save_halves ? full / 2 : 0) : full;
+            result.effects.push_back(effect);
+        }
+        return result;
+    }
+
+    for (int p = 0; p < result.projectiles; ++p) {
+        SpellEffectRoll effect;
+        effect.target = p % static_cast<int>(targets.size());
+        const SpellTarget& target = targets[static_cast<size_t>(effect.target)];
+
+        if (spell.resolution == SpellResolution::Attack) {
+            AttackResult attack = resolve_attack(dice, caster.spell_attack_bonus, target.armor_class, dice_count,
+                                                 spell.dice_sides, bonus);
+            effect.attack_roll = attack.attack_roll;
+            effect.hit = attack.hit;
+            effect.critical = attack.critical;
+            effect.amount = attack.damage_total;
+        } else {  // AutoHit, Heal
+            effect.hit = true;
+            effect.amount = std::max(0, Dice::sum(dice.roll(spell.dice_sides, dice_count)) + bonus);
+        }
+        result.effects.push_back(effect);
+    }
+    return result;
+}
+
+}  // namespace dnd

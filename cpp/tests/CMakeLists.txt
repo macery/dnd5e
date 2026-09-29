@@ -18,6 +18,7 @@ add_executable(dnd_tests
     test_progression.cpp
     test_repository.cpp
     test_rules.cpp
+    test_spellcasting.cpp
 )
 target_link_libraries(dnd_tests PRIVATE dndcore Catch2::Catch2WithMain)
 
