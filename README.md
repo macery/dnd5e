@@ -170,6 +170,8 @@ Any pending schema migrations run on launch, so older save files are upgraded in
 
 ### Magic system
 
+Planned after the character creation wizard. The wizard adds the per-class rules data this builds on, and it will gain a "Choose spells" step once spells exist.
+
 - [ ] **Design the approach**: decide what needs to be data (a `Spells` table: level, school, casting time, range, components, duration, damage/healing dice, save ability, attack or save) and what needs code (special effects).
 - [ ] **Spellcasting stats**: each class's spellcasting ability, spell save DC (8 + proficiency + modifier), and spell attack bonus, added to `rules`.
 - [ ] **Spell slots**: slots per level by class and level, spent when casting and restored on a long rest (Warlock pact slots on a short rest).
@@ -182,6 +184,17 @@ Any pending schema migrations run on launch, so older save files are upgraded in
 
 ### Characters
 
+- [ ] **Character creation wizard** (next up): a step-by-step `QWizard` that builds a complete, rules-valid level-1 character, instead of the current single form where everything is typed by hand. Several items below are steps of it.
+  1. **Class:** sets the hit die and saving-throw proficiencies, and which skills you can choose from and how many (e.g. a Rogue picks 4).
+  2. **Race:** ability score increases, speed, and traits.
+  3. **Ability scores:** roll 4d6 drop the lowest, use point buy, or take the standard array, then assign each value to an ability, with racial bonuses shown.
+  4. **Background:** two fixed skill proficiencies.
+  5. **Skills:** choose from the class list; background skills are pre-selected and locked.
+  6. **Details:** name and alignment.
+  7. **Equipment:** a starting weapon, plus a starting gear pack that goes straight into the inventory.
+  8. **Review:** a preview of the finished character sheet (HP from hit die + CON, AC, all bonuses) before saving.
+
+  It needs new per-class rules data: saving throws, skill choices, hit die, and later the spellcasting ability. The existing editor can also use that data to check proficiencies.
 - [ ] **Ability score generation**: 4d6 drop the lowest, point buy, and the standard array in the character editor.
 - [ ] **Race traits**: ability score increases, speed, darkvision, and racial features.
 - [ ] **Class features**: a few defining ones, e.g. Fighter's Second Wind and Action Surge, Rogue's Sneak Attack, Barbarian's Rage.
