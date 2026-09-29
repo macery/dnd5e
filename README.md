@@ -116,6 +116,13 @@ scp cpp/packaging/out/DnD_Engine-x86_64.AppImage other-machine:~/
 chmod +x DnD_Engine-x86_64.AppImage && ./DnD_Engine-x86_64.AppImage
 ```
 
+**From CI:** the `AppImage` workflow (`.github/workflows/appimage.yml`) runs the same script on every push to `main`, on pull requests that touch `cpp/`, and on demand from the Actions tab.
+- **Every run:** the AppImage is uploaded as a workflow artifact. Download it from the run's page. GitHub delivers artifacts zipped, so unzip it and `chmod +x` it before running.
+- **Releases:** pushing a version tag attaches the AppImage to a GitHub release:
+  ```sh
+  git tag v0.1.0 && git push origin v0.1.0
+  ```
+
 Things to know:
 - **FUSE:** AppImages need FUSE 2. If it won't start on Ubuntu, either `sudo apt install libfuse2t64`, or run it with `APPIMAGE_EXTRACT_AND_RUN=1 ./DnD_Engine-x86_64.AppImage`.
 - **OpenGL:** it expects the desktop's graphics libraries. On a minimal install, `sudo apt install libopengl0` provides the one most likely to be missing.
@@ -206,7 +213,8 @@ Any pending schema migrations run on launch, so older save files are upgraded in
 - [ ] **Stale comment in `app/main.cpp`**: it still says there's "no schema migration system yet", which is no longer true.
 - [ ] **Qt UI tests**: add some tests for the dialogs, or move more of their logic into `dndcore` where it can be tested.
 - [x] **Linux AppImage**: a local build script (`cpp/packaging/build-appimage.sh`).
-- [ ] **Packaging in CI**: build the AppImage in CI and attach it to releases. Also a Windows installer, and maybe Flatpak.
+- [x] **AppImage in CI**: built on every push and attached to releases for `v*` tags.
+- [ ] **More packaging**: a Windows installer, and maybe Flatpak.
 - [ ] **Wayland plugin**: bundle Qt's Wayland platform plugin so the app runs natively on Wayland instead of through XWayland.
 - [ ] **Code style**: add `clang-format` / `clang-tidy` configs and check them in CI.
 - [ ] **Legacy code**: decide whether to archive or remove the legacy `DND5EProject/` C# code.

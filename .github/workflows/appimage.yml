@@ -1,0 +1,44 @@
+name: AppImage
+
+# Builds the portable Linux AppImage with the same script used locally
+# (cpp/packaging/build-appimage.sh), inside the same Ubuntu 24.04 image, so
+# CI and local builds match. Every run uploads the AppImage as a workflow
+# artifact; pushing a v* tag also attaches it to a GitHub release.
+
+"on":
+  # No paths filter on push: it could stop a v* tag push from building the
+  # release asset. Pull requests still only build when cpp/ changes.
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    paths:
+      - 'cpp/**'
+      - '.github/workflows/appimage.yml'
+  workflow_dispatch:
+
+jobs:
+  appimage:
+    runs-on: ubuntu-latest
+    container: ubuntu:24.04
+    permissions:
+      contents: write  # only used to attach the AppImage to a release
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build AppImage
+        run: cpp/packaging/build-appimage.sh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DnD_Engine-x86_64.AppImage
+          path: cpp/packaging/out/DnD_Engine-x86_64.AppImage
+          if-no-files-found: error
+
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: cpp/packaging/out/DnD_Engine-x86_64.AppImage
