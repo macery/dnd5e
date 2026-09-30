@@ -1,6 +1,8 @@
 #include "CombatEncounterDialog.hpp"
 
 #include <QAbstractItemView>
+#include <QBrush>
+#include <QColor>
 #include <QComboBox>
 #include <QFormLayout>
 #include <QGroupBox>
@@ -70,8 +72,8 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
         "Armor Class -- how hard this participant is to hit. An attack roll must meet or beat this to hit.");
     participantTable_->horizontalHeaderItem(3)->setToolTip("Current hit points out of maximum.");
     participantTable_->horizontalHeaderItem(4)->setToolTip(
-        "Conditions and effects in play. \"Dying\" characters roll a death save each turn (three successes: "
-        "stable; three failures: dead); healing brings them back.");
+        "Conditions and effects in play. Hover a creature's status for what each one does and how long it lasts. "
+        "\"Dying ✓○○ ✗○○\" shows death save successes and failures.");
 
     auto* monsterRow = new QHBoxLayout();
     monsterTypeCombo_ = new QComboBox(this);
@@ -403,7 +405,18 @@ void CombatEncounterDialog::refreshParticipantTable() {
         participantTable_->setItem(row, 2, new QTableWidgetItem(QString::number(combatant.armor_class)));
         participantTable_->setItem(
             row, 3, new QTableWidgetItem(QString("%1/%2").arg(combatant.current_hp).arg(combatant.max_hp)));
-        participantTable_->setItem(row, 4, new QTableWidgetItem(q(encounter_.status_text(static_cast<int>(order[static_cast<size_t>(row)])))));
+        int index = static_cast<int>(order[static_cast<size_t>(row)]);
+        auto* status = new QTableWidgetItem(q(encounter_.status_text(index)));
+        QStringList tooltip;
+        for (const auto& line : encounter_.status_tooltip(index)) tooltip << q(line).toHtmlEscaped();
+        status->setToolTip(tooltip.join("<br>"));
+        if (combatant.death_saves.dead || (combatant.is_character && combatant.current_hp <= 0 &&
+                                           !combatant.death_saves.stable)) {
+            status->setForeground(QBrush(QColor(176, 0, 32)));  // dying or dead
+        } else if (combatant.current_hp <= 0) {
+            status->setForeground(QBrush(QColor(128, 128, 128)));  // stable, or a defeated monster
+        }
+        participantTable_->setItem(row, 4, status);
     }
 }
 

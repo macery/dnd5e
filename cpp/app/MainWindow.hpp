@@ -52,6 +52,10 @@ private:
     // one, titled `action`) if nothing is selected.
     const dnd::Character* selectedCharacter(const QString& action);
     int currentPlayerId() const;
+    // Every character who can still fight (not dead). If that leaves nobody
+    // but some characters exist, explains why (titled `action`) and returns
+    // an empty list; the caller should then stop.
+    std::vector<dnd::Character> charactersWhoCanFight(const QString& action);
     QString currentPlayerName() const;
 
     dnd::Repository& repository_;

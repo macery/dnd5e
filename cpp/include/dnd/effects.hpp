@@ -94,6 +94,10 @@ struct ActiveEffect {
     std::string label;  // shown in the UI and log, e.g. "Blessed"
 };
 
+// What an effect does, in a sentence for tooltips: the condition's
+// description, or e.g. "Adds 1d4 to its attack rolls." for AttackBonusDice.
+std::string effect_description(const ActiveEffect& effect);
+
 // Does `target` have `condition`, directly or implied? Paralyzed, Petrified,
 // Stunned, and Unconscious imply Incapacitated; Unconscious implies Prone.
 bool has_condition(const std::vector<ActiveEffect>& effects, int target, Condition condition);

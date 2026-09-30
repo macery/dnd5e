@@ -236,3 +236,16 @@ TEST_CASE("ability check modifiers", "[effects]") {
     REQUIRE(dnd::ability_check_modifiers(effects, 1, source_down).mode() == RollMode::Normal);
     REQUIRE(dnd::ability_check_modifiers(effects, 3, kAllAlive).mode() == RollMode::Normal);
 }
+
+TEST_CASE("effect descriptions", "[effects]") {
+    REQUIRE(dnd::effect_description(effect(1, 0, EffectKind::AttackBonusDice, 4)) == "Adds 1d4 to its attack rolls.");
+    REQUIRE(dnd::effect_description(effect(1, 0, EffectKind::ArmorClassBonus, 2)) == "+2 AC.");
+    REQUIRE(dnd::effect_description(condition(0, Condition::Stunned)) ==
+            dnd::condition_description(Condition::Stunned));
+    for (auto kind : {EffectKind::Dodging, EffectKind::SaveBonusDice, EffectKind::ExtraWeaponDamageDice,
+                      EffectKind::AdvantageOnNextAttackAgainst, EffectKind::AdvantageOnAttacksAgainst,
+                      EffectKind::DisadvantageOnNextAttack, EffectKind::CantRegainHitPoints,
+                      EffectKind::SpeedReduction}) {
+        REQUIRE_FALSE(dnd::effect_description(effect(1, 0, kind, 4)).empty());
+    }
+}

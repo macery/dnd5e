@@ -58,7 +58,8 @@ MainWindow::MainWindow(dnd::Repository& repository, QWidget* parent)
     characterTable_ = new QTableView(central);
     characterTable_->setModel(characterModel_);
     characterTable_->setSelectionBehavior(QAbstractItemView::SelectRows);
-    characterTable_->horizontalHeader()->setStretchLastSection(true);
+    characterTable_->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
+    characterTable_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);  // Name
     rootLayout->addWidget(characterTable_, 1);
 
     auto* characterRow = new QHBoxLayout();
@@ -291,6 +292,11 @@ void MainWindow::adjustCurrentCharacterHp(int delta) {
     if (!selected) return;
 
     dnd::Character character = *selected;
+    if (character.dead) {
+        QMessageBox::information(this, "Adjust HP",
+            QString("%1 is dead. Only revival magic can bring them back.").arg(QString::fromStdString(character.character_name)));
+        return;
+    }
     character.current_hp = std::clamp(character.current_hp + delta, 0, character.max_hp);
     repository_.update_character(character);
     reloadCharactersForCurrentPlayer();
@@ -388,8 +394,23 @@ void MainWindow::onLongRestClicked() {
             .arg(character.level));
 }
 
+std::vector<dnd::Character> MainWindow::charactersWhoCanFight(const QString& action) {
+    auto characters = repository_.get_characters();
+    std::vector<dnd::Character> living;
+    for (const auto& character : characters) {
+        if (!character.dead) living.push_back(character);
+    }
+    if (living.empty() && !characters.empty()) {
+        QMessageBox::information(this, action,
+            "Every character is dead. Only revival magic can bring them back, and that isn't available yet.");
+    }
+    return living;
+}
+
 void MainWindow::onInitiativeTrackerClicked() {
-    InitiativeTrackerDialog dialog(repository_.get_characters(), this);
+    auto characters = charactersWhoCanFight("Initiative Tracker");
+    if (characters.empty() && !repository_.get_characters().empty()) return;
+    InitiativeTrackerDialog dialog(characters, this);
     dialog.exec();
 }
 
@@ -399,8 +420,9 @@ void MainWindow::onMonstersClicked() {
 }
 
 void MainWindow::onCombatEncounterClicked() {
-    CombatEncounterDialog dialog(repository_, repository_.get_characters(), repository_.get_monsters(), weapons_,
-                                  this);
+    auto characters = charactersWhoCanFight("Combat Encounter");
+    if (characters.empty() && !repository_.get_characters().empty()) return;
+    CombatEncounterDialog dialog(repository_, characters, repository_.get_monsters(), weapons_, this);
     dialog.exec();
     reloadCharactersForCurrentPlayer();
 }
@@ -413,8 +435,10 @@ void MainWindow::onSoloAdventureClicked() {
     int index = picker.selectedIndex();
     if (index < 0 || index >= static_cast<int>(templates.size())) return;
 
-    CombatEncounterDialog dialog(repository_, repository_.get_characters(), repository_.get_monsters(), weapons_,
-                                  this, &templates[static_cast<size_t>(index)]);
+    auto characters = charactersWhoCanFight("Solo Adventure");
+    if (characters.empty() && !repository_.get_characters().empty()) return;
+    CombatEncounterDialog dialog(repository_, characters, repository_.get_monsters(), weapons_, this,
+                                  &templates[static_cast<size_t>(index)]);
     dialog.exec();
     reloadCharactersForCurrentPlayer();
 }

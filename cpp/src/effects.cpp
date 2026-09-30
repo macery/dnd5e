@@ -93,6 +93,25 @@ const char* condition_description(Condition condition) {
     return kConditionDescriptions.at(static_cast<size_t>(condition));
 }
 
+std::string effect_description(const ActiveEffect& effect) {
+    std::string amount = std::to_string(effect.amount);
+    switch (effect.kind) {
+        case EffectKind::Condition: return condition_description(effect.condition);
+        case EffectKind::Dodging:
+            return "Attacks against it have disadvantage, and it has advantage on DEX saves (unless incapacitated).";
+        case EffectKind::AttackBonusDice: return "Adds 1d" + amount + " to its attack rolls.";
+        case EffectKind::SaveBonusDice: return "Adds 1d" + amount + " to its saving throws.";
+        case EffectKind::ArmorClassBonus: return "+" + amount + " AC.";
+        case EffectKind::ExtraWeaponDamageDice: return "Its weapon hits deal an extra 1d" + amount + " damage.";
+        case EffectKind::AdvantageOnNextAttackAgainst: return "The next attack roll against it has advantage.";
+        case EffectKind::AdvantageOnAttacksAgainst: return "Attack rolls against it have advantage.";
+        case EffectKind::DisadvantageOnNextAttack: return "Its next attack roll has disadvantage.";
+        case EffectKind::CantRegainHitPoints: return "It can't regain hit points.";
+        case EffectKind::SpeedReduction: return "Its speed drops by " + amount + " feet (speed isn't tracked yet).";
+    }
+    return "";
+}
+
 bool has_condition(const std::vector<ActiveEffect>& effects, int target, Condition condition) {
     if (has_direct_condition(effects, target, condition)) return true;
     switch (condition) {

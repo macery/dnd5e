@@ -1,8 +1,11 @@
 #include "CharacterTableModel.hpp"
 
+#include <QBrush>
+#include <QColor>
+
 namespace {
 
-constexpr int kColumnCount = 6;
+constexpr int kColumnCount = 7;
 
 QString nameFor(const std::vector<dnd::LookupEntry>& entries, int id) {
     for (const auto& entry : entries) {
@@ -54,9 +57,18 @@ int CharacterTableModel::columnCount(const QModelIndex& parent) const {
 }
 
 QVariant CharacterTableModel::data(const QModelIndex& index, int role) const {
-    if (!index.isValid() || role != Qt::DisplayRole) return {};
-
+    if (!index.isValid()) return {};
     const auto& character = characters_.at(static_cast<size_t>(index.row()));
+
+    if (role == Qt::ForegroundRole && character.dead) return QBrush(QColor(128, 128, 128));
+    if (role == Qt::ToolTipRole && index.column() == 6) {
+        if (character.dead) return "Dead: failed three death saves or took massive damage. Only revival magic "
+                                   "can bring them back, and it isn't available yet. They can't fight or rest.";
+        if (character.current_hp <= 0) return "Unconscious at 0 HP (stable). Any healing wakes them.";
+        return {};
+    }
+    if (role != Qt::DisplayRole) return {};
+
     switch (index.column()) {
         case 0: return QString::fromStdString(character.character_name);
         case 1: return nameFor(classes_, character.class_id);
@@ -64,6 +76,10 @@ QVariant CharacterTableModel::data(const QModelIndex& index, int role) const {
         case 3: return nameFor(alignments_, character.alignment);
         case 4: return character.level;
         case 5: return QString("%1/%2").arg(character.current_hp).arg(character.max_hp);
+        case 6:
+            if (character.dead) return "Dead";
+            if (character.current_hp <= 0) return "Unconscious";
+            return "";
         default: return {};
     }
 }
@@ -78,6 +94,7 @@ QVariant CharacterTableModel::headerData(int section, Qt::Orientation orientatio
         case 3: return "Alignment";
         case 4: return "Level";
         case 5: return "HP";
+        case 6: return "Status";
         default: return {};
     }
 }

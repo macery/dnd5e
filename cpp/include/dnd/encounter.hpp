@@ -129,9 +129,14 @@ public:
 
     // Base AC plus effect bonuses (Shield of Faith).
     int armor_class(int index) const;
-    // A short status for the UI: "Up", "Up (Dodging, Prone)", "Dying (✓1 ✗2)",
-    // "Stable", "Dead", or "Down" for a defeated monster.
+    // A short status for the UI: "Up", "Up (Dodging, Prone)", "Dying ✓○○ ✗✗○"
+    // (death save successes / failures), "Stable", "Dead", or "Down" for a
+    // defeated monster.
     std::string status_text(int index) const;
+    // A multi-line, plain-language explanation of status_text: each effect with
+    // its source, what it does, and how long it lasts, plus what dying,
+    // stable, dead, and concentrating mean. One line per entry.
+    std::vector<std::string> status_tooltip(int index) const;
     // Everyone on the other side from the current combatant who's still up.
     std::vector<int> attack_targets() const;
     // The current character's healing items with quantities.

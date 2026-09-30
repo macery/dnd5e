@@ -54,10 +54,19 @@ CharacterSheetDialog::CharacterSheetDialog(const dnd::Character& character,
     : QDialog(parent), dice_(randomSource_) {
     setWindowTitle(QString::fromStdString(character.character_name));
 
-    auto* header = new QLabel(QString("<b>%1</b> — Level %2")
+    auto* header = new QLabel(QString("<b>%1</b> — Level %2%3")
                                    .arg(QString::fromStdString(character.character_name))
-                                   .arg(character.level),
+                                   .arg(character.level)
+                                   .arg(character.dead ? " — <span style='color:#b00020'>DEAD</span>" : ""),
                                this);
+    QLabel* deadBanner = nullptr;
+    if (character.dead) {
+        deadBanner = new QLabel("This character died in battle. Only revival magic (Revivify, Raise Dead, ...) can "
+                                "bring them back, and it isn't available yet. They can't fight, rest, or cast.",
+                                this);
+        deadBanner->setWordWrap(true);
+        deadBanner->setStyleSheet("color: #b00020;");
+    }
 
     auto* rollModeRow = new QHBoxLayout();
     rollModeRow->addWidget(new QLabel("Roll Mode:", this));
@@ -228,6 +237,7 @@ CharacterSheetDialog::CharacterSheetDialog(const dnd::Character& character,
 
     auto* layout = new QVBoxLayout(this);
     layout->addWidget(header);
+    if (deadBanner) layout->addWidget(deadBanner);
     layout->addLayout(rollModeRow);
     layout->addWidget(lastRollLabel_);
     layout->addWidget(summaryGroup);

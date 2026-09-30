@@ -1,6 +1,17 @@
 # Effects system design: conditions, death saves, concentration
 
-Status: **step zero and phases 2 (core effects) and 3 (data) done**; phase 4 (UI polish) is next. All open questions are settled; see [Decisions](#decisions).
+Status: **step zero and phases 2–4 done.** What's left is under [Later](#later). All open questions are settled; see [Decisions](#decisions).
+
+**Phase 4 as built:**
+- **Combat Status column:**
+  - Death save pips for the dying ("Dying ✓○○ ✗✗○").
+  - A tooltip explaining every condition and effect on a creature: what it does, who caused it, and how long it lasts ("3 rounds left", "until the start of Tam's next turn", "or until used", "while Tam concentrates").
+  - Explanations of dying, stable, dead, and concentration.
+  - Red text for dying or dead, grey for stable or defeated.
+- **Core:** `effect_description()` and `Encounter::status_tooltip()`, so the UI only renders text.
+- **Main window:** a Status column (Dead / Unconscious); dead characters are greyed out with a tooltip.
+- **Where the dead can't go:** they're left out of Combat Encounter, Solo Adventure, and the Initiative Tracker, and they're refused by Damage/Heal, both rests, potions, and the Spellbook.
+- **Character sheet:** a red "DEAD" header and an explanation.
 
 **Phase 3 as built:**
 - **Migration 14:**

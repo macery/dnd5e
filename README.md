@@ -31,7 +31,10 @@ It manages players and characters, computes a full character sheet from the 5e r
 - **Combat encounters**:
   - Real initiative order.
   - Monster turns resolve automatically.
-  - On each of your turns you pick Attack, Dash, Dodge, Drink Potion, or Cast a Spell.
+  - On each of your turns you pick Attack, Dash, Dodge, Drink Potion, Cast a Spell, or Stabilize.
+  - **Conditions and effects:** all 14 PHB conditions, plus spell effects like *Bless*, *Guiding Bolt*, and *Charm Person*. They change advantage and disadvantage, saves, AC, and who can act. Hover a creature's status for what each one does and how long it lasts.
+  - **Death saving throws:** characters at 0 HP are dying and roll each turn. Stabilize them, heal them, or lose them. The dead stay dead until revival magic exists.
+  - **Concentration:** one spell at a time, and damage can break it.
   - Natural 20s crit and natural 1s miss.
   - Dodge imposes disadvantage on attacks against you.
   - Drink Potion heals from your inventory.
@@ -228,11 +231,11 @@ Phases 1 (core and data) and 2 (UI) are done; see [docs/magic-system.md](docs/ma
 
 ### Combat
 
-- [ ] **Effects system**: designed in [docs/effects-system.md](docs/effects-system.md). It covers the next two items, concentration, and spell side effects.
-  - **Done:** step zero (combat logic in a tested `dnd::Encounter`), phase 2 (the core effects engine), and phase 3 (spells and monsters applying effects, plus the Stabilize action).
-  - **Next:** phase 4, UI polish: condition tooltips, death save pips, and showing the dead on the main window and sheet.
-- [ ] **Conditions**: all 14 PHB conditions are wired into advantage, disadvantage, auto-fails, auto-crits, and skipped turns (`dnd/effects`). They're applied in play by *Charm Person*, the Wolf's knock-prone, and dropping to 0 HP. Still to do: tooltips in the UI (phase 4), and more sources as monsters and spells are added.
-- [x] **Death saving throws**: characters at 0 HP fall unconscious and roll death saves each turn. A natural 1 counts as two failures, and a natural 20 brings them back with 1 HP. Massive damage kills outright. Healing revives them, and the fight's end stabilizes them. Monsters ignore the dying. A **Stabilize** action (Medicine check, or automatic with a Healer's Kit) and *Spare the Dying* stabilize the dying. Still to do: death save pips in the UI (phase 4).
+- [x] **Effects system**: designed in [docs/effects-system.md](docs/effects-system.md). It covers the next two items, concentration, and spell side effects.
+  - **Done:** step zero (combat logic in a tested `dnd::Encounter`), phase 2 (the core effects engine), phase 3 (spells and monsters applying effects, plus the Stabilize action), and phase 4 (tooltips, death save pips, and the dead shown and kept out of play).
+  - **Later:** effects that outlast combat (*Mage Armor*, exhaustion), reactions, temporary HP, resistances, and creature types.
+- [x] **Conditions**: all 14 PHB conditions are wired into advantage, disadvantage, auto-fails, auto-crits, and skipped turns (`dnd/effects`). They're applied in play by *Charm Person*, the Wolf's knock-prone, and dropping to 0 HP. Hovering a status in combat explains each one. More sources will come as monsters and spells are added.
+- [x] **Death saving throws**: characters at 0 HP fall unconscious and roll death saves each turn. A natural 1 counts as two failures, and a natural 20 brings them back with 1 HP. Massive damage kills outright. Healing revives them, and the fight's end stabilizes them. Monsters ignore the dying. A **Stabilize** action (Medicine check, or automatic with a Healer's Kit) and *Spare the Dying* stabilize the dying. Death save pips show in combat, and the dead are marked and kept out of play.
 - [ ] **Revival**: bring dead characters back the 2014 PHB way: *Revivify*, *Raise Dead*, *Reincarnate*, *Resurrection*, *True Resurrection*, or a temple's spellcasting service. It needs the spells, their material components, currency, and time tracking; see the effects design doc's Decisions.
 - [ ] **More actions**: Disengage, Help, Hide, Ready, and Use an Object (for potions).
 - [ ] **Monsters with several attacks**: Multiattack and more than one attack per stat block.

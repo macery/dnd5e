@@ -64,6 +64,15 @@ std::string bonus_note(const std::vector<int>& sides, const std::vector<int>& ro
     return text;
 }
 
+// "✓○○ ✗✗○": death save successes, then failures, out of three each.
+std::string death_save_pips(const DeathSaveState& saves) {
+    std::string pips;
+    for (int i = 0; i < 3; ++i) pips += i < saves.successes ? "✓" : "○";
+    pips += " ";
+    for (int i = 0; i < 3; ++i) pips += i < saves.failures ? "✗" : "○";
+    return pips;
+}
+
 int sum(const std::vector<int>& values) {
     int total = 0;
     for (int value : values) total += value;
@@ -200,7 +209,7 @@ std::string Encounter::status_text(int index) const {
     if (combatant.current_hp <= 0) {
         if (!combatant.is_character) return "Down";
         if (saves.stable) return "Stable";
-        return "Dying (✓" + std::to_string(saves.successes) + " ✗" + std::to_string(saves.failures) + ")";
+        return "Dying " + death_save_pips(saves);
     }
 
     std::vector<std::string> notes;
@@ -216,6 +225,79 @@ std::string Encounter::status_text(int index) const {
     }
     if (!combatant.concentration.empty()) notes.push_back("Concentrating: " + combatant.concentration);
     return notes.empty() ? "Up" : "Up (" + join(notes, ", ") + ")";
+}
+
+std::vector<std::string> Encounter::status_tooltip(int index) const {
+    std::vector<std::string> lines;
+    const Combatant& combatant = combatants_.at(static_cast<size_t>(index));
+    const DeathSaveState& saves = combatant.death_saves;
+    auto name_of = [this](int who) {
+        return who >= 0 && who < static_cast<int>(combatants_.size()) ? combatants_[static_cast<size_t>(who)].name
+                                                                       : std::string("someone");
+    };
+
+    if (saves.dead) {
+        lines.push_back("Dead. Only revival magic can bring them back.");
+        return lines;
+    }
+    if (combatant.current_hp <= 0) {
+        if (!combatant.is_character) {
+            lines.push_back("Defeated.");
+        } else if (saves.stable) {
+            lines.push_back("Stable: unconscious at 0 HP, but no longer dying. Any healing wakes them.");
+        } else {
+            lines.push_back("Dying: rolls a death save at the start of each turn. 10 or higher is a success; three "
+                            "successes means stable, three failures means dead. A natural 20 wakes them with 1 HP; "
+                            "any healing brings them back. Taking damage counts as a failure.");
+            lines.push_back("Successes " + std::to_string(saves.successes) + "/3, failures " +
+                            std::to_string(saves.failures) + "/3.");
+        }
+    }
+
+    for (const auto& effect : effects_) {
+        if (effect.target != index) continue;
+        std::string name = effect.kind == EffectKind::Dodging   ? "Dodging"
+                           : !effect.label.empty()              ? effect.label
+                           : effect.kind == EffectKind::Condition ? condition_name(effect.condition)
+                                                                  : effect_kind_name(effect.kind);
+        std::string line = name + ": " + effect_description(effect);
+
+        std::vector<std::string> notes;
+        if (effect.source >= 0 && effect.source != index) notes.push_back("from " + name_of(effect.source));
+        switch (effect.duration.kind) {
+            case DurationKind::UntilRemoved: break;
+            case DurationKind::Rounds:
+                notes.push_back(std::to_string(effect.duration.rounds) +
+                                (effect.duration.rounds == 1 ? " round left" : " rounds left"));
+                break;
+            case DurationKind::UntilStartOfTurn:
+                notes.push_back("until the start of " +
+                                (effect.duration.participant == index ? std::string("its") : name_of(effect.duration.participant) + "'s") +
+                                " next turn");
+                break;
+            case DurationKind::UntilEndOfTurn:
+                notes.push_back("until the end of " +
+                                (effect.duration.participant == index ? std::string("its") : name_of(effect.duration.participant) + "'s") +
+                                " next turn");
+                break;
+        }
+        if (effect.duration.until_used) notes.push_back("or until used");
+        if (effect.concentration) notes.push_back("while " + name_of(effect.source) + " concentrates");
+        if (effect.save_to_end) {
+            notes.push_back("DC " + std::to_string(effect.save_to_end->dc) + " " +
+                            ability_name(effect.save_to_end->ability) + " save at the end of each turn ends it");
+        }
+        if (!notes.empty()) line += " (" + join(notes, "; ") + ")";
+        lines.push_back(line);
+    }
+
+    if (!combatant.concentration.empty()) {
+        lines.push_back("Concentrating on " + combatant.concentration +
+                        ": taking damage forces a CON save (DC 10 or half the damage) to keep it. Dropping to 0 HP "
+                        "or casting another concentration spell ends it.");
+    }
+    if (lines.empty()) lines.push_back("No conditions or effects.");
+    return lines;
 }
 
 // --- Turns -------------------------------------------------------------------

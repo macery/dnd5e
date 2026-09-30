@@ -499,7 +499,7 @@ TEST_CASE("dropping to 0 HP: dying, and monsters ignore the dying", "[encounter]
     auto lines = logs(encounter.take_events());
     REQUIRE(contains(lines, "Orc attacks Aria: d20(15) +5 -> hit for 8. Aria is now 0/12 HP."));
     REQUIRE(contains(lines, "    Aria falls unconscious and is dying."));
-    REQUIRE(encounter.status_text(0) == "Dying (✓0 ✗0)");
+    REQUIRE(encounter.status_text(0) == "Dying ○○○ ○○○");
     REQUIRE(dnd::has_condition(encounter.effects(), 0, dnd::Condition::Unconscious));
     REQUIRE(encounter.current()->name == "Zanna");
 
@@ -508,7 +508,7 @@ TEST_CASE("dropping to 0 HP: dying, and monsters ignore the dying", "[encounter]
     lines = logs(encounter.take_events());
     REQUIRE(contains(lines, "Aria makes a death saving throw: d20(9) -> failure (0 successes, 1 failures)."));
     REQUIRE(contains(lines, "Orc attacks Zanna"));
-    REQUIRE(encounter.status_text(0) == "Dying (✓0 ✗1)");
+    REQUIRE(encounter.status_text(0) == "Dying ○○○ ✗○○");
 
     REQUIRE(encounter.dash());
     encounter.next_turn();  // natural 1: two more failures, dead
@@ -927,7 +927,7 @@ TEST_CASE("stabilizing a dying ally", "[encounter][effects]") {
         auto encounter = setup(dice, {}, {});
         REQUIRE(encounter.stabilize(0));
         REQUIRE(contains(logs(encounter.take_events()), "-> failure."));
-        REQUIRE(encounter.status_text(0) == "Dying (✓0 ✗0)");
+        REQUIRE(encounter.status_text(0) == "Dying ○○○ ○○○");
     }
 
     SECTION("a Healer's Kit makes it automatic") {
@@ -975,4 +975,64 @@ TEST_CASE("effects that block healing", "[encounter][effects]") {
     auto lines = logs(encounter.take_events());
     REQUIRE(lines.at(0) == "Aria drinks a Potion of Healing and regains 0 HP (now 2/12).");
     REQUIRE(lines.at(1) == "    Aria can't regain hit points right now.");
+}
+
+TEST_CASE("status tooltips explain effects in plain language", "[encounter][effects]") {
+    Fixture f;
+    ScriptedRandomSource rolls({10, 20, 1});
+    dnd::Dice dice(rolls);
+    auto encounter = f.encounter(dice);
+    encounter.add_character(f.fighter(), {}, {});
+    encounter.add_character(f.wizard(), {}, {});
+    encounter.add_monsters(f.monster("Goblin"), 1);
+    encounter.roll_initiative();  // Zanna's turn
+
+    REQUIRE(encounter.status_tooltip(0) == std::vector<std::string>{"No conditions or effects."});
+
+    encounter.start_concentration(1, "Bless");
+    dnd::ActiveEffect bless;
+    bless.kind = dnd::EffectKind::AttackBonusDice;
+    bless.amount = 4;
+    bless.target = 0;
+    bless.source = 1;
+    bless.concentration = true;
+    bless.duration.kind = dnd::DurationKind::Rounds;
+    bless.duration.rounds = 10;
+    bless.label = "Blessed";
+    encounter.add_effect(bless);
+
+    dnd::ActiveEffect prone;
+    prone.kind = dnd::EffectKind::Condition;
+    prone.condition = dnd::Condition::Prone;
+    prone.target = 2;
+    prone.source = 0;
+    encounter.add_effect(prone);
+
+    REQUIRE(encounter.status_tooltip(0) ==
+            std::vector<std::string>{"Blessed: Adds 1d4 to its attack rolls. (from Zanna; 10 rounds left; while Zanna concentrates)"});
+    auto caster = encounter.status_tooltip(1);
+    REQUIRE(caster.size() == 1);
+    REQUIRE(caster[0].rfind("Concentrating on Bless: taking damage forces a CON save", 0) == 0);
+    auto goblin = encounter.status_tooltip(2);
+    REQUIRE(goblin.size() == 1);
+    REQUIRE(goblin[0].rfind("Prone: Its attacks have disadvantage.", 0) == 0);
+    REQUIRE(goblin[0].find("(from Aria)") != std::string::npos);
+}
+
+TEST_CASE("status tooltips for dying, stable, and dead", "[encounter][effects]") {
+    Fixture f;
+    ScriptedRandomSource rolls({10});
+    dnd::Dice dice(rolls);
+    auto encounter = f.encounter(dice);
+    auto stable = f.fighter(1);
+    stable.current_hp = 0;
+    auto dead = f.wizard(2);
+    dead.dead = true;
+    encounter.add_character(stable, {}, {});
+    encounter.add_character(dead, {}, {});
+
+    auto lines = encounter.status_tooltip(0);
+    REQUIRE(lines.at(0) == "Stable: unconscious at 0 HP, but no longer dying. Any healing wakes them.");
+    REQUIRE(lines.at(1).rfind("Unconscious: Incapacitated and prone.", 0) == 0);
+    REQUIRE(encounter.status_tooltip(1) == std::vector<std::string>{"Dead. Only revival magic can bring them back."});
 }
