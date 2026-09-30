@@ -24,15 +24,15 @@ int main(int argc, char** argv) {
     try {
         repository = std::make_unique<dnd::Repository>(dbPath.toStdString());
     } catch (const std::exception& error) {
-        // There's no schema migration system yet (deliberately, while this app
-        // has no real users): an older database from before a schema change
-        // fails here rather than silently misbehaving. Fail with a clear,
-        // actionable message instead of letting the exception escape and
-        // std::terminate the whole process.
+        // Opening runs any pending schema migrations (dnd/migrations.hpp), so
+        // older save files upgrade in place. Getting here means the file is
+        // unreadable or a migration failed (each one rolls back on error).
+        // Fail with a clear, actionable message instead of letting the
+        // exception escape and std::terminate the whole process.
         QMessageBox::critical(nullptr, "DnD Engine - database error",
             QString("Couldn't open the database:\n\n%1\n\n%2\n\n"
-                    "If this database predates a schema change, delete the file above "
-                    "and relaunch to let it rebuild.")
+                    "The file may be damaged, or upgrading it to this version failed. "
+                    "Back it up, then delete it and relaunch to start with a fresh database.")
                 .arg(dbPath)
                 .arg(error.what()));
         return 1;

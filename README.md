@@ -191,20 +191,26 @@ Any pending schema migrations run on launch, so older save files are upgraded in
 - [ ] **Armor & shields**: seed armor (light/medium/heavy) and calculate AC from the equipped armor, DEX (capped for medium armor), and a shield, instead of entering AC by hand.
 - [ ] **Currency**: track CP/SP/EP/GP/PP and have adventures award gold alongside XP.
 - [ ] **Encumbrance** (optional): item weights compared with carrying capacity (STR × 15).
+- [ ] **Item uses**: a Healer's Kit has 10 uses in the PHB, but they aren't tracked, so stabilizing with one never uses it up. The same applies to other limited-use gear later (torches burning out, rations eaten).
 
 ### Magic system
 
-Phases 1 (core and data) and 2 (UI) are done; see [docs/magic-system.md](docs/magic-system.md). Phase 3 (concentration, spell side effects, reactions) is being designed together with conditions and death saves in [docs/effects-system.md](docs/effects-system.md).
+Phases 1 (core and data) and 2 (UI) are done; see [docs/magic-system.md](docs/magic-system.md). Most of phase 3 was built as part of the [effects system](docs/effects-system.md): spell side effects, *Bless*-style buffs, concentration, and *Spare the Dying*. The unchecked items below are what's left.
 
 - [x] **Design the approach**: see [docs/magic-system.md](docs/magic-system.md). It covers what's data and what's code, the `Spells` schema, class spellcasting rules, the starter spell list, three build phases, and the settled decisions (2014 PHB rules, "choose up to N targets" for area spells, spells cast as actions, no monster casters yet).
 - [x] **Spellcasting stats**: each class's spellcasting ability, caster type, cantrip and spell counts, spell save DC, and spell attack bonus (`dnd/spellcasting.hpp`), shown on the sheet and in the Spellbook.
 - [x] **Spell slots**: full, half, and pact slot tables for levels 1–20, spent by casting. Long Rest restores every slot; Short Rest restores Warlock pact slots.
 - [x] **Known/prepared spells**: the wizard's "Choose Spells" step, the Spellbook dialog (learn, forget, cast out of combat), and a Spellcasting section on the character sheet. Prepared casters keep the spells they picked; re-preparing after a long rest is phase 3.
-- [x] **Starter spell list**: 18 spells with automated effects (migration 11), plus 24 *Utility* spells with no automated effect yet (migration 12), so every caster can fill its PHB level-1 picks. *Shield* moves to phase 3 with reactions.
+- [x] **Starter spell list**: 18 spells with automated effects (migration 11), plus 24 *Utility* spells with no automated effect yet (migration 12), so every caster can fill its PHB level-1 picks. *Shield* waits for reactions (below).
 - [x] **Cast a Spell in combat**: pick a spell, a slot level, and targets. Monsters make saving throws with their ability modifiers, and everything is logged. Conditions, Dodge, and *Bless* apply to spell attacks and saves.
 - [x] **Spell side effects**: *Bless*, *Shield of Faith*, *Divine Favor*, *Guiding Bolt*, *Ray of Frost*, *Chill Touch*, *Vicious Mockery*, *Faerie Fire*, *Charm Person*, and *Spare the Dying* do what the PHB says (`SpellEffects`, effects phase 3).
 - [x] **Concentration**: one spell at a time (casting another ends the first); damage forces a CON save against DC max(10, half the damage); dropping to 0 or dying ends it, along with the spell's effects. *Bless*, *Shield of Faith*, *Divine Favor*, and *Faerie Fire* use it.
 - [x] **Scaling**: cantrips get extra dice (or extra beams, for Eldritch Blast) at levels 5, 11, and 17, and casting with a higher-level slot adds dice or darts.
+- [ ] **Reactions**: *Shield*, *Hellish Rebuke*, *Feather Fall*, and opportunity attacks. They need a way to interrupt another creature's turn.
+- [ ] **Bonus actions**: *Healing Word*, *Shield of Faith*, *Divine Favor*, and *Sanctuary* are bonus actions in the PHB but are cast as actions here. The combat turn needs a real bonus-action slot (the turn guidance already shows "Bonus Action: none available").
+- [ ] **Re-preparing spells**: Clerics, Druids, and Wizards choose new prepared spells after a long rest, and Wizards get a real spellbook (6 spells at level 1, plus 2 per level) to prepare from. Today, the spells picked at creation or learned later are the prepared list.
+- [ ] **Effects that outlast combat**: *Mage Armor* (8 hours; AC 13 + DEX while unarmored, which also needs [armor & shields](#inventory--items)) and exhaustion levels. They need effects saved on the character; today every effect ends with the fight.
+- [ ] **More utility spells with real effects**: 18 utility spells (*Light*, *Detect Magic*, *Command*, *Sanctuary*, ...) still have no automated effect.
 - [ ] **Magic items**: +1 weapons and armor, wands, scrolls, and so on, built on top of the inventory system.
 
 ### Characters
@@ -233,14 +239,16 @@ Phases 1 (core and data) and 2 (UI) are done; see [docs/magic-system.md](docs/ma
 
 - [x] **Effects system**: designed in [docs/effects-system.md](docs/effects-system.md). It covers the next two items, concentration, and spell side effects.
   - **Done:** step zero (combat logic in a tested `dnd::Encounter`), phase 2 (the core effects engine), phase 3 (spells and monsters applying effects, plus the Stabilize action), and phase 4 (tooltips, death save pips, and the dead shown and kept out of play).
-  - **Later:** effects that outlast combat (*Mage Armor*, exhaustion), reactions, temporary HP, resistances, and creature types.
+  - **Later:** tracked as their own items. Effects that outlast combat and reactions are under [Magic system](#magic-system); damage types, temporary HP, and creature types are below.
 - [x] **Conditions**: all 14 PHB conditions are wired into advantage, disadvantage, auto-fails, auto-crits, and skipped turns (`dnd/effects`). They're applied in play by *Charm Person*, the Wolf's knock-prone, and dropping to 0 HP. Hovering a status in combat explains each one. More sources will come as monsters and spells are added.
 - [x] **Death saving throws**: characters at 0 HP fall unconscious and roll death saves each turn. A natural 1 counts as two failures, and a natural 20 brings them back with 1 HP. Massive damage kills outright. Healing revives them, and the fight's end stabilizes them. Monsters ignore the dying. A **Stabilize** action (Medicine check, or automatic with a Healer's Kit) and *Spare the Dying* stabilize the dying. Death save pips show in combat, and the dead are marked and kept out of play.
 - [ ] **Revival**: bring dead characters back the 2014 PHB way: *Revivify*, *Raise Dead*, *Reincarnate*, *Resurrection*, *True Resurrection*, or a temple's spellcasting service. It needs the spells, their material components, currency, and time tracking; see the effects design doc's Decisions.
-- [ ] **More actions**: Disengage, Help, Hide, Ready, and Use an Object (for potions).
+- [ ] **More actions**: Disengage, Help, Hide, and Ready. (Attack, Dash, Dodge, Drink Potion, Cast a Spell, and Stabilize exist.) Most need positions or reactions to mean much without a map; Help (advantage on an ally's next attack) works without one.
 - [ ] **Monsters with several attacks**: Multiattack and more than one attack per stat block.
-- [ ] **Smarter monster AI**: target selection better than a random living character (lowest HP, closest, etc.).
-- [ ] **Damage types**: resistances, vulnerabilities, and immunities (e.g. skeletons are vulnerable to bludgeoning).
+- [ ] **Smarter monster AI**: monsters already ignore dying characters and won't attack whoever charmed them. Beyond that, they pick a random conscious character. Better choices might be the lowest HP, the biggest threat, or the spellcaster who's concentrating.
+- [ ] **Damage types**: resistances, vulnerabilities, and immunities (e.g. skeletons are vulnerable to bludgeoning). Weapon and spell damage types are already recorded; monsters need theirs.
+- [ ] **Temporary hit points**: *Heroism*, *Armor of Agathys*, and similar effects that soak damage before HP.
+- [ ] **Creature types**: humanoid, undead, beast, and so on, on each monster. *Charm Person* should only work on humanoids (today it works on anything), and *Protection from Evil and Good* needs them.
 - [ ] **Save log**: save the combat log or an encounter summary when the encounter ends.
 
 ### Content
@@ -248,13 +256,13 @@ Phases 1 (core and data) and 2 (UI) are done; see [docs/magic-system.md](docs/ma
 - [ ] **More monsters**: more stat blocks, including CR 1–5 enemies for higher-level parties.
 - [ ] **Monster editor**: add and edit custom monsters in the UI.
 - [ ] **Multi-encounter adventures**: several fights in a row, with rests in between.
-- [ ] **Encounter difficulty**: rate encounters Easy/Medium/Hard/Deadly from party XP budgets, and scale adventures to the party's level.
+- [ ] **Encounter difficulty**: rate encounters Easy/Medium/Hard/Deadly from party XP budgets, and scale adventures to the party's level. In testing, a lone level-3 Wizard loses to the three-goblin adventure about half the time, so solo play needs this.
 - [x] **Loot**: adventure rewards that drop items into inventory (depends on the inventory system).
 
 ### Technical / housekeeping
 
-- [ ] **Stale comment in `app/main.cpp`**: it still says there's "no schema migration system yet", which is no longer true.
-- [ ] **Qt UI tests**: add some tests for the dialogs, or move more of their logic into `dndcore` where it can be tested.
+- [x] **Stale comment in `app/main.cpp`**: the comment and the database-error message now describe migrations: older save files upgrade in place, so a failure means a damaged file or a failed upgrade.
+- [ ] **Qt UI tests**: turn the offscreen walkthroughs used during development into automated tests that run in CI. They build dialogs with an in-memory database and `QT_QPA_PLATFORM=offscreen`, click through them, and check the results. Combat logic already lives in the tested `dnd::Encounter`; the wizard, Spellbook, and main window are what's left.
 - [x] **Linux AppImage**: a local build script (`cpp/packaging/build-appimage.sh`).
 - [x] **AppImage in CI**: built on every push and attached to releases for `v*` tags.
 - [ ] **More packaging**: a Windows installer, and maybe Flatpak.
