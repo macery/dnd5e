@@ -76,6 +76,7 @@ dnd5e/
 | `dice` / `rng` | The dice engine. Randomness comes from an injected `IRandomSource`, so tests are deterministic. |
 | `rules` | Pure 5e rules math: modifiers, proficiency, skills, saves, weapon attack bonuses. |
 | `combat` | Attack resolution (hit/miss, crits, advantage/disadvantage). Knows nothing about characters or monsters. |
+| `encounter` | The combat engine: initiative and turns, monster AI, the Attack/Dash/Dodge/Drink Potion/Cast a Spell actions, victory and defeat, XP and loot. It reports log lines and what to persist as events, and never touches the database. |
 | `inventory` | The item model (`item.hpp`), healing consumables, weight and cost helpers. |
 | `character_creation` | Class, race, and background rules data; ability score generation; skill plans; validation; and assembling a level-1 character. |
 | `spellcasting` | Spell model (`spell.hpp`), class spellcasting stats, spell counts, slot tables, and `cast_spell`. |
@@ -83,7 +84,7 @@ dnd5e/
 | `adventure` | Built-in solo adventure templates. |
 | `repository` | SQLite persistence for players, characters, inventories, and the lookup tables. |
 | `migrations` | Versioned, append-only schema migrations. They run automatically when the database is opened. |
-| `app/` | Qt dialogs and widgets. They sit on top of `dndcore` and hold no rules logic. |
+| `app/` | Qt dialogs and widgets. They sit on top of `dndcore` and hold no rules logic. The combat dialog, for example, is a view over `dnd::Encounter`. |
 
 `dndcore` has no Qt dependency. The library and its tests build even on a machine without Qt; in that case the UI target is skipped.
 
@@ -226,9 +227,10 @@ Phases 1 (core and data) and 2 (UI) are done; see [docs/magic-system.md](docs/ma
 
 ### Combat
 
-- [ ] **Effects system**: designed in [docs/effects-system.md](docs/effects-system.md) (draft). It covers the next two items, concentration, and spell side effects, and starts by moving combat logic out of the Qt dialog into a testable `dnd::Encounter`.
+- [ ] **Effects system**: designed in [docs/effects-system.md](docs/effects-system.md). It covers the next two items, concentration, and spell side effects. Step zero is done: combat logic now lives in a tested `dnd::Encounter` instead of the Qt dialog.
 - [ ] **Conditions**: prone, poisoned, frightened, restrained, stunned, etc., wired into advantage and disadvantage.
 - [ ] **Death saving throws**: characters at 0 HP roll death saves, get stabilized, or die, instead of simply being "Down".
+- [ ] **Revival**: bring dead characters back the 2014 PHB way: *Revivify*, *Raise Dead*, *Reincarnate*, *Resurrection*, *True Resurrection*, or a temple's spellcasting service. It needs the spells, their material components, currency, and time tracking; see the effects design doc's Decisions.
 - [ ] **More actions**: Disengage, Help, Hide, Ready, and Use an Object (for potions).
 - [ ] **Monsters with several attacks**: Multiattack and more than one attack per stat block.
 - [ ] **Smarter monster AI**: target selection better than a random living character (lowest HP, closest, etc.).

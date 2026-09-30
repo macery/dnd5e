@@ -21,6 +21,7 @@ add_library(dndcore
     src/character_creation.cpp
     src/combat.cpp
     src/dice.cpp
+    src/encounter.cpp
     src/inventory.cpp
     src/migrations.cpp
     src/progression.cpp

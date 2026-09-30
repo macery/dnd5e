@@ -1,6 +1,6 @@
 # Effects system design: conditions, death saves, concentration
 
-Status: **approved in part; step zero in progress.** Decisions so far are under [Decisions](#decisions). Questions 2, 4, and 5 are still open; they only matter from phase 2.
+Status: **step zero done** (`dnd::Encounter` in `include/dnd/encounter.hpp`, with tests in `tests/test_encounter.cpp`); phase 2 (core effects) is next. All open questions are settled; see [Decisions](#decisions).
 
 This covers the *Conditions* and *Death saving throws* TODOs, and phase 3 of the [magic system](magic-system.md): concentration, spell side effects, and a proper Dodge. All three need the same thing: **something attached to a creature that changes the rules until it ends**. Rules follow the **2014 PHB**: Appendix A (Conditions), chapter 9 (Dropping to 0 Hit Points), and chapter 10 (Concentration).
 
@@ -176,13 +176,23 @@ Turn handling in `Encounter`:
 
 Settled 2026-09-29:
 
-- **Step zero** (question 1): yes. Move combat into `dnd::Encounter` first, with no behaviour change.
-- **Defeat** (question 3): when every character is at 0 HP, the fight ends in defeat at once, and anyone still dying is automatically **stabilized**. No one dies after the fight is lost.
+1. **Step zero:** yes. Move combat into `dnd::Encounter` first, with no behaviour change. (Done.)
+2. **Death is permanent until revived, as in the 2014 PHB.** A character who fails three death saves (or takes massive damage) is marked **dead**. They stay viewable but can't join encounters or rest. The PHB's ways back are all spells:
 
-## Open questions
+   | Spell (PHB) | Level | Classes | Time limit | Component | Effect on the revived |
+   |---|---|---|---|---|---|
+   | *Revivify* | 3rd | Cleric, Paladin | within 1 minute of death | diamonds worth 300 gp (consumed) | returns with 1 HP |
+   | *Raise Dead* | 5th | Bard, Cleric, Paladin | within 10 days | diamond worth 500 gp (consumed) | 1 HP; −4 to attacks, saves, and ability checks, reduced by 1 per long rest |
+   | *Reincarnate* | 5th | Druid | within 10 days | rare oils worth 1,000 gp (consumed) | a new body: the race is rolled on a table |
+   | *Resurrection* | 7th | Bard, Cleric | within 100 years | diamond worth 1,000 gp (consumed) | full HP; −4 penalty as for *Raise Dead* |
+   | *True Resurrection* | 9th | Cleric, Druid | within 200 years | diamonds worth 25,000 gp (consumed) | full HP, even with no body |
 
-1. **Step zero:** is it OK to spend phase 1 moving combat into `dndcore` with no visible change? It makes everything after it testable. The alternative is adding effects straight into the dialog: faster to see, but mostly untested.
-2. **Character death:** when a character dies, should that be **permanent**? They'd be marked dead and couldn't join encounters, but you could still view them. Or should there be an option to revive them? The 2014 PHB's way back is *Revivify* and similar spells, which aren't seeded.
-3. **Defeat:** today, all characters at 0 HP means defeat. With death saves, should defeat still end the fight at once, with anyone still dying automatically **stabilized**? That's forgiving, and suits solo play. Or should the monsters keep attacking and the death saves play out? That's brutal: melee hits on unconscious characters are critical.
-4. **Monster targeting:** should monsters ignore dying characters while anyone else is still standing? I'd suggest yes, which also matches what most tables do.
-5. **Bless-style bonus dice:** roll them automatically, adding the 1d4 to every eligible attack and save, and log them? I'd suggest yes.
+   For a party without a caster that high, PHB chapter 5, *Spellcasting Services*, has a temple or NPC cast the spell for a price: the material component, plus gold or a service.
+
+   **What this means for the build:**
+   - **Phase 2** records death: a `Dead` flag, plus the time of death, so the time limits can be checked.
+   - **Revival** is its own later piece. It needs these spells seeded, material components in the inventory, currency (for diamonds and temple fees), and a sense of time passing. Counting long rests could stand in for days.
+   - Until then, the Spellbook refuses dead characters, and the main window shows them as dead.
+3. **Defeat:** when every character is at 0 HP, the fight ends in defeat at once, and anyone still dying is automatically **stabilized**. No one dies after the fight is lost.
+4. **Monster targeting:** monsters ignore dying (0 HP) characters while any character is still conscious.
+5. **Bonus dice** (*Bless*, *Divine Favor*): rolled automatically on every eligible attack, save, or hit, and shown in the log line.
