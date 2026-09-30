@@ -151,6 +151,25 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
         "Attack, one Attack action is several attacks.");
     takeActionButton_ = new QPushButton("Roll Attack", attackGroup);
     takeActionButton_->setEnabled(false);
+    actionSurgeButton_ = new QPushButton("Action Surge", attackGroup);
+    actionSurgeButton_->setToolTip("Fighter: take one additional action this turn. Once per short rest.");
+    actionSurgeButton_->setVisible(false);
+
+    bonusCombo_ = new QComboBox(attackGroup);
+    bonusTargetCombo_ = new QComboBox(attackGroup);
+    bonusButton_ = new QPushButton("Use", attackGroup);
+    bonusButton_->setToolTip("Use the chosen bonus action. (Bonus-action spells are under Cast a Spell.)");
+    auto* bonusRow = new QWidget(attackGroup);
+    auto* bonusLayout = new QHBoxLayout(bonusRow);
+    bonusLayout->setContentsMargins(0, 0, 0, 0);
+    bonusLayout->addWidget(bonusCombo_, 2);
+    bonusLayout->addWidget(bonusTargetCombo_, 1);
+    bonusLayout->addWidget(bonusButton_);
+    auto* actionRow = new QWidget(attackGroup);
+    auto* actionLayout = new QHBoxLayout(actionRow);
+    actionLayout->setContentsMargins(0, 0, 0, 0);
+    actionLayout->addWidget(takeActionButton_, 1);
+    actionLayout->addWidget(actionSurgeButton_);
 
     attackForm->addRow(moveLabel_);
     attackForm->addRow("Action", actionCombo_);
@@ -166,8 +185,9 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
     attackForm->addRow("Damage Dice Count", damageDiceCountSpin_);
     attackForm->addRow("Damage Dice Sides", damageDiceSidesSpin_);
     attackForm->addRow("Damage Bonus", damageBonusSpin_);
+    attackForm->addRow(actionRow);
+    attackForm->addRow("Bonus action", bonusRow);
     attackForm->addRow(bonusActionLabel_);
-    attackForm->addRow(takeActionButton_);
 
     logView_ = new QPlainTextEdit(this);
     logView_->setReadOnly(true);
@@ -189,6 +209,10 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
     connect(actionCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             &CombatEncounterDialog::onActionChanged);
     connect(takeActionButton_, &QPushButton::clicked, this, &CombatEncounterDialog::onTakeActionClicked);
+    connect(bonusButton_, &QPushButton::clicked, this, &CombatEncounterDialog::onBonusActionClicked);
+    connect(actionSurgeButton_, &QPushButton::clicked, this, &CombatEncounterDialog::onActionSurgeClicked);
+    connect(bonusCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            [this](int) { refreshBonusTargets(); });
     connect(spellCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int) { onSpellChanged(); });
     connect(spellSlotCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             [this](int) { refreshSpellInfo(); });
@@ -269,6 +293,7 @@ void CombatEncounterDialog::refreshState() {
     }
     refreshParticipantTable();
     takeActionButton_->setEnabled(encounter_.awaiting_action() || encounter_.bonus_action_available());
+    refreshBonusControls();
 
     // "Action: available · Bonus action: used", plus attacks left in an Attack action.
     if (!encounter_.awaiting_action() && !encounter_.bonus_action_available()) {
@@ -364,15 +389,66 @@ void CombatEncounterDialog::onTakeActionClicked() {
     }
 
     processEvents();
-    if (acted) {
-        refreshTargetCombo();
-        refreshPotionCombo();
-        refreshStabilizeCombo();
-        refreshSpellControls();
-        updateActionControlsVisibility();
-    }
+    if (acted) afterCharacterActed();
     if (encounter_.status() != dnd::EncounterStatus::InProgress) onTurnStarted();
-    refreshState();  // one action per turn: Next Turn re-enables the button for whoever acts next
+    refreshState();
+}
+
+void CombatEncounterDialog::afterCharacterActed() {
+    refreshTargetCombo();
+    refreshPotionCombo();
+    refreshStabilizeCombo();
+    refreshSpellControls();
+    updateActionControlsVisibility();
+}
+
+void CombatEncounterDialog::onBonusActionClicked() {
+    int index = bonusCombo_->currentIndex();
+    if (index < 0 || index >= static_cast<int>(bonusTargets_.size())) return;
+    auto kind = static_cast<dnd::Encounter::BonusAction>(bonusCombo_->currentData().toInt());
+    int target = bonusTargetCombo_->isVisible() ? bonusTargetCombo_->currentData().toInt() : -1;
+    bool used = encounter_.use_bonus_action(kind, target);
+    processEvents();
+    if (used) afterCharacterActed();
+    if (encounter_.status() != dnd::EncounterStatus::InProgress) onTurnStarted();
+    refreshState();
+}
+
+void CombatEncounterDialog::onActionSurgeClicked() {
+    encounter_.action_surge();
+    processEvents();
+    afterCharacterActed();
+    refreshState();
+}
+
+void CombatEncounterDialog::refreshBonusControls() {
+    bonusCombo_->blockSignals(true);
+    bonusCombo_->clear();
+    bonusTargets_.clear();
+    for (const auto& option : encounter_.bonus_action_options()) {
+        bonusCombo_->addItem(q(option.label), static_cast<int>(option.kind));
+        bonusCombo_->setItemData(bonusCombo_->count() - 1, q(option.description), Qt::ToolTipRole);
+        bonusTargets_.push_back(option.target);
+    }
+    bool any = bonusCombo_->count() > 0;
+    if (!any) bonusCombo_->addItem(encounter_.bonus_action_available() ? "(none available)" : "(used)");
+    bonusCombo_->setEnabled(any);
+    bonusButton_->setEnabled(any);
+    bonusCombo_->blockSignals(false);
+    refreshBonusTargets();
+    actionSurgeButton_->setVisible(encounter_.can_action_surge());
+}
+
+void CombatEncounterDialog::refreshBonusTargets() {
+    bonusTargetCombo_->clear();
+    int index = bonusCombo_->currentIndex();
+    bool needsTarget = index >= 0 && index < static_cast<int>(bonusTargets_.size()) &&
+                       bonusTargets_[static_cast<size_t>(index)] != dnd::Encounter::BonusTarget::None;
+    bonusTargetCombo_->setVisible(needsTarget);
+    if (!needsTarget) return;
+    for (int target : encounter_.bonus_action_targets(bonusTargets_[static_cast<size_t>(index)])) {
+        bonusTargetCombo_->addItem(q(encounter_.combatants()[static_cast<size_t>(target)].name), target);
+    }
 }
 
 // --- Views -------------------------------------------------------------------

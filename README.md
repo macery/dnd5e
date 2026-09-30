@@ -40,6 +40,15 @@ It manages players and characters, computes a full character sheet from the 5e r
   - **Conditions and effects:** all 14 PHB conditions, plus spell effects like *Bless*, *Guiding Bolt*, and *Charm Person*. They change advantage and disadvantage, saves, AC, and who can act. Hover a creature's status for what each one does and how long it lasts.
   - **Death saving throws:** characters at 0 HP are dying and roll each turn. Stabilize them, heal them, or lose them. The dead stay dead until revival magic exists.
   - **Concentration:** one spell at a time, and damage can break it.
+  - **Actions and class features:** one action and one bonus action per turn, plus class features:
+    - **Barbarian:** Rage.
+    - **Fighter:** Second Wind, Action Surge.
+    - **Rogue:** Sneak Attack, Cunning Action.
+    - **Bard:** Bardic Inspiration.
+    - **Monk:** Martial Arts.
+    - **Level 5:** Extra Attack.
+
+    Bonus-action spells follow the PHB rule.
   - Natural 20s crit and natural 1s miss.
   - Dodge imposes disadvantage on attacks against you.
   - Drink Potion heals from your inventory.
@@ -234,7 +243,9 @@ Phases 1 (core and data) and 2 (UI) are done; see [docs/magic-system.md](docs/ma
   The per-class rules data it added (saving throws, skill choices, hit die, and since the magic system, spellcasting) lives in `dnd/character_creation.hpp`. Still to do: using this data in the existing editor to check proficiencies.
 - [x] **Ability score generation**: 4d6 drop the lowest, point buy, and the standard array, in the wizard.
 - [ ] **Race traits**: ability score increases and racial skills are applied. Speed and traits (darkvision, Lucky, Relentless Endurance, etc.) are shown but not simulated. Subraces (Hill Dwarf, High Elf, ...) aren't modeled, and speed isn't stored on the character yet.
-- [ ] **Class features**: drafted in [docs/class-features.md](docs/class-features.md), together with bonus actions. It covers Rage, Sneak Attack, Second Wind, Action Surge, Bardic Inspiration, Martial Arts and Ki, Lay on Hands, Divine Smite, Arcane Recovery, Extra Attack, and Fighter Fighting Styles. Decisions are settled; it's built in three phases.
+- [ ] **Class features** ([docs/class-features.md](docs/class-features.md)):
+  - **Done:** Rage, Sneak Attack, Second Wind, Action Surge, Cunning Action, Bardic Inspiration, Martial Arts, Arcane Recovery, and Extra Attack, with uses saved and restored by rests.
+  - **Next (phase 3):** Fighter Fighting Styles, Ki, Lay on Hands, Divine Smite, and Reckless Attack.
 - [ ] **Level-up choices**: Ability Score Improvements at levels 4/8/12/16/19, and an option to roll HP instead of taking the average.
 - [x] **Starting HP**: level-1 max HP is the class hit die plus CON, calculated by the wizard.
 - [ ] **Keep level and XP in sync**: editing the level by hand in the editor can leave it out of step with XP.

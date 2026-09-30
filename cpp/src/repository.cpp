@@ -22,7 +22,7 @@ constexpr const char* kCharacterColumns =
     "CharacterId, CharacterName, Class, Race, Alignment, PlayerID, Level, "
     "Strength, Dexterity, Constitution, Intelligence, Wisdom, Charisma, "
     "CurrentHP, MaxHP, SkillProficiencies, SaveProficiencies, "
-    "Experience, HitDiceUsed, Background, SpellSlotsUsed, Dead";
+    "Experience, HitDiceUsed, Background, SpellSlotsUsed, Dead, FeatureUses";
 // (Characters.ArmorClass and WeaponID still exist but are no longer used:
 // AC and weapons come from equipped inventory items since migration 15.)
 
@@ -55,6 +55,31 @@ std::array<int, 9> parse_spell_slots(const std::string& text) {
     return slots;
 }
 
+// FeatureUses is stored as "Key:count" pairs, comma-separated ("SecondWind:1,Rage:2").
+std::string format_feature_uses(const std::map<std::string, int>& uses) {
+    std::string text;
+    for (const auto& [key, count] : uses) {
+        if (count <= 0) continue;
+        if (!text.empty()) text += ',';
+        text += key + ":" + std::to_string(count);
+    }
+    return text;
+}
+
+std::map<std::string, int> parse_feature_uses(const std::string& text) {
+    std::map<std::string, int> uses;
+    size_t start = 0;
+    while (start < text.size()) {
+        size_t end = text.find(',', start);
+        if (end == std::string::npos) end = text.size();
+        std::string pair = text.substr(start, end - start);
+        size_t colon = pair.find(':');
+        if (colon != std::string::npos) uses[pair.substr(0, colon)] = std::stoi(pair.substr(colon + 1));
+        start = end + 1;
+    }
+    return uses;
+}
+
 Character read_character_row(sqlite3_stmt* stmt) {
     Character character;
     character.character_id = sqlite3_column_int(stmt, 0);
@@ -79,6 +104,7 @@ Character read_character_row(sqlite3_stmt* stmt) {
     character.background = column_text(stmt, 19);
     character.spell_slots_used = parse_spell_slots(column_text(stmt, 20));
     character.dead = sqlite3_column_int(stmt, 21) != 0;
+    character.feature_uses_spent = parse_feature_uses(column_text(stmt, 22));
     return character;
 }
 
@@ -460,8 +486,8 @@ int Repository::add_character(const Character& character) {
         "INSERT INTO Characters (CharacterName, Class, Race, Alignment, PlayerID, Level, "
         "Strength, Dexterity, Constitution, Intelligence, Wisdom, Charisma, "
         "CurrentHP, MaxHP, SkillProficiencies, SaveProficiencies, "
-        "Experience, HitDiceUsed, Background, SpellSlotsUsed, Dead) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);");
+        "Experience, HitDiceUsed, Background, SpellSlotsUsed, Dead, FeatureUses) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);");
     bind_text(stmt, 1, character.character_name);
     sqlite3_bind_int(stmt.get(), 2, character.class_id);
     sqlite3_bind_int(stmt.get(), 3, character.race);
@@ -483,6 +509,7 @@ int Repository::add_character(const Character& character) {
     bind_text(stmt, 19, character.background);
     bind_text(stmt, 20, format_spell_slots(character.spell_slots_used));
     sqlite3_bind_int(stmt.get(), 21, character.dead ? 1 : 0);
+    bind_text(stmt, 22, format_feature_uses(character.feature_uses_spent));
     detail::run_and_expect_done(stmt, "insert character");
     return static_cast<int>(sqlite3_last_insert_rowid(db_));
 }
@@ -519,7 +546,8 @@ void Repository::update_character(const Character& character) {
         "UPDATE Characters SET CharacterName = ?, Class = ?, Race = ?, Alignment = ?, Level = ?, "
         "Strength = ?, Dexterity = ?, Constitution = ?, Intelligence = ?, Wisdom = ?, Charisma = ?, "
         "CurrentHP = ?, MaxHP = ?, SkillProficiencies = ?, SaveProficiencies = ?, "
-        "Experience = ?, HitDiceUsed = ?, Background = ?, SpellSlotsUsed = ?, Dead = ? WHERE CharacterId = ?;");
+        "Experience = ?, HitDiceUsed = ?, Background = ?, SpellSlotsUsed = ?, Dead = ?, FeatureUses = ? "
+        "WHERE CharacterId = ?;");
     bind_text(stmt, 1, character.character_name);
     sqlite3_bind_int(stmt.get(), 2, character.class_id);
     sqlite3_bind_int(stmt.get(), 3, character.race);
@@ -540,7 +568,8 @@ void Repository::update_character(const Character& character) {
     bind_text(stmt, 18, character.background);
     bind_text(stmt, 19, format_spell_slots(character.spell_slots_used));
     sqlite3_bind_int(stmt.get(), 20, character.dead ? 1 : 0);
-    sqlite3_bind_int(stmt.get(), 21, character.character_id);
+    bind_text(stmt, 21, format_feature_uses(character.feature_uses_spent));
+    sqlite3_bind_int(stmt.get(), 22, character.character_id);
     detail::run_and_expect_done(stmt, "update character");
 }
 

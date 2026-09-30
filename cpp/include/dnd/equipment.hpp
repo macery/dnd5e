@@ -79,12 +79,20 @@ struct WeaponAttack {
     std::string damage_type;
     bool melee = true;
     bool versatile_two_handed = false;  // using a Versatile weapon's larger die
+    bool uses_strength = true;       // the attack uses STR (Rage's damage bonus needs this)
+    bool finesse_or_ranged = false;  // eligible for Sneak Attack
+    bool unarmed = false;
+    bool martial_arts = false;       // a Monk's unarmed strike or monk weapon (Martial Arts applies)
 };
 
 // The attack with the wielded weapon, or an unarmed strike (1 + STR
 // bludgeoning, always proficient; PHB ch. 9) when nothing is wielded.
 // Finesse weapons use the better of STR and DEX; ranged weapons use DEX;
-// Versatile weapons use their larger die when no shield is worn.
+// Versatile weapons use their larger die when no shield is worn. A Monk
+// without armor or a shield gets Martial Arts (PHB ch. 3) with unarmed
+// strikes and monk weapons (shortswords, and simple melee weapons that
+// aren't two-handed or heavy): the better of STR and DEX, and the Martial
+// Arts die if it's bigger than the weapon's.
 WeaponAttack weapon_attack(const Character& character, const std::string& class_name, const std::string& race_name,
                            const std::vector<InventoryEntry>& inventory);
 

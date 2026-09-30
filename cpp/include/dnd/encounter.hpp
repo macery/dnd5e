@@ -2,12 +2,14 @@
 
 #include <array>
 #include <map>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "dnd/character.hpp"
 #include "dnd/dice.hpp"
 #include "dnd/effects.hpp"
+#include "dnd/equipment.hpp"
 #include "dnd/item.hpp"
 #include "dnd/lookup_entry.hpp"
 #include "dnd/monster.hpp"
@@ -34,6 +36,17 @@ struct Combatant {
     bool melee_attack = true;  // the weapon/attack above; ranged changes how Prone applies
     std::string attack_name;   // "Longsword", "Unarmed Strike", or the monster's attack
     int attacks_per_action = 1;  // Extra Attack (characters from level 5)
+    bool attack_uses_strength = true;       // for Rage's damage bonus
+    bool attack_finesse_or_ranged = false;  // for Sneak Attack
+    bool attack_martial_arts = false;       // an unarmed strike or monk weapon (Martial Arts)
+
+    // Characters only: class features (dnd/class_features.hpp).
+    std::string class_name;
+    int level = 0;
+    int sneak_attack_dice = 0;  // Rogue: d6s, once per turn
+    bool wearing_heavy_armor = false;  // no raging in heavy armor
+    std::optional<WeaponAttack> martial_arts_strike;  // Monk: the bonus-action unarmed strike
+    bool rage_kept_up = false;  // attacked or took damage since its last turn (else Rage ends)
     // Characters only: wearing armor they aren't proficient with, which also
     // rules out spellcasting (PHB ch. 5).
     bool armor_not_proficient = false;
@@ -169,6 +182,26 @@ public:
     // True if the current character carries a Healer's Kit (stabilizing is automatic).
     bool has_healers_kit() const;
 
+    // --- Class features -----------------------------------------------------
+    enum class BonusAction { SecondWind, Rage, CunningDash, CunningDisengage, BardicInspiration, MartialArtsStrike };
+    enum class BonusTarget { None, Ally, Enemy };
+    struct BonusActionOption {
+        BonusAction kind;
+        std::string label;        // "Second Wind (1 left)"
+        std::string description;  // for tooltips
+        BonusTarget target = BonusTarget::None;
+    };
+    // The current character's non-spell bonus actions available right now.
+    // (Bonus-action spells go through cast_spell.)
+    std::vector<BonusActionOption> bonus_action_options() const;
+    // Candidates for a BonusTarget: allies are other conscious characters;
+    // enemies are living monsters.
+    std::vector<int> bonus_action_targets(BonusTarget target) const;
+    bool use_bonus_action(BonusAction kind, int target = -1);
+    // Fighter Action Surge: one more action this turn.
+    bool can_action_surge() const;
+    bool action_surge();
+
     // --- Actions ------------------------------------------------------------
     // Each returns false -- using nothing up, with a log line saying why where
     // useful -- if it isn't a character's turn, what it needs (action or bonus
@@ -200,9 +233,13 @@ private:
     std::vector<std::string> apply_damage(int target, int amount, bool critical, int source);
     std::vector<std::string> apply_healing(int target, int amount, int& healed);
 
-    // Resolves a weapon attack with every effect applied, and logs it.
-    void weapon_attack(int attacker, int target, int attack_bonus, int damage_dice_count, int damage_dice_sides,
-                       int damage_bonus, bool melee);
+    // Resolves a weapon attack with every effect and class feature applied
+    // (Rage, Sneak Attack, Divine Favor, a monster's rider), and logs it.
+    void weapon_attack(int attacker, int target, const WeaponAttack& attack);
+    bool is_raging(int index) const;
+    // Ends a rage early; returns the log line ("" if not raging).
+    std::string end_rage(int index, const std::string& reason);
+    const std::vector<InventoryEntry>* inventory_of(int character_id) const;
     // d20 + the target's save bonus + effects, vs `dc`. Logs nothing.
     bool roll_save(int target, Ability ability, int dc, std::string& detail);
     int save_bonus(int index, Ability ability) const;

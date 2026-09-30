@@ -1,6 +1,21 @@
 # Bonus actions and class features design
 
-Status: **phase 1 (turn economy and bonus actions) done;** phase 2 (core features) is next. The open questions were settled on 2026-09-30; see [Decisions](#decisions).
+Status: **phases 1 (turn economy) and 2 (core features) done;** phase 3 (Fighting Styles, Ki, Lay on Hands, Divine Smite, Reckless Attack) is next.
+
+**Phase 2 as built:**
+- **`dnd/class_features`:**
+  - Limited-use features (Second Wind, Action Surge, Rage, Bardic Inspiration, Arcane Recovery): who has them, uses per rest, short or long rest recovery, spending, and restoring.
+  - The PHB scaling formulas (Rage damage, Sneak Attack dice, Martial Arts die, Bardic Inspiration die, Arcane Recovery budget).
+  - `use_arcane_recovery`: recovers slots, highest first.
+- **Saved uses:** migration 16 adds `Characters.FeatureUses`. Short and long rests restore uses, and the main window's Short Rest runs Arcane Recovery for Wizards.
+- **Martial Arts in `weapon_attack`:** for an unarmored Monk, unarmed strikes and monk weapons use DEX and the Martial Arts die. Attacks also report whether they use STR and whether they qualify for Sneak Attack.
+- **New effects:** `Raging` (advantage on STR saves) and `InspirationDie` (added to the next attack or save, then gone).
+- **`Encounter`:**
+  - **Bonus actions:** `bonus_action_options` / `use_bonus_action` for Second Wind, Rage, Cunning Action (Dash, Disengage), Bardic Inspiration, and the Martial Arts strike.
+  - **Action Surge:** `action_surge()`.
+  - **Rage:** +2 damage, physical damage halved, no spellcasting or concentration, and it ends when knocked unconscious or after a turn without attacking or taking damage.
+  - **Sneak Attack:** once per turn, triggered by advantage or an ally in the fight.
+- **UI:** a Bonus Action row (options, target, Use) and an Action Surge button in combat, and a Class Features section on the sheet. The open questions were settled on 2026-09-30; see [Decisions](#decisions).
 
 **Phase 1 as built:**
 - **`dnd/turn`:** `TurnState` (actions left, attacks left in an Attack action, bonus action used) and the PHB ch. 10 spell rule (`spell_casting_blocked` / `record_spell_cast`).

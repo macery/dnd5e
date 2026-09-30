@@ -193,6 +193,7 @@ TEST_CASE("adding a character without setting the new fields uses sane defaults"
     REQUIRE(loaded.experience == 0);
     REQUIRE(loaded.hit_dice_used == 0);
     REQUIRE_FALSE(loaded.dead);
+    REQUIRE(loaded.feature_uses_spent.empty());
 }
 
 TEST_CASE("update_player renames an existing player", "[repository]") {
@@ -231,6 +232,7 @@ TEST_CASE("update_character changes fields in place", "[repository]") {
     updated.experience = 2700;
     updated.hit_dice_used = 1;
     updated.dead = true;
+    updated.feature_uses_spent = {{"SecondWind", 1}, {"Rage", 2}};
     repo.update_character(updated);
 
     auto reloaded = repo.get_characters();
@@ -241,6 +243,7 @@ TEST_CASE("update_character changes fields in place", "[repository]") {
     REQUIRE(reloaded[0].experience == 2700);
     REQUIRE(reloaded[0].hit_dice_used == 1);
     REQUIRE(reloaded[0].dead);
+    REQUIRE(reloaded[0].feature_uses_spent == std::map<std::string, int>{{"Rage", 2}, {"SecondWind", 1}});
 }
 
 TEST_CASE("delete_character removes only that character", "[repository]") {

@@ -4,6 +4,7 @@
 #include <functional>
 #include <map>
 
+#include "dnd/class_features.hpp"
 #include "dnd/rules.hpp"
 
 namespace dnd {
@@ -180,20 +181,37 @@ WeaponAttack weapon_attack(const Character& character, const std::string& class_
     int proficiency = proficiency_bonus(character.level);
 
     const InventoryEntry* wielded = equipped_weapon(inventory);
+    bool monk_unarmored = class_name == "Monk" && !equipped_armor(inventory) && !equipped_shield(inventory);
     if (!wielded || !wielded->item.weapon) {
         attack.name = "Unarmed Strike";
         attack.proficient = true;
-        attack.attack_bonus = str + proficiency;
-        attack.damage_dice_count = 0;
-        attack.damage_dice_sides = 1;
-        attack.damage_bonus = 1 + str;
+        attack.unarmed = true;
         attack.damage_type = "bludgeoning";
         attack.melee = true;
+        if (monk_unarmored) {  // Martial Arts: the better of STR and DEX, and the Martial Arts die
+            int ability = std::max(str, dex);
+            attack.martial_arts = true;
+            attack.uses_strength = str >= dex;
+            attack.attack_bonus = ability + proficiency;
+            attack.damage_dice_count = 1;
+            attack.damage_dice_sides = martial_arts_die(character.level);
+            attack.damage_bonus = ability;
+        } else {
+            attack.attack_bonus = str + proficiency;
+            attack.damage_dice_count = 0;
+            attack.damage_dice_sides = 1;
+            attack.damage_bonus = 1 + str;
+        }
         return attack;
     }
 
     const WeaponStats& stats = *wielded->item.weapon;
-    int ability = stats.ranged ? dex : stats.finesse ? std::max(str, dex) : str;
+    bool monk_weapon = monk_unarmored && !stats.ranged && !stats.two_handed && !stats.heavy &&
+                       (stats.category == WeaponCategory::Simple || wielded->item.name == "Shortsword");
+    int ability = stats.ranged ? dex : (stats.finesse || monk_weapon) ? std::max(str, dex) : str;
+    attack.uses_strength = !stats.ranged && ability == str;
+    attack.finesse_or_ranged = stats.finesse || stats.ranged;
+    attack.martial_arts = monk_weapon;
     attack.name = wielded->item.name;
     attack.proficient = is_proficient_with_weapon(class_name, race_name, wielded->item);
     attack.attack_bonus = ability + (attack.proficient ? proficiency : 0);
@@ -202,6 +220,11 @@ WeaponAttack weapon_attack(const Character& character, const std::string& class_
     if (stats.versatile_dice_sides > 0 && !equipped_shield(inventory)) {
         attack.damage_dice_sides = stats.versatile_dice_sides;
         attack.versatile_two_handed = true;
+    }
+    if (monk_weapon && martial_arts_die(character.level) > attack.damage_dice_sides &&
+        attack.damage_dice_count == 1) {
+        attack.damage_dice_sides = martial_arts_die(character.level);
+        attack.versatile_two_handed = false;
     }
     attack.damage_bonus = ability;
     attack.damage_type = stats.damage_type;

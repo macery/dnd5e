@@ -51,6 +51,9 @@ enum class EffectKind {
     SpeedReduction,               // amount feet; shown only (Ray of Frost)
     ArmorNotProficient,           // wearing armor it isn't trained with: disadvantage on STR/DEX
                                   // attacks, checks, and saves, and no spellcasting (PHB ch. 5)
+    Raging,                       // Barbarian Rage: advantage on STR saves (the damage bonus and
+                                  // resistance are applied by Encounter)
+    InspirationDie,               // Bardic Inspiration: + 1d(amount) to the next attack roll or save
 };
 
 // Stable text names for storing effect kinds (SpellEffects.Kind): the

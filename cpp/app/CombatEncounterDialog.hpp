@@ -41,6 +41,8 @@ private slots:
     void onNextTurnClicked();
     void onActionChanged(int index);
     void onTakeActionClicked();
+    void onBonusActionClicked();
+    void onActionSurgeClicked();
 
 private:
     // Logs and persists everything the encounter reported since last time.
@@ -53,6 +55,12 @@ private:
     void refreshTargetCombo();
     void refreshPotionCombo();
     void refreshStabilizeCombo();
+    // The current character's non-spell bonus actions (class features) and
+    // the Action Surge button.
+    void refreshBonusControls();
+    void refreshBonusTargets();
+    // After anything the current character does: lists and counts change.
+    void afterCharacterActed();
     void updateAttackFieldsForCurrentTurn();
     void updateActionControlsVisibility();
 
@@ -100,6 +108,12 @@ private:
     QSpinBox* damageDiceSidesSpin_ = nullptr;
     QSpinBox* damageBonusSpin_ = nullptr;
     QPushButton* takeActionButton_ = nullptr;
+    QComboBox* bonusCombo_ = nullptr;
+    QComboBox* bonusTargetCombo_ = nullptr;
+    QPushButton* bonusButton_ = nullptr;
+    QPushButton* actionSurgeButton_ = nullptr;
+    // BonusTarget of each bonusCombo_ entry, by index.
+    std::vector<dnd::Encounter::BonusTarget> bonusTargets_;
     QFormLayout* attackFormLayout_ = nullptr;
 
     QPlainTextEdit* logView_ = nullptr;

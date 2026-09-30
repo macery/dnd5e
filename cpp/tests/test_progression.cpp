@@ -146,3 +146,20 @@ TEST_CASE("rests never revive the dead", "[progression]") {
     REQUIRE(dnd::spend_hit_die(character, dice, 8) == -1);
     REQUIRE(character.current_hp == 0);
 }
+
+TEST_CASE("rests restore class feature uses", "[progression][class_features]") {
+    dnd::Character fighter;
+    fighter.level = 2;
+    fighter.feature_uses_spent = {{"SecondWind", 1}, {"ActionSurge", 1}};
+    dnd::take_short_rest(fighter, *dnd::find_class_info("Fighter"));
+    REQUIRE(fighter.feature_uses_spent.empty());
+
+    dnd::Character barbarian;
+    barbarian.level = 1;
+    barbarian.feature_uses_spent = {{"Rage", 2}};
+    dnd::take_short_rest(barbarian, *dnd::find_class_info("Barbarian"));
+    REQUIRE(barbarian.feature_uses_spent.at("Rage") == 2);  // Rage needs a long rest
+    barbarian.max_hp = 12;
+    dnd::take_long_rest(barbarian);
+    REQUIRE(barbarian.feature_uses_spent.empty());
+}

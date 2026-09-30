@@ -30,6 +30,7 @@
 #include "SpellbookDialog.hpp"
 
 #include "dnd/adventure.hpp"
+#include "dnd/class_features.hpp"
 #include "dnd/progression.hpp"
 #include "dnd/spellcasting.hpp"
 
@@ -339,17 +340,28 @@ void MainWindow::onShortRestClicked() {
         return;
     }
 
-    // A Warlock's pact slots come back on any short rest, hit dice or not.
+    // Pact slots and short-rest features come back on any short rest, hit
+    // dice or not; a Wizard also uses Arcane Recovery if any slots are spent.
     bool slotsRestored = false;
+    bool featuresRestored = false;
+    QStringList recoveredSlots;
     if (const dnd::ClassInfo* info = dnd::find_class_info_by_id(classes_, character.class_id)) {
-        auto before = character.spell_slots_used;
+        auto slotsBefore = character.spell_slots_used;
+        auto featuresBefore = character.feature_uses_spent;
         dnd::take_short_rest(character, *info);
-        slotsRestored = character.spell_slots_used != before;
+        slotsRestored = character.spell_slots_used != slotsBefore;
+        featuresRestored = character.feature_uses_spent != featuresBefore;
+
+        auto recovered = dnd::use_arcane_recovery(character, info->name);
+        for (int level = 1; level <= 9; ++level) {
+            int count = recovered[static_cast<size_t>(level - 1)];
+            if (count > 0) recoveredSlots << QString("%1 × %2-level").arg(count).arg(QString::fromStdString(dnd::ordinal(level)));
+        }
     }
 
     int hit_die = dnd::hit_die_for_class_id(classes_, character.class_id);
     int regained = dnd::spend_hit_die(character, dice_, hit_die);
-    if (regained < 0 && !slotsRestored) {
+    if (regained < 0 && !slotsRestored && !featuresRestored && recoveredSlots.isEmpty()) {
         QMessageBox::information(this, "Short Rest",
             QString("%1 has no hit dice left. Take a long rest to recover them.").arg(name));
         return;
@@ -369,6 +381,10 @@ void MainWindow::onShortRestClicked() {
               .arg(dnd::hit_dice_remaining(character))
               .arg(character.level);
     if (slotsRestored) message += " Pact spell slots restored.";
+    if (featuresRestored) message += " Short-rest class features (like Second Wind) are ready again.";
+    if (!recoveredSlots.isEmpty()) {
+        message += QString(" Arcane Recovery restores %1 spell slot(s).").arg(recoveredSlots.join(", "));
+    }
     QMessageBox::information(this, "Short Rest", message);
 }
 
@@ -386,7 +402,7 @@ void MainWindow::onLongRestClicked() {
     repository_.update_character(character);
     reloadCharactersForCurrentPlayer();
     QMessageBox::information(this, "Long Rest",
-        QString("%1 is fully rested: %2/%3 HP, %4/%5 hit dice, all spell slots.")
+        QString("%1 is fully rested: %2/%3 HP, %4/%5 hit dice, all spell slots and class features.")
             .arg(QString::fromStdString(character.character_name))
             .arg(character.current_hp)
             .arg(character.max_hp)

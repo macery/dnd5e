@@ -119,6 +119,23 @@ void Encounter::add_character(const Character& character, std::vector<Spell> kno
     combatant.melee_attack = weapon.melee;
     combatant.armor_not_proficient = wearing_armor_without_proficiency(class_name, inventory);
     combatant.attacks_per_action = attacks_per_attack_action(class_name, character.level);
+    combatant.attack_uses_strength = weapon.uses_strength;
+    combatant.attack_finesse_or_ranged = weapon.finesse_or_ranged;
+    combatant.attack_martial_arts = weapon.martial_arts;
+    combatant.class_name = class_name;
+    combatant.level = character.level;
+    combatant.sneak_attack_dice = class_name == "Rogue" ? sneak_attack_dice(character.level) : 0;
+    const InventoryEntry* armor = equipped_armor(inventory);
+    combatant.wearing_heavy_armor = armor && armor->item.armor && armor->item.armor->type == ArmorType::Heavy;
+    if (class_name == "Monk") {
+        // The Martial Arts bonus strike is always unarmed, whatever is wielded.
+        auto empty_handed = inventory;
+        for (auto& entry : empty_handed) {
+            if (entry.item.weapon) entry.equipped = false;
+        }
+        WeaponAttack strike = dnd::weapon_attack(character, class_name, race_name, empty_handed);
+        if (strike.martial_arts) combatant.martial_arts_strike = strike;
+    }
     combatant.death_saves.dead = character.dead;
     combatants_.push_back(combatant);
     inventories_[character.character_id] = std::move(inventory);
@@ -437,6 +454,13 @@ void Encounter::start_turn(int index) {
 }
 
 void Encounter::end_turn(int index) {
+    // Rage ends if the barbarian neither attacked nor took damage since their last turn.
+    Combatant& ending = combatants_[static_cast<size_t>(index)];
+    if (is_raging(index) && !ending.rage_kept_up) {
+        log(end_rage(index, "didn't attack or take damage this turn").substr(4));
+    }
+    ending.rage_kept_up = false;
+
     // "Until the end of X's next turn" effects end now -- unless they were
     // applied during this very turn, in which case they last one more.
     std::vector<std::string> expired;
@@ -568,31 +592,67 @@ void Encounter::resolve_monster_turn(Combatant& monster) {
 
     int pick = dice_.roll(static_cast<int>(candidates.size()), 1).front() - 1;
     int target = candidates[static_cast<size_t>(pick)];
-    weapon_attack(monster_index, target, monster.attack_bonus, monster.damage_dice_count, monster.damage_dice_sides,
-                  monster.damage_bonus, monster.melee_attack);
+    WeaponAttack attack;
+    attack.name = monster.attack_name;
+    attack.attack_bonus = monster.attack_bonus;
+    attack.damage_dice_count = monster.damage_dice_count;
+    attack.damage_dice_sides = monster.damage_dice_sides;
+    attack.damage_bonus = monster.damage_bonus;
+    attack.melee = monster.melee_attack;
+    weapon_attack(monster_index, target, attack);
 }
 
-void Encounter::weapon_attack(int attacker_index, int target_index, int attack_bonus, int damage_dice_count,
-                              int damage_dice_sides, int damage_bonus, bool melee) {
-    const Combatant& attacker = combatants_[static_cast<size_t>(attacker_index)];
+void Encounter::weapon_attack(int attacker_index, int target_index, const WeaponAttack& attack) {
+    Combatant& attacker = combatants_[static_cast<size_t>(attacker_index)];
     Combatant& target = combatants_[static_cast<size_t>(target_index)];
+    int attack_bonus = attack.attack_bonus;
+    attacker.rage_kept_up = true;  // attacking a hostile creature keeps a rage going
 
-    RollModifiers mods = attack_roll_modifiers(effects_, attacker_index, target_index, melee, alive_flags());
+    RollModifiers mods = attack_roll_modifiers(effects_, attacker_index, target_index, attack.melee, alive_flags());
     std::vector<int> bonus_rolls;
     for (int sides : mods.bonus_dice) bonus_rolls.push_back(dice_.roll(sides, 1).front());
 
     auto result = resolve_attack(dice_, attack_bonus + sum(bonus_rolls), armor_class(target_index),
-                                 damage_dice_count, damage_dice_sides, damage_bonus, mods.mode(), mods.auto_crit);
+                                 attack.damage_dice_count, attack.damage_dice_sides, attack.damage_bonus, mods.mode(),
+                                 mods.auto_crit);
     use_effects(mods.used_effects);
 
-    // Divine Favor-style extra damage dice (doubled on a crit, like all attack dice).
     std::string extra_note;
     if (result.hit) {
+        // Divine Favor-style extra damage dice (doubled on a crit, like all attack dice).
         for (const auto& effect : effects_) {
             if (effect.target != attacker_index || effect.kind != EffectKind::ExtraWeaponDamageDice) continue;
             auto extra = dice_.roll(effect.amount, result.critical ? 2 : 1);
             result.damage_total += sum(extra);
             extra_note += " (+" + std::to_string(sum(extra)) + " " + (effect.label.empty() ? "extra" : effect.label) + ")";
+        }
+        // Rage: extra damage on STR melee weapon attacks.
+        if (is_raging(attacker_index) && attack.melee && attack.uses_strength) {
+            int bonus = rage_damage_bonus(attacker.level);
+            result.damage_total += bonus;
+            extra_note += " (+" + std::to_string(bonus) + " Rage)";
+        }
+        // Sneak Attack: once per turn, finesse or ranged, with advantage -- or,
+        // with no map, when another party member is fighting too (docs/class-features.md).
+        if (attacker.sneak_attack_dice > 0 && attack.finesse_or_ranged && !turn_.sneak_attack_used &&
+            mods.mode() != RollMode::Disadvantage) {
+            bool ally_fighting = std::any_of(combatants_.begin(), combatants_.end(), [&](const Combatant& c) {
+                return c.is_character && &c != &attacker && c.current_hp > 0 &&
+                       !is_incapacitated(effects_, static_cast<int>(&c - combatants_.data()));
+            });
+            if (mods.mode() == RollMode::Advantage || ally_fighting) {
+                turn_.sneak_attack_used = true;
+                auto extra = dice_.roll(6, attacker.sneak_attack_dice * (result.critical ? 2 : 1));
+                result.damage_total += sum(extra);
+                extra_note += " (+" + std::to_string(sum(extra)) + " Sneak Attack, " +
+                              (mods.mode() == RollMode::Advantage ? "advantage" : "an ally is fighting the target") +
+                              ")";
+            }
+        }
+        // Rage: resistance to bludgeoning, piercing, and slashing -- every weapon attack here.
+        if (is_raging(target_index)) {
+            result.damage_total /= 2;
+            extra_note += " (halved by Rage)";
         }
     }
 
@@ -708,6 +768,7 @@ std::vector<std::string> Encounter::apply_damage(int target_index, int amount, b
 
     int hp_before = target.current_hp;
     target.current_hp = std::max(0, target.current_hp - amount);
+    target.rage_kept_up = true;  // taking damage keeps a rage going
 
     if (target.current_hp == 0) {
         if (target.is_character) {
@@ -717,6 +778,8 @@ std::vector<std::string> Encounter::apply_damage(int target_index, int amount, b
                 return followups;
             }
             target.death_saves = DeathSaveState{};
+            std::string rage = end_rage(target_index, "knocked unconscious");
+            if (!rage.empty()) followups.push_back(rage);
             fall_unconscious(target_index);
             followups.push_back("    " + target.name + " falls unconscious and is dying.");
         }
@@ -772,6 +835,7 @@ std::vector<std::string> Encounter::apply_healing(int target_index, int amount, 
 
 bool Encounter::roll_save(int target_index, Ability ability, int dc, std::string& detail) {
     RollModifiers mods = saving_throw_modifiers(effects_, target_index, ability);
+    use_effects(mods.used_effects);  // e.g. a Bardic Inspiration die
     int roll = dice_.roll_d20(mods.mode()).result;
     std::vector<int> bonus_rolls;
     for (int sides : mods.bonus_dice) bonus_rolls.push_back(dice_.roll(sides, 1).front());
@@ -1017,6 +1081,7 @@ std::vector<Spell> Encounter::castable_spells() const {
     std::vector<Spell> spells;
     const Combatant* actor = current_character();
     if (actor && actor->armor_not_proficient) return spells;  // PHB ch. 5: no spellcasting
+    if (actor && is_raging(current_index())) return spells;   // Rage: no spellcasting
     const Character* caster = actor ? character(actor->character_id) : nullptr;
     const ClassInfo* info = caster ? find_class_info_by_id(classes_, caster->class_id) : nullptr;
     if (!caster || !info) return spells;
@@ -1095,6 +1160,180 @@ bool Encounter::has_healers_kit() const {
     });
 }
 
+// --- Class features ------------------------------------------------------------
+
+bool Encounter::is_raging(int index) const {
+    return has_effect(effects_, index, EffectKind::Raging);
+}
+
+std::string Encounter::end_rage(int index, const std::string& reason) {
+    if (!is_raging(index)) return "";
+    effects_.erase(std::remove_if(effects_.begin(), effects_.end(),
+                                  [index](const ActiveEffect& e) { return e.target == index && e.kind == EffectKind::Raging; }),
+                   effects_.end());
+    return "    " + combatants_[static_cast<size_t>(index)].name + "'s rage ends (" + reason + ").";
+}
+
+const std::vector<InventoryEntry>* Encounter::inventory_of(int character_id) const {
+    auto found = inventories_.find(character_id);
+    return found == inventories_.end() ? nullptr : &found->second;
+}
+
+std::vector<Encounter::BonusActionOption> Encounter::bonus_action_options() const {
+    std::vector<BonusActionOption> options;
+    if (!bonus_action_available()) return options;
+    int index = current_index();
+    const Combatant& actor = combatants_[static_cast<size_t>(index)];
+    const Character* character = this->character(actor.character_id);
+    if (!character) return options;
+    auto uses = [&](Feature feature) { return feature_uses_left(feature, *character, actor.class_name); };
+    auto left = [](int n) { return " (" + std::to_string(n) + " left)"; };
+
+    if (uses(Feature::SecondWind) > 0) {
+        options.push_back({BonusAction::SecondWind, "Second Wind" + left(uses(Feature::SecondWind)),
+                           feature_info(Feature::SecondWind).description, BonusTarget::None});
+    }
+    if (uses(Feature::Rage) > 0 && !is_raging(index) && !actor.wearing_heavy_armor) {
+        options.push_back({BonusAction::Rage, "Rage" + left(uses(Feature::Rage)), feature_info(Feature::Rage).description,
+                           BonusTarget::None});
+    }
+    if (actor.class_name == "Rogue" && actor.level >= 2) {
+        options.push_back({BonusAction::CunningDash, "Cunning Action: Dash",
+                           "Double your movement this turn (shown only: there's no map).", BonusTarget::None});
+        options.push_back({BonusAction::CunningDisengage, "Cunning Action: Disengage",
+                           "Your movement doesn't provoke opportunity attacks this turn (shown only: there's no map "
+                           "or reactions yet).",
+                           BonusTarget::None});
+    }
+    if (uses(Feature::BardicInspiration) > 0 && !bonus_action_targets(BonusTarget::Ally).empty()) {
+        options.push_back({BonusAction::BardicInspiration,
+                           "Bardic Inspiration, d" + std::to_string(bardic_inspiration_die(actor.level)) +
+                               left(uses(Feature::BardicInspiration)),
+                           feature_info(Feature::BardicInspiration).description, BonusTarget::Ally});
+    }
+    if (actor.martial_arts_strike && turn_.attack_action_martial &&
+        !bonus_action_targets(BonusTarget::Enemy).empty()) {
+        options.push_back({BonusAction::MartialArtsStrike, "Martial Arts: unarmed strike",
+                           "After the Attack action with an unarmed strike or monk weapon, one unarmed strike as a "
+                           "bonus action.",
+                           BonusTarget::Enemy});
+    }
+    return options;
+}
+
+std::vector<int> Encounter::bonus_action_targets(BonusTarget target) const {
+    std::vector<int> targets;
+    int actor = current_index();
+    for (int i = 0; i < static_cast<int>(combatants_.size()); ++i) {
+        const auto& candidate = combatants_[static_cast<size_t>(i)];
+        if (candidate.current_hp <= 0) continue;
+        if (target == BonusTarget::Ally && candidate.is_character && i != actor) targets.push_back(i);
+        if (target == BonusTarget::Enemy && !candidate.is_character && !(actor >= 0 && charmed_by(actor, i))) {
+            targets.push_back(i);
+        }
+    }
+    return targets;
+}
+
+bool Encounter::use_bonus_action(BonusAction kind, int target) {
+    if (!bonus_action_available()) {
+        if (character_can_act()) log(current()->name + " has already used their bonus action this turn.");
+        return false;
+    }
+    auto options = bonus_action_options();
+    auto option = std::find_if(options.begin(), options.end(), [kind](const BonusActionOption& o) { return o.kind == kind; });
+    if (option == options.end()) return false;
+    if (option->target != BonusTarget::None) {
+        auto targets = bonus_action_targets(option->target);
+        if (std::find(targets.begin(), targets.end(), target) == targets.end()) return false;
+    }
+
+    int index = current_index();
+    Combatant& actor = combatants_[static_cast<size_t>(index)];
+    Character& character = *character_mut(actor.character_id);
+    turn_.bonus_action_used = true;
+
+    switch (kind) {
+        case BonusAction::SecondWind: {
+            spend_feature(character, Feature::SecondWind, actor.class_name);
+            int roll = dice_.roll(10, 1).front();
+            int healed = 0;
+            auto followups = apply_healing(index, roll + second_wind_bonus(actor.level), healed);
+            changed(actor.character_id);
+            log(actor.name + " uses Second Wind: d10(" + std::to_string(roll) + ") + " +
+                std::to_string(second_wind_bonus(actor.level)) + ", regains " + std::to_string(healed) + " HP (now " +
+                hp_text(actor) + ").");
+            for (const auto& line : followups) log(line);
+            break;
+        }
+        case BonusAction::Rage: {
+            spend_feature(character, Feature::Rage, actor.class_name);
+            changed(actor.character_id);
+            ActiveEffect rage;
+            rage.kind = EffectKind::Raging;
+            rage.target = index;
+            rage.source = index;
+            rage.duration.kind = DurationKind::Rounds;
+            rage.duration.rounds = 10;
+            rage.label = "Raging";
+            add_effect(rage);
+            actor.rage_kept_up = false;
+            log(actor.name + " flies into a rage! (+" + std::to_string(rage_damage_bonus(actor.level)) +
+                " damage on STR melee attacks, advantage on STR saves, physical damage halved)");
+            std::string concentration = drop_concentration(index, "raging");
+            if (!concentration.empty()) log(concentration);
+            break;
+        }
+        case BonusAction::CunningDash:
+            log(actor.name + " takes the Dash action as a bonus action (Cunning Action).");
+            break;
+        case BonusAction::CunningDisengage:
+            log(actor.name + " takes the Disengage action as a bonus action (Cunning Action).");
+            break;
+        case BonusAction::BardicInspiration: {
+            spend_feature(character, Feature::BardicInspiration, actor.class_name);
+            changed(actor.character_id);
+            int die = bardic_inspiration_die(actor.level);
+            ActiveEffect inspiration;
+            inspiration.kind = EffectKind::InspirationDie;
+            inspiration.amount = die;
+            inspiration.target = target;
+            inspiration.source = index;
+            inspiration.duration.kind = DurationKind::Rounds;
+            inspiration.duration.rounds = 100;  // 10 minutes
+            inspiration.duration.until_used = true;
+            inspiration.label = "Inspired (d" + std::to_string(die) + ")";
+            add_effect(inspiration);
+            log(actor.name + " inspires " + combatants_[static_cast<size_t>(target)].name + " (Bardic Inspiration, d" +
+                std::to_string(die) + " for their next attack roll or save).");
+            break;
+        }
+        case BonusAction::MartialArtsStrike:
+            weapon_attack(index, target, *actor.martial_arts_strike);
+            break;
+    }
+    check_for_victory_or_defeat();
+    return true;
+}
+
+bool Encounter::can_action_surge() const {
+    if (!character_can_act() || turn_.action_surge_used) return false;
+    const Combatant& actor = *current();
+    const Character* character = this->character(actor.character_id);
+    return character && feature_uses_left(Feature::ActionSurge, *character, actor.class_name) > 0;
+}
+
+bool Encounter::action_surge() {
+    if (!can_action_surge()) return false;
+    const Combatant& actor = *current();
+    spend_feature(*character_mut(actor.character_id), Feature::ActionSurge, actor.class_name);
+    changed(actor.character_id);
+    turn_.actions_left += 1;
+    turn_.action_surge_used = true;
+    log(actor.name + " uses Action Surge: one more action this turn.");
+    return true;
+}
+
 // --- Actions -----------------------------------------------------------------
 
 bool Encounter::attack(int target_index, int attack_bonus, int damage_dice_count, int damage_dice_sides,
@@ -1114,9 +1353,20 @@ bool Encounter::attack(int target_index, int attack_bonus, int damage_dice_count
     } else {
         turn_.actions_left -= 1;  // taking the Attack action
         turn_.attacks_left = attacker.attacks_per_action - 1;
+        turn_.attack_action_taken = true;
+        turn_.attack_action_martial = attacker.attack_martial_arts;
     }
-    weapon_attack(actor, target_index, attack_bonus, damage_dice_count, damage_dice_sides, damage_bonus,
-                  attacker.melee_attack);
+    WeaponAttack attack;
+    attack.name = attacker.attack_name;
+    attack.attack_bonus = attack_bonus;
+    attack.damage_dice_count = damage_dice_count;
+    attack.damage_dice_sides = damage_dice_sides;
+    attack.damage_bonus = damage_bonus;
+    attack.melee = attacker.melee_attack;
+    attack.uses_strength = attacker.attack_uses_strength;
+    attack.finesse_or_ranged = attacker.attack_finesse_or_ranged;
+    attack.martial_arts = attacker.attack_martial_arts;
+    weapon_attack(actor, target_index, attack);
     if (turn_.attacks_left > 0) {
         log("    (Extra Attack: " + std::to_string(turn_.attacks_left) + " more attack" +
             (turn_.attacks_left == 1 ? "" : "s") + " in this Attack action.)");
@@ -1222,6 +1472,10 @@ bool Encounter::cast_spell(int spell_id, int slot_level, const std::vector<int>&
 
     if (actor.armor_not_proficient) {
         log(actor.name + " can't cast spells while wearing armor they aren't proficient with.");
+        return false;
+    }
+    if (is_raging(actor_index)) {
+        log(actor.name + " can't cast spells while raging.");
         return false;
     }
     // Turn economy first, so the log can say why (e.g. the bonus-action spell rule).

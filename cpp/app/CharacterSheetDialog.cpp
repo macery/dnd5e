@@ -13,6 +13,7 @@
 #include <QWidget>
 
 #include "dnd/character_creation.hpp"
+#include "dnd/class_features.hpp"
 #include "dnd/equipment.hpp"
 #include "dnd/progression.hpp"
 #include "dnd/rules.hpp"
@@ -213,6 +214,51 @@ CharacterSheetDialog::CharacterSheetDialog(const dnd::Character& character,
             dnd::skill_description(skill));
     }
 
+    // Class features: limited-use ones with uses left, plus the passive ones.
+    QGroupBox* featuresGroup = new QGroupBox("Class Features", this);
+    auto* featuresForm = new QFormLayout(featuresGroup);
+    for (const auto& info : dnd::limited_features()) {
+        if (!dnd::has_feature(info.feature, className, character.level)) continue;
+        int max = dnd::feature_max_uses(info.feature, character, className);
+        int left = dnd::feature_uses_left(info.feature, character, className);
+        bool shortRest = dnd::feature_recovery(info.feature, character.level) == dnd::Recovery::ShortRest;
+        QString uses = max >= 99 ? QString("unlimited")
+                                 : QString("%1 / %2 (%3 rest)").arg(left).arg(max).arg(shortRest ? "short" : "long");
+        addExplainedRow(featuresForm, info.name, new QLabel(uses, featuresGroup), info.description);
+    }
+    if (className == "Barbarian") {
+        addExplainedRow(featuresForm, "Rage Damage",
+            new QLabel(QString("+%1").arg(dnd::rage_damage_bonus(character.level)), featuresGroup),
+            "Added to damage with STR melee weapon attacks while raging.");
+    }
+    if (className == "Rogue") {
+        addExplainedRow(featuresForm, "Sneak Attack",
+            new QLabel(QString("%1d6").arg(dnd::sneak_attack_dice(character.level)), featuresGroup),
+            "Once per turn, extra damage on a hit with a finesse or ranged weapon, if you have advantage -- or an "
+            "ally is also fighting the target -- and you don't have disadvantage.");
+    }
+    if (className == "Rogue" && character.level >= 2) {
+        addExplainedRow(featuresForm, "Cunning Action", new QLabel("Dash or Disengage as a bonus action", featuresGroup),
+            "Your quick thinking lets you Dash or Disengage as a bonus action. (Movement isn't tracked yet.)");
+    }
+    if (className == "Monk") {
+        addExplainedRow(featuresForm, "Martial Arts",
+            new QLabel(QString("d%1 unarmed, DEX, bonus unarmed strike").arg(dnd::martial_arts_die(character.level)),
+                       featuresGroup),
+            "Without armor or a shield: unarmed strikes and monk weapons can use DEX and the Martial Arts die, and "
+            "after the Attack action with one you can make an unarmed strike as a bonus action.");
+    }
+    int attacks = dnd::attacks_per_attack_action(className, character.level);
+    if (attacks > 1) {
+        addExplainedRow(featuresForm, "Extra Attack", new QLabel(QString("%1 attacks per Attack action").arg(attacks),
+                                                                 featuresGroup),
+            "When you take the Attack action, you attack more than once.");
+    }
+    if (featuresForm->rowCount() == 0) {
+        delete featuresGroup;
+        featuresGroup = nullptr;
+    }
+
     QGroupBox* spellsGroup = nullptr;
     const dnd::ClassInfo* classInfo = dnd::find_class_info_by_id(classes, character.class_id);
     if (classInfo && dnd::is_spellcaster(*classInfo)) {
@@ -265,6 +311,7 @@ CharacterSheetDialog::CharacterSheetDialog(const dnd::Character& character,
     layout->addWidget(summaryGroup);
     layout->addWidget(abilitiesGroup);
     layout->addWidget(savesGroup);
+    if (featuresGroup) layout->addWidget(featuresGroup);
     if (spellsGroup) layout->addWidget(spellsGroup);
     layout->addWidget(skillsScroll, 1);
 

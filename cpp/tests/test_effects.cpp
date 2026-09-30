@@ -221,7 +221,8 @@ TEST_CASE("condition and effect kind names round-trip", "[effects]") {
                       EffectKind::SaveBonusDice, EffectKind::ArmorClassBonus, EffectKind::ExtraWeaponDamageDice,
                       EffectKind::AdvantageOnNextAttackAgainst, EffectKind::AdvantageOnAttacksAgainst,
                       EffectKind::DisadvantageOnNextAttack, EffectKind::CantRegainHitPoints,
-                      EffectKind::SpeedReduction, EffectKind::ArmorNotProficient}) {
+                      EffectKind::SpeedReduction, EffectKind::ArmorNotProficient, EffectKind::Raging,
+                      EffectKind::InspirationDie}) {
         REQUIRE(dnd::effect_kind_from_name(dnd::effect_kind_name(kind)) == kind);
     }
     REQUIRE_THROWS_AS(dnd::condition_from_name("Sleepy"), std::invalid_argument);
@@ -259,4 +260,19 @@ TEST_CASE("armor without proficiency hinders STR and DEX", "[effects]") {
     REQUIRE(dnd::saving_throw_modifiers(effects, 0, dnd::Ability::Strength).mode() == RollMode::Disadvantage);
     REQUIRE(dnd::saving_throw_modifiers(effects, 0, dnd::Ability::Wisdom).mode() == RollMode::Normal);
     REQUIRE_FALSE(dnd::effect_description(effects[0]).empty());
+}
+
+TEST_CASE("rage and inspiration modify rolls", "[effects]") {
+    std::vector<ActiveEffect> effects = {effect(1, 0, EffectKind::Raging), effect(2, 1, EffectKind::InspirationDie, 6, true)};
+    REQUIRE(dnd::saving_throw_modifiers(effects, 0, dnd::Ability::Strength).mode() == RollMode::Advantage);
+    REQUIRE(dnd::saving_throw_modifiers(effects, 0, dnd::Ability::Dexterity).mode() == RollMode::Normal);
+
+    auto attack = dnd::attack_roll_modifiers(effects, 1, 0, true, kAllAlive);
+    REQUIRE(attack.bonus_dice == std::vector<int>{6});
+    REQUIRE(attack.used_effects == std::vector<int>{2});
+    auto save = dnd::saving_throw_modifiers(effects, 1, dnd::Ability::Wisdom);
+    REQUIRE(save.bonus_dice == std::vector<int>{6});
+    REQUIRE(save.used_effects == std::vector<int>{2});
+    REQUIRE_FALSE(dnd::effect_description(effects[0]).empty());
+    REQUIRE(dnd::effect_description(effects[1]) == "Inspired: adds 1d6 to its next attack roll or saving throw.");
 }

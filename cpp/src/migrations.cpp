@@ -18,7 +18,7 @@ using detail::Statement;
 // for future schema changes -- never edit an existing one, since a
 // migration's sql is exactly what already ran on every database that has it
 // recorded in SchemaMigrations.
-constexpr std::array<Migration, 15> kMigrations = {{
+constexpr std::array<Migration, 16> kMigrations = {{
     {1, "initial schema: Players, Classes, Characters", R"sql(
         CREATE TABLE IF NOT EXISTS Players (
             PlayerID INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -603,6 +603,9 @@ constexpr std::array<Migration, 15> kMigrations = {{
             JOIN Items ON Items.Name = Weapons.Name AND Items.Category = 'Weapon'
             WHERE 1
             ON CONFLICT (CharacterID, ItemID) DO UPDATE SET Equipped = 1;
+    )sql"},
+    {16, "add FeatureUses (spent class feature uses) to Characters", R"sql(
+        ALTER TABLE Characters ADD COLUMN FeatureUses TEXT NOT NULL DEFAULT '';
     )sql"},
 }};
 

@@ -245,3 +245,49 @@ TEST_CASE("walking speed", "[equipment]") {
     REQUIRE(dnd::walking_speed(stats(13, 10), "Human", items.wearing({"Chain Mail"})) == 30);
     REQUIRE(dnd::walking_speed(stats(8, 10), "Human", items.wearing({"Scale Mail"})) == 30);  // medium: no requirement
 }
+
+TEST_CASE("Martial Arts: an unarmored Monk's strikes", "[equipment][class_features]") {
+    Items items;
+    auto monk = stats(10, 16);  // STR +0, DEX +3; level 1: d4
+
+    auto unarmed = dnd::weapon_attack(monk, "Monk", "Human", {});
+    REQUIRE(unarmed.martial_arts);
+    REQUIRE(unarmed.attack_bonus == 5);  // DEX +3 + 2
+    REQUIRE(unarmed.damage_dice_count == 1);
+    REQUIRE(unarmed.damage_dice_sides == 4);
+    REQUIRE(unarmed.damage_bonus == 3);
+    REQUIRE_FALSE(unarmed.uses_strength);
+
+    auto shortsword = dnd::weapon_attack(monk, "Monk", "Human", items.wearing({"Shortsword"}));
+    REQUIRE(shortsword.martial_arts);
+    REQUIRE(shortsword.damage_dice_sides == 6);  // the weapon's d6 beats the d4
+
+    auto club_like = dnd::weapon_attack(monk, "Monk", "Human", items.wearing({"Mace"}));
+    REQUIRE(club_like.martial_arts);
+    REQUIRE(club_like.attack_bonus == 5);  // DEX with a simple melee weapon
+
+    auto greataxe = dnd::weapon_attack(monk, "Monk", "Human", items.wearing({"Greataxe"}));
+    REQUIRE_FALSE(greataxe.martial_arts);  // martial, heavy, two-handed
+
+    // Armor or a shield turns Martial Arts off.
+    auto armored = dnd::weapon_attack(monk, "Monk", "Human", items.wearing({"Leather Armor"}));
+    REQUIRE_FALSE(armored.martial_arts);
+    REQUIRE(armored.damage_bonus == 1);  // plain unarmed strike: 1 + STR
+
+    auto higher = stats(10, 16, 10, 10, 5);
+    REQUIRE(dnd::weapon_attack(higher, "Monk", "Human", {}).damage_dice_sides == 6);  // d6 at level 5
+}
+
+TEST_CASE("weapon attacks report STR use and Sneak Attack eligibility", "[equipment]") {
+    Items items;
+    auto strong = stats(16, 12);
+    auto quick = stats(10, 16);
+    REQUIRE(dnd::weapon_attack(strong, "Fighter", "Human", items.wearing({"Greataxe"})).uses_strength);
+    REQUIRE_FALSE(dnd::weapon_attack(strong, "Fighter", "Human", items.wearing({"Greataxe"})).finesse_or_ranged);
+    REQUIRE(dnd::weapon_attack(strong, "Rogue", "Human", items.wearing({"Rapier"})).uses_strength);  // STR is higher
+    REQUIRE_FALSE(dnd::weapon_attack(quick, "Rogue", "Human", items.wearing({"Rapier"})).uses_strength);
+    REQUIRE(dnd::weapon_attack(quick, "Rogue", "Human", items.wearing({"Rapier"})).finesse_or_ranged);
+    REQUIRE_FALSE(dnd::weapon_attack(strong, "Ranger", "Human", items.wearing({"Longbow"})).uses_strength);
+    REQUIRE(dnd::weapon_attack(strong, "Ranger", "Human", items.wearing({"Longbow"})).finesse_or_ranged);
+    REQUIRE(dnd::weapon_attack(strong, "Fighter", "Human", {}).unarmed);
+}

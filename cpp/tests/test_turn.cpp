@@ -1,5 +1,8 @@
 #include <catch2/catch_test_macros.hpp>
 
+#include <array>
+#include <string>
+
 #include "dnd/class_features.hpp"
 #include "dnd/turn.hpp"
 
@@ -63,4 +66,100 @@ TEST_CASE("the bonus-action spell rule", "[turn]") {
         dnd::record_spell_cast(turn, kGuidingBolt);
         REQUIRE_FALSE(dnd::spell_casting_blocked(turn, kGuidingBolt));
     }
+}
+
+TEST_CASE("which classes have which limited-use features", "[class_features]") {
+    using dnd::Feature;
+    REQUIRE(dnd::has_feature(Feature::SecondWind, "Fighter", 1));
+    REQUIRE_FALSE(dnd::has_feature(Feature::ActionSurge, "Fighter", 1));
+    REQUIRE(dnd::has_feature(Feature::ActionSurge, "Fighter", 2));
+    REQUIRE(dnd::has_feature(Feature::Rage, "Barbarian", 1));
+    REQUIRE_FALSE(dnd::has_feature(Feature::Rage, "Fighter", 20));
+    REQUIRE(dnd::has_feature(Feature::BardicInspiration, "Bard", 1));
+    REQUIRE(dnd::has_feature(Feature::ArcaneRecovery, "Wizard", 1));
+    for (const auto& info : dnd::limited_features()) REQUIRE(std::string(info.description).size() > 20);
+}
+
+TEST_CASE("feature uses per rest", "[class_features]") {
+    using dnd::Feature;
+    dnd::Character barbarian;
+    barbarian.level = 1;
+    REQUIRE(dnd::feature_max_uses(Feature::Rage, barbarian, "Barbarian") == 2);
+    barbarian.level = 3;
+    REQUIRE(dnd::feature_max_uses(Feature::Rage, barbarian, "Barbarian") == 3);
+    barbarian.level = 6;
+    REQUIRE(dnd::feature_max_uses(Feature::Rage, barbarian, "Barbarian") == 4);
+    REQUIRE(dnd::feature_max_uses(Feature::Rage, barbarian, "Fighter") == 0);
+
+    dnd::Character bard;
+    bard.level = 1;
+    bard.charisma = 16;
+    REQUIRE(dnd::feature_max_uses(Feature::BardicInspiration, bard, "Bard") == 3);
+    bard.charisma = 8;
+    REQUIRE(dnd::feature_max_uses(Feature::BardicInspiration, bard, "Bard") == 1);  // minimum 1
+    REQUIRE(dnd::feature_recovery(Feature::BardicInspiration, 4) == dnd::Recovery::LongRest);
+    REQUIRE(dnd::feature_recovery(Feature::BardicInspiration, 5) == dnd::Recovery::ShortRest);
+
+    dnd::Character fighter;
+    fighter.level = 2;
+    REQUIRE(dnd::spend_feature(fighter, Feature::SecondWind, "Fighter"));
+    REQUIRE_FALSE(dnd::spend_feature(fighter, Feature::SecondWind, "Fighter"));
+    REQUIRE(dnd::spend_feature(fighter, Feature::ActionSurge, "Fighter"));
+    REQUIRE(fighter.feature_uses_spent.at("SecondWind") == 1);
+
+    barbarian.level = 1;
+    REQUIRE(dnd::spend_feature(barbarian, Feature::Rage, "Barbarian"));
+    REQUIRE(dnd::feature_uses_left(Feature::Rage, barbarian, "Barbarian") == 1);
+
+    // A short rest brings back Second Wind and Action Surge, not Rage.
+    dnd::restore_short_rest_features(fighter, "Fighter");
+    REQUIRE(dnd::feature_uses_left(Feature::SecondWind, fighter, "Fighter") == 1);
+    REQUIRE(dnd::feature_uses_left(Feature::ActionSurge, fighter, "Fighter") == 1);
+    dnd::restore_short_rest_features(barbarian, "Barbarian");
+    REQUIRE(dnd::feature_uses_left(Feature::Rage, barbarian, "Barbarian") == 1);
+    dnd::restore_all_features(barbarian);
+    REQUIRE(dnd::feature_uses_left(Feature::Rage, barbarian, "Barbarian") == 2);
+}
+
+TEST_CASE("feature formulas follow the PHB class tables", "[class_features]") {
+    REQUIRE(dnd::rage_damage_bonus(1) == 2);
+    REQUIRE(dnd::rage_damage_bonus(9) == 3);
+    REQUIRE(dnd::rage_damage_bonus(16) == 4);
+    REQUIRE(dnd::sneak_attack_dice(1) == 1);
+    REQUIRE(dnd::sneak_attack_dice(2) == 1);
+    REQUIRE(dnd::sneak_attack_dice(3) == 2);
+    REQUIRE(dnd::sneak_attack_dice(20) == 10);
+    REQUIRE(dnd::martial_arts_die(1) == 4);
+    REQUIRE(dnd::martial_arts_die(5) == 6);
+    REQUIRE(dnd::martial_arts_die(17) == 10);
+    REQUIRE(dnd::bardic_inspiration_die(1) == 6);
+    REQUIRE(dnd::bardic_inspiration_die(5) == 8);
+    REQUIRE(dnd::bardic_inspiration_die(15) == 12);
+    REQUIRE(dnd::second_wind_bonus(3) == 3);
+    REQUIRE(dnd::arcane_recovery_budget(1) == 1);
+    REQUIRE(dnd::arcane_recovery_budget(5) == 3);
+}
+
+TEST_CASE("Arcane Recovery recovers slots up to the budget, highest first", "[class_features]") {
+    dnd::Character wizard;
+    wizard.level = 5;  // budget 3
+    wizard.spell_slots_used = {3, 2, 1, 0, 0, 0, 0, 0, 0};
+
+    auto recovered = dnd::use_arcane_recovery(wizard, "Wizard");
+    REQUIRE(recovered == std::array<int, 9>{0, 0, 1, 0, 0, 0, 0, 0, 0});  // one 3rd-level slot uses the whole budget
+    REQUIRE(wizard.spell_slots_used == std::array<int, 9>{3, 2, 0, 0, 0, 0, 0, 0, 0});
+
+    // Once per day.
+    REQUIRE(dnd::use_arcane_recovery(wizard, "Wizard") == std::array<int, 9>{});
+
+    dnd::Character apprentice;
+    apprentice.level = 3;  // budget 2
+    apprentice.spell_slots_used = {2, 0, 0, 0, 0, 0, 0, 0, 0};
+    REQUIRE(dnd::use_arcane_recovery(apprentice, "Wizard") == std::array<int, 9>{2, 0, 0, 0, 0, 0, 0, 0, 0});
+
+    dnd::Character rested;
+    rested.level = 3;
+    REQUIRE(dnd::use_arcane_recovery(rested, "Wizard") == std::array<int, 9>{});  // nothing spent: use kept
+    REQUIRE(dnd::feature_uses_left(dnd::Feature::ArcaneRecovery, rested, "Wizard") == 1);
+    REQUIRE(dnd::use_arcane_recovery(apprentice, "Fighter") == std::array<int, 9>{});
 }

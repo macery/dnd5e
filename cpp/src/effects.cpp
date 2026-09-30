@@ -60,7 +60,7 @@ Condition condition_from_name(const std::string& name) {
 }
 
 namespace {
-constexpr std::array<std::pair<EffectKind, const char*>, 12> kEffectKindNames = {{
+constexpr std::array<std::pair<EffectKind, const char*>, 14> kEffectKindNames = {{
     {EffectKind::Condition, "Condition"},
     {EffectKind::Dodging, "Dodging"},
     {EffectKind::AttackBonusDice, "AttackBonusDice"},
@@ -73,6 +73,8 @@ constexpr std::array<std::pair<EffectKind, const char*>, 12> kEffectKindNames = 
     {EffectKind::CantRegainHitPoints, "CantRegainHitPoints"},
     {EffectKind::SpeedReduction, "SpeedReduction"},
     {EffectKind::ArmorNotProficient, "ArmorNotProficient"},
+    {EffectKind::Raging, "Raging"},
+    {EffectKind::InspirationDie, "InspirationDie"},
 }};
 }  // namespace
 
@@ -109,6 +111,11 @@ std::string effect_description(const ActiveEffect& effect) {
         case EffectKind::DisadvantageOnNextAttack: return "Its next attack roll has disadvantage.";
         case EffectKind::CantRegainHitPoints: return "It can't regain hit points.";
         case EffectKind::SpeedReduction: return "Its speed drops by " + amount + " feet (speed isn't tracked yet).";
+        case EffectKind::Raging:
+            return "Raging: advantage on STR checks and saves, extra damage on STR melee weapon attacks, and "
+                   "resistance to bludgeoning, piercing, and slashing damage. Can't cast spells or concentrate.";
+        case EffectKind::InspirationDie:
+            return "Inspired: adds 1d" + amount + " to its next attack roll or saving throw.";
         case EffectKind::ArmorNotProficient:
             return "Wearing armor it isn't proficient with: disadvantage on attacks, ability checks, and saves that use "
                    "STR or DEX, and it can't cast spells.";
@@ -179,6 +186,9 @@ RollModifiers attack_roll_modifiers(const std::vector<ActiveEffect>& effects, in
             m.bonus_dice.push_back(effect.amount);
         } else if (effect.kind == EffectKind::ArmorNotProficient) {
             m.disadvantage.push_back("armor not proficient");  // weapon attacks always use STR or DEX
+        } else if (effect.kind == EffectKind::InspirationDie) {
+            m.bonus_dice.push_back(effect.amount);
+            add_used(m, effect);
         }
     }
 
@@ -233,7 +243,13 @@ RollModifiers saving_throw_modifiers(const std::vector<ActiveEffect>& effects, i
         }
     }
     for (const auto& effect : effects) {
-        if (effect.target == target && effect.kind == EffectKind::SaveBonusDice) m.bonus_dice.push_back(effect.amount);
+        if (effect.target != target) continue;
+        if (effect.kind == EffectKind::SaveBonusDice) m.bonus_dice.push_back(effect.amount);
+        if (effect.kind == EffectKind::InspirationDie) {
+            m.bonus_dice.push_back(effect.amount);
+            add_used(m, effect);
+        }
+        if (effect.kind == EffectKind::Raging && ability == Ability::Strength) m.advantage.push_back("raging");
     }
     return m;
 }

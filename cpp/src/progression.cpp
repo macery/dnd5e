@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "dnd/character_creation.hpp"
+#include "dnd/class_features.hpp"
 #include "dnd/rules.hpp"
 
 namespace dnd {
@@ -107,11 +108,13 @@ void take_long_rest(Character& character) {
     int recovered = std::max(1, character.level / 2);
     character.hit_dice_used = std::max(0, character.hit_dice_used - recovered);
     character.spell_slots_used.fill(0);
+    restore_all_features(character);
 }
 
 void take_short_rest(Character& character, const ClassInfo& class_info) {
     if (character.dead) return;
     if (class_info.spellcasting.caster_type == CasterType::Pact) character.spell_slots_used.fill(0);
+    restore_short_rest_features(character, class_info.name);
 }
 
 }  // namespace dnd

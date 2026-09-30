@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstdint>
+#include <map>
 #include <string>
 
 namespace dnd {
@@ -30,6 +31,10 @@ struct Character {
     // Failed three death saves (or took massive damage). Stays dead until
     // revived by a spell -- see docs/effects-system.md, Decisions.
     bool dead = false;
+    // Class feature uses spent since they last came back, by feature key
+    // ("SecondWind", "Rage", ...). Maximums come from class and level
+    // (dnd/class_features.hpp); rests clear them.
+    std::map<std::string, int> feature_uses_spent;
 
     int experience = 0;
     // Spent on short rests, partly recovered on a long rest; the total

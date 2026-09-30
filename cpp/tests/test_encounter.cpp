@@ -1176,3 +1176,198 @@ TEST_CASE("bonus-action spells and the one-levelled-spell rule", "[encounter][tu
         REQUIRE(contains(logs(encounter.take_events()), "A bonus-action spell can only be paired with a cantrip"));
     }
 }
+
+// --- Class features ------------------------------------------------------------
+
+namespace {
+using BonusAction = dnd::Encounter::BonusAction;
+
+// A level-`level` character of `class_name` with Aria's stats (STR 16, DEX 12, CON 14).
+dnd::Character classed(Fixture& f, int id, const char* name, const char* class_name, int level = 1) {
+    auto c = f.fighter(id);
+    c.character_name = name;
+    c.class_id = f.class_id(class_name);
+    c.level = level;
+    return c;
+}
+
+bool offers(const dnd::Encounter& encounter, BonusAction kind) {
+    auto options = encounter.bonus_action_options();
+    return std::any_of(options.begin(), options.end(), [kind](const auto& o) { return o.kind == kind; });
+}
+}  // namespace
+
+TEST_CASE("Second Wind and Action Surge", "[encounter][class_features]") {
+    Fixture f;
+    ScriptedRandomSource rolls({20, 1, 6});  // Aria first; Second Wind d10 = 6
+    dnd::Dice dice(rolls);
+    auto encounter = f.encounter(dice);
+    auto aria = classed(f, 1, "Aria", "Fighter", 2);
+    aria.current_hp = 3;
+    encounter.add_character(aria, {}, f.fighter_gear());
+    encounter.add_monsters(f.monster("Goblin"), 1);
+    encounter.roll_initiative();
+    encounter.take_events();
+
+    REQUIRE(offers(encounter, BonusAction::SecondWind));
+    REQUIRE(encounter.use_bonus_action(BonusAction::SecondWind));
+    auto events = encounter.take_events();
+    REQUIRE(logs(events).at(0) == "Aria uses Second Wind: d10(6) + 2, regains 8 HP (now 11/12).");
+    REQUIRE(has_event(events, EncounterEvent::Kind::CharacterChanged, 1));
+    REQUIRE(encounter.character(1)->feature_uses_spent.at("SecondWind") == 1);
+    REQUIRE_FALSE(encounter.bonus_action_available());
+    REQUIRE_FALSE(offers(encounter, BonusAction::SecondWind));
+
+    REQUIRE(encounter.can_action_surge());
+    REQUIRE(encounter.action_surge());
+    REQUIRE(encounter.turn().actions_left == 2);
+    REQUIRE_FALSE(encounter.can_action_surge());  // once per turn (and per short rest)
+    REQUIRE(encounter.dash());
+    REQUIRE(encounter.dash());
+    REQUIRE_FALSE(encounter.awaiting_action());
+}
+
+TEST_CASE("Rage: damage, resistance, and when it ends", "[encounter][class_features]") {
+    Fixture f;
+
+    SECTION("not in heavy armor") {
+        ScriptedRandomSource rolls({20, 1});
+        dnd::Dice dice(rolls);
+        auto encounter = f.encounter(dice);
+        encounter.add_character(classed(f, 1, "Grog", "Barbarian"), {}, f.fighter_gear());  // chain mail
+        encounter.add_monsters(f.monster("Goblin"), 1);
+        encounter.roll_initiative();
+        REQUIRE_FALSE(offers(encounter, BonusAction::Rage));
+    }
+
+    SECTION("a full rage") {
+        // Grog first. Rage; Greataxe d20 15 hits, d12 5 (+3 +2 Rage = 10).
+        // Goblin: pick, d20 15 hits AC 13, d6 4 (+2 = 6, halved to 3).
+        // Grog dashes; Goblin misses (natural 1); Grog dashes again: the rage ends.
+        ScriptedRandomSource rolls({20, 1, 1, 15, 5, 1, 15, 4, 1, 1, 1, 1});  // initiative: Grog, Goblin #1, #2
+        dnd::Dice dice(rolls);
+        auto encounter = f.encounter(dice);
+        encounter.add_character(classed(f, 1, "Grog", "Barbarian"), {}, {{f.item("Greataxe"), 1, true}});
+        encounter.add_monsters(f.monster("Goblin"), 2);
+        encounter.roll_initiative();
+        encounter.take_events();
+
+        REQUIRE(encounter.use_bonus_action(BonusAction::Rage));
+        REQUIRE(contains(logs(encounter.take_events()), "Grog flies into a rage!"));
+        REQUIRE(encounter.status_text(0) == "Up (Raging)");
+        REQUIRE(encounter.castable_spells().empty());
+        REQUIRE(encounter.attack(1, 5, 1, 12, 3));
+        REQUIRE(contains(logs(encounter.take_events()), "-> hit for 10 (+2 Rage). Goblin #1 is now 0/7 HP."));
+
+        encounter.next_turn();  // Goblin #2 hits Grog, halved
+        REQUIRE(contains(logs(encounter.take_events()), "-> hit for 3 (halved by Rage). Grog is now 9/12 HP."));
+
+        encounter.dash();
+        encounter.next_turn();  // he took damage since his last turn: the rage holds
+        REQUIRE(dnd::has_effect(encounter.effects(), 0, dnd::EffectKind::Raging));
+        encounter.take_events();
+
+        encounter.dash();
+        encounter.next_turn();  // no attack, no damage this round: it ends
+        REQUIRE(contains(logs(encounter.take_events()),
+                         "Grog's rage ends (didn't attack or take damage this turn)."));
+        REQUIRE_FALSE(dnd::has_effect(encounter.effects(), 0, dnd::EffectKind::Raging));
+    }
+}
+
+TEST_CASE("Sneak Attack needs advantage or an ally in the fight", "[encounter][class_features]") {
+    Fixture f;
+    auto rogue = classed(f, 1, "Vex", "Rogue");
+    rogue.dexterity = 16;
+
+    SECTION("with an ally") {
+        // Vex 20+3, Zanna 1+2, Goblin 1+2. Rapier d20 15 (+5 = 20) hits, d8 3 (+3); Sneak Attack d6 4.
+        ScriptedRandomSource rolls({20, 1, 1, 15, 3, 4});
+        dnd::Dice dice(rolls);
+        auto encounter = f.encounter(dice);
+        encounter.add_character(rogue, {}, {{f.item("Rapier"), 1, true}});
+        encounter.add_character(f.wizard(2), {}, {});
+        encounter.add_monsters(f.monster("Goblin"), 1);
+        encounter.roll_initiative();
+        encounter.take_events();
+        REQUIRE(encounter.current()->name == "Vex");
+        REQUIRE(encounter.attack(2, 5, 1, 8, 3));
+        REQUIRE(contains(logs(encounter.take_events()),
+                         "-> hit for 10 (+4 Sneak Attack, an ally is fighting the target). Goblin is now 0/7 HP."));
+    }
+
+    SECTION("alone, without advantage: no Sneak Attack") {
+        ScriptedRandomSource rolls({20, 1, 15, 3});
+        dnd::Dice dice(rolls);
+        auto encounter = f.encounter(dice);
+        encounter.add_character(rogue, {}, {{f.item("Rapier"), 1, true}});
+        encounter.add_monsters(f.monster("Goblin"), 1);
+        encounter.roll_initiative();
+        encounter.take_events();
+        REQUIRE(encounter.attack(1, 5, 1, 8, 3));
+        auto lines = logs(encounter.take_events());
+        REQUIRE(contains(lines, "-> hit for 6. Goblin is now 1/7 HP."));
+        REQUIRE_FALSE(contains(lines, "Sneak Attack"));
+    }
+}
+
+TEST_CASE("Bardic Inspiration adds a die to an ally's next roll", "[encounter][class_features]") {
+    Fixture f;
+    auto bard = classed(f, 2, "Lyra", "Bard");
+    bard.charisma = 16;
+    bard.dexterity = 14;
+    // Aria 1+1, Lyra 20+2, Goblin 1+2: Lyra, Goblin, Aria. Goblin picks Aria, rolls a 1.
+    // Aria: Inspiration d6 5, d20 10 (+5 +5 = 20) hits, d10 1 (+3).
+    ScriptedRandomSource rolls({1, 20, 1, 1, 1, 5, 10, 1});
+    dnd::Dice dice(rolls);
+    auto encounter = f.encounter(dice);
+    encounter.add_character(f.fighter(1), {}, f.fighter_gear());
+    encounter.add_character(bard, {}, {});
+    encounter.add_monsters(f.monster("Goblin"), 1);
+    encounter.roll_initiative();
+    encounter.take_events();
+    REQUIRE(encounter.current()->name == "Lyra");
+
+    auto options = encounter.bonus_action_options();
+    REQUIRE(options.size() == 1);
+    REQUIRE(options[0].label == "Bardic Inspiration, d6 (3 left)");
+    REQUIRE(encounter.bonus_action_targets(dnd::Encounter::BonusTarget::Ally) == std::vector<int>{0});
+    REQUIRE(encounter.use_bonus_action(BonusAction::BardicInspiration, 0));
+    REQUIRE(encounter.status_text(0) == "Up (Inspired (d6))");
+
+    encounter.next_turn();  // Goblin, then Aria
+    REQUIRE(encounter.current()->name == "Aria");
+    encounter.take_events();
+    REQUIRE(encounter.attack(2, 5, 1, 10, 3));
+    REQUIRE(contains(logs(encounter.take_events()), "Aria attacks Goblin: d20(10) +5 +1d6(5) -> hit for 4."));
+    REQUIRE_FALSE(dnd::has_effect(encounter.effects(), 0, dnd::EffectKind::InspirationDie));
+}
+
+TEST_CASE("Martial Arts: a bonus unarmed strike after the Attack action", "[encounter][class_features]") {
+    Fixture f;
+    auto monk = classed(f, 1, "Kai", "Monk");
+    monk.strength = 10;
+    monk.dexterity = 16;
+    // Kai first. Unarmed d20 15 (+5) hits, d4 2 (+3); bonus strike d20 15 hits, d4 2 (+3).
+    ScriptedRandomSource rolls({20, 1, 15, 2, 15, 2});
+    dnd::Dice dice(rolls);
+    auto encounter = f.encounter(dice);
+    encounter.add_character(monk, {}, {});
+    encounter.add_monsters(f.monster("Orc"), 1);
+    encounter.roll_initiative();
+    encounter.take_events();
+
+    const auto& kai = encounter.combatants()[0];
+    REQUIRE(kai.attack_bonus == 5);
+    REQUIRE(kai.damage_dice_sides == 4);
+    REQUIRE(kai.martial_arts_strike.has_value());
+    REQUIRE_FALSE(offers(encounter, BonusAction::MartialArtsStrike));  // not before the Attack action
+
+    REQUIRE(encounter.attack(1, kai.attack_bonus, kai.damage_dice_count, kai.damage_dice_sides, kai.damage_bonus));
+    REQUIRE(offers(encounter, BonusAction::MartialArtsStrike));
+    REQUIRE(encounter.use_bonus_action(BonusAction::MartialArtsStrike, 1));
+    auto lines = logs(encounter.take_events());
+    REQUIRE(std::count_if(lines.begin(), lines.end(), [](const std::string& l) {
+                return l.rfind("Kai attacks Orc: d20(15) +5 -> hit for 5.", 0) == 0;
+            }) == 2);
+}
