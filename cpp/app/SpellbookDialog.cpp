@@ -30,18 +30,7 @@ QString ordinal(int level) {
 }
 
 QString effectText(const dnd::Spell& spell) {
-    QString dice = QString("%1d%2").arg(spell.dice_count).arg(spell.dice_sides);
-    if (spell.flat_bonus) dice += formatModifier(spell.flat_bonus);
-    switch (spell.resolution) {
-        case dnd::SpellResolution::Attack: return QString("attack, %1 %2").arg(dice, q(spell.damage_type));
-        case dnd::SpellResolution::Save:
-            return QString("%1 save, %2 %3").arg(dnd::ability_name(spell.save_ability), dice, q(spell.damage_type));
-        case dnd::SpellResolution::AutoHit:
-            return QString("%1 × %2 %3").arg(spell.projectiles).arg(dice, q(spell.damage_type));
-        case dnd::SpellResolution::Heal: return QString("heal %1%2").arg(dice, spell.adds_modifier ? " + mod" : "");
-        case dnd::SpellResolution::Utility: return "utility";
-    }
-    return "";
+    return q(dnd::spell_summary(spell));
 }
 
 QString tooltipFor(const dnd::Spell& spell) {
@@ -225,7 +214,8 @@ void SpellbookDialog::onSelectionChanged() {
     castButton_->setEnabled(castable);
     castButton_->setToolTip(spell && !castable && spell->resolution != dnd::SpellResolution::Heal &&
                                     spell->resolution != dnd::SpellResolution::Utility
-                                ? "Damage spells are cast from Combat Encounter."
+                                ? "Cast this spell from Combat Encounter: damage, buffs, and stabilizing only matter "
+                                  "in a fight."
                                 : "");
 }
 

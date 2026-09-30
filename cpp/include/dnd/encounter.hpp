@@ -35,6 +35,10 @@ struct Combatant {
     int xp = 0;  // monsters only: awarded to the party on victory
     // Monsters only: STR..CHA, for saving throws. (Characters use their sheet.)
     std::array<int, 6> ability_scores{10, 10, 10, 10, 10, 10};
+    // Monsters only: an effect their attack adds on a hit (see Monster).
+    Ability on_hit_save_ability = Ability::Strength;
+    int on_hit_save_dc = 0;
+    Condition on_hit_condition = Condition::Prone;
 
     // Characters at 0 HP: dying (rolling death saves), stable, or dead.
     // Monsters simply die at 0 HP.
@@ -136,8 +140,14 @@ public:
     std::vector<Spell> castable_spells() const;
     // Slot levels the current character could cast `spell` with (empty for cantrips).
     std::vector<int> spell_slot_options(const Spell& spell) const;
-    // Heals: every character (including anyone down). Otherwise: living monsters.
+    // Who `spell` can target: heals, any character not dead (including anyone
+    // down); buffs, conscious characters; Stabilize, dying characters;
+    // otherwise living monsters. Empty for spells that target nobody.
     std::vector<int> spell_target_candidates(const Spell& spell) const;
+    // Dying characters the current character could try to stabilize.
+    std::vector<int> stabilize_targets() const;
+    // True if the current character carries a Healer's Kit (stabilizing is automatic).
+    bool has_healers_kit() const;
 
     // --- Actions (the current character's one action for the turn) -----------
     // Each returns false -- leaving the action unused, with a log line saying
@@ -150,6 +160,9 @@ public:
     bool dash();
     bool dodge();
     bool drink_potion(int item_id);
+    // Stabilize a dying ally: a DC 10 WIS (Medicine) check, or automatic with a
+    // Healer's Kit (not used up; kit uses aren't tracked yet).
+    bool stabilize(int target);
     // `slot_level` is 0 for cantrips; `targets` are combatant indices (ignored
     // for Utility spells).
     bool cast_spell(int spell_id, int slot_level, const std::vector<int>& targets);
@@ -175,6 +188,10 @@ private:
     // Charmed by `target`: can't attack it.
     bool charmed_by(int attacker, int target) const;
     void use_effects(const std::vector<int>& effect_ids);
+    // Applies `spell`'s effects with this trigger from `caster` to `target`;
+    // returns their labels for the log.
+    std::vector<std::string> apply_spell_effects(const Spell& spell, SpellEffectTrigger trigger, int caster,
+                                                 int target);
 
     // Effect bookkeeping at turn boundaries (durations, standing up, saves to end).
     void start_turn(int index);

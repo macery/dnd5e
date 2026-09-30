@@ -1,6 +1,19 @@
 # Effects system design: conditions, death saves, concentration
 
-Status: **step zero and phase 2 (core effects) done**; phase 3 (data: spell and monster effects, Stabilize) is next. All open questions are settled; see [Decisions](#decisions).
+Status: **step zero and phases 2 (core effects) and 3 (data) done**; phase 4 (UI polish) is next. All open questions are settled; see [Decisions](#decisions).
+
+**Phase 3 as built:**
+- **Migration 14:**
+  - **`SpellEffects` table:** trigger (on hit, on a failed save, on cast to targets, on cast to self), effect kind, condition, amount, duration (relative to the caster or target), until-used, and a label.
+  - **New spell columns:** `UpcastTargets` and `CombatSaveAdvantage`.
+  - **Monster on-hit riders:** the Wolf's DC 11 STR save or be knocked prone.
+- **Two new spell kinds:** **Buff** (*Bless*, *Shield of Faith*, *Divine Favor*) and **Stabilize** (*Spare the Dying*). *Faerie Fire* and *Charm Person* are now no-damage Save spells; Charm Person's save has advantage in combat.
+- **Side effects now in play:** *Guiding Bolt*, *Ray of Frost* (speed shown only), *Chill Touch*, *Vicious Mockery*, *Faerie Fire*, *Charm Person*.
+- **Concentration:** casting any concentration spell starts it and ends the previous one. Utility concentration spells like *Detect Magic* count too.
+- **"End of your next turn"** effects survive the turn they were cast.
+- **Stabilize action:** a DC 10 WIS (Medicine) check, with disadvantage while poisoned or frightened, or automatic with a Healer's Kit. Kit uses aren't tracked, so it isn't used up.
+- **Combat dialog:** a Stabilize action; a spell summary line covering buffs, riders, and concentration; no target list for self-only spells.
+- **`spell_summary()`** in the core replaces three copies of the "describe this spell" text in the UI.
 
 **Phase 2 as built:**
 - **`dnd/effects`:** conditions (with tooltip descriptions), `ActiveEffect`, the attack and save modifier functions, death-save rules, and the concentration DC.

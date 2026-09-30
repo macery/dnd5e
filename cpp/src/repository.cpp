@@ -107,7 +107,7 @@ constexpr const char* kSpellColumns =
     "Spells.RangeText, Spells.DurationText, Spells.Concentration, Spells.Resolution, Spells.MeleeAttack, "
     "Spells.SaveAbility, Spells.SaveHalves, Spells.DiceCount, Spells.DiceSides, Spells.FlatBonus, "
     "Spells.AddsModifier, Spells.DamageType, Spells.Projectiles, Spells.MaxTargets, Spells.UpcastDice, "
-    "Spells.UpcastProjectiles, Spells.CantripScaling";
+    "Spells.UpcastProjectiles, Spells.CantripScaling, Spells.UpcastTargets, Spells.CombatSaveAdvantage";
 
 Spell read_spell_row(sqlite3_stmt* stmt) {
     Spell spell;
@@ -135,11 +135,13 @@ Spell read_spell_row(sqlite3_stmt* stmt) {
     spell.upcast_dice = sqlite3_column_int(stmt, 20);
     spell.upcast_projectiles = sqlite3_column_int(stmt, 21);
     spell.cantrip_scaling = cantrip_scaling_from_name(column_text(stmt, 22));
+    spell.upcast_targets = sqlite3_column_int(stmt, 23);
+    spell.combat_save_advantage = sqlite3_column_int(stmt, 24) != 0;
     return spell;
 }
 
 // Runs a spell query (selecting kSpellColumns, optionally binding one int)
-// and fills each spell's class_names from ClassSpells.
+// and fills each spell's class_names (ClassSpells) and effects (SpellEffects).
 std::vector<Spell> run_spell_query(sqlite3* db, const std::string& sql, int bind_id = -1) {
     std::vector<Spell> spells;
     {
@@ -151,10 +153,29 @@ std::vector<Spell> run_spell_query(sqlite3* db, const std::string& sql, int bind
     Statement classes(db,
         "SELECT Classes.ClassName FROM ClassSpells JOIN Classes ON Classes.ClassID = ClassSpells.ClassID "
         "WHERE ClassSpells.SpellID = ? ORDER BY Classes.ClassName;");
+    Statement effects(db,
+        "SELECT EffectTrigger, Kind, ConditionName, Amount, Duration, Rounds, UntilUsed, Label FROM SpellEffects "
+        "WHERE SpellID = ? ORDER BY SpellEffectID;");
     for (auto& spell : spells) {
         sqlite3_reset(classes.get());
         sqlite3_bind_int(classes.get(), 1, spell.spell_id);
         while (sqlite3_step(classes.get()) == SQLITE_ROW) spell.class_names.push_back(column_text(classes.get(), 0));
+
+        sqlite3_reset(effects.get());
+        sqlite3_bind_int(effects.get(), 1, spell.spell_id);
+        while (sqlite3_step(effects.get()) == SQLITE_ROW) {
+            SpellEffectSpec effect;
+            effect.trigger = spell_effect_trigger_from_name(column_text(effects.get(), 0));
+            effect.kind = effect_kind_from_name(column_text(effects.get(), 1));
+            std::string condition = column_text(effects.get(), 2);
+            if (!condition.empty()) effect.condition = condition_from_name(condition);
+            effect.amount = sqlite3_column_int(effects.get(), 3);
+            effect.duration = spell_effect_duration_from_name(column_text(effects.get(), 4));
+            effect.rounds = sqlite3_column_int(effects.get(), 5);
+            effect.until_used = sqlite3_column_int(effects.get(), 6) != 0;
+            effect.label = column_text(effects.get(), 7);
+            spell.effects.push_back(std::move(effect));
+        }
     }
     return spells;
 }
@@ -256,7 +277,8 @@ std::vector<Monster> Repository::get_monsters() const {
     Statement stmt(db_,
         "SELECT MonsterID, Name, ArmorClass, HitPoints, Strength, Dexterity, Constitution, "
         "Intelligence, Wisdom, Charisma, ChallengeRating, AttackName, AttackBonus, "
-        "DamageDiceCount, DamageDiceSides, DamageBonus FROM Monsters ORDER BY ChallengeRating, Name;");
+        "DamageDiceCount, DamageDiceSides, DamageBonus, OnHitSaveAbility, OnHitSaveDC, OnHitCondition "
+        "FROM Monsters ORDER BY ChallengeRating, Name;");
     std::vector<Monster> monsters;
     while (sqlite3_step(stmt.get()) == SQLITE_ROW) {
         Monster monster;
@@ -278,6 +300,11 @@ std::vector<Monster> Repository::get_monsters() const {
         monster.damage_dice_count = sqlite3_column_int(stmt.get(), 13);
         monster.damage_dice_sides = sqlite3_column_int(stmt.get(), 14);
         monster.damage_bonus = sqlite3_column_int(stmt.get(), 15);
+        std::string save_ability = column_text(stmt.get(), 16);
+        if (!save_ability.empty()) monster.on_hit_save_ability = ability_from_name(save_ability);
+        monster.on_hit_save_dc = sqlite3_column_int(stmt.get(), 17);
+        std::string condition = column_text(stmt.get(), 18);
+        if (!condition.empty()) monster.on_hit_condition = condition_from_name(condition);
         monsters.push_back(std::move(monster));
     }
     return monsters;

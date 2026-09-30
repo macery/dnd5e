@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 
+#include "dnd/effects.hpp"
 #include "dnd/rules.hpp"
 
 namespace dnd {
@@ -14,7 +15,40 @@ enum class SpellResolution {
     Save,     // each target saves vs the caster's spell save DC
     AutoHit,  // every projectile hits (Magic Missile)
     Heal,     // restores HP to a friendly target
-    Utility,  // no automated effect yet: casting just spends the slot and shows the description
+    Utility,    // no automated effect yet: casting just spends the slot and shows the description
+    Buff,       // no roll: applies its effects to allies or the caster (Bless, Shield of Faith)
+    Stabilize,  // a dying creature becomes stable (Spare the Dying)
+};
+
+// When a spell's effect lands (SpellEffects.Trigger).
+enum class SpellEffectTrigger {
+    OnHit,         // Attack spells, on each target hit
+    OnFailedSave,  // Save spells, on each target that fails
+    OnCastTarget,  // on each chosen target when cast (Buff spells)
+    OnCastSelf,    // on the caster when cast
+};
+
+// How long a spell's effect lasts, relative to the caster or target
+// (SpellEffects.Duration). Turned into an EffectDuration when applied.
+enum class SpellEffectDuration {
+    UntilRemoved,
+    Rounds,                  // `rounds`, counted on the caster's turns (1 minute = 10)
+    UntilStartOfCasterTurn,  // Ray of Frost, Chill Touch
+    UntilEndOfCasterTurn,    // Guiding Bolt: through the end of the caster's next turn
+    UntilStartOfTargetTurn,
+    UntilEndOfTargetTurn,    // Vicious Mockery: through the end of the target's next turn
+};
+
+// One effect a spell applies (a SpellEffects row).
+struct SpellEffectSpec {
+    SpellEffectTrigger trigger = SpellEffectTrigger::OnHit;
+    EffectKind kind = EffectKind::Condition;
+    Condition condition = Condition::Prone;  // for EffectKind::Condition
+    int amount = 0;
+    SpellEffectDuration duration = SpellEffectDuration::UntilRemoved;
+    int rounds = 0;
+    bool until_used = false;
+    std::string label;
 };
 
 enum class CastingTime { Action, BonusAction, Reaction };
@@ -54,7 +88,12 @@ struct Spell {
     int max_targets = 1;  // creatures one cast can affect (area spells: see docs)
     int upcast_dice = 0;         // extra dice per slot level above `level`
     int upcast_projectiles = 0;  // extra projectiles per slot level above `level`
+    int upcast_targets = 0;      // extra targets per slot level above `level` (Bless)
     CantripScaling cantrip_scaling = CantripScaling::Dice;
+    // Save spells: targets save with advantage in combat ("if you or your
+    // companions are fighting it", Charm Person).
+    bool combat_save_advantage = false;
+    std::vector<SpellEffectSpec> effects;  // SpellEffects rows
 
     std::vector<std::string> class_names;  // classes whose list includes it (ClassSpells)
 };

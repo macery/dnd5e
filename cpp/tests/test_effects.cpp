@@ -1,5 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 
+#include <stdexcept>
 #include <vector>
 
 #include "dnd/effects.hpp"
@@ -209,4 +210,29 @@ TEST_CASE("concentration save DC", "[effects]") {
     REQUIRE(dnd::concentration_save_dc(21) == 10);
     REQUIRE(dnd::concentration_save_dc(22) == 11);
     REQUIRE(dnd::concentration_save_dc(40) == 20);
+}
+
+TEST_CASE("condition and effect kind names round-trip", "[effects]") {
+    for (int i = 0; i < dnd::kConditionCount; ++i) {
+        auto c = static_cast<Condition>(i);
+        REQUIRE(dnd::condition_from_name(dnd::condition_name(c)) == c);
+    }
+    for (auto kind : {EffectKind::Condition, EffectKind::Dodging, EffectKind::AttackBonusDice,
+                      EffectKind::SaveBonusDice, EffectKind::ArmorClassBonus, EffectKind::ExtraWeaponDamageDice,
+                      EffectKind::AdvantageOnNextAttackAgainst, EffectKind::AdvantageOnAttacksAgainst,
+                      EffectKind::DisadvantageOnNextAttack, EffectKind::CantRegainHitPoints,
+                      EffectKind::SpeedReduction}) {
+        REQUIRE(dnd::effect_kind_from_name(dnd::effect_kind_name(kind)) == kind);
+    }
+    REQUIRE_THROWS_AS(dnd::condition_from_name("Sleepy"), std::invalid_argument);
+    REQUIRE_THROWS_AS(dnd::effect_kind_from_name("Flying"), std::invalid_argument);
+}
+
+TEST_CASE("ability check modifiers", "[effects]") {
+    std::vector<ActiveEffect> effects = {condition(0, Condition::Poisoned), condition(1, Condition::Frightened, 2)};
+    REQUIRE(dnd::ability_check_modifiers(effects, 0, kAllAlive).mode() == RollMode::Disadvantage);
+    REQUIRE(dnd::ability_check_modifiers(effects, 1, kAllAlive).mode() == RollMode::Disadvantage);
+    std::vector<bool> source_down = {true, true, false, true};
+    REQUIRE(dnd::ability_check_modifiers(effects, 1, source_down).mode() == RollMode::Normal);
+    REQUIRE(dnd::ability_check_modifiers(effects, 3, kAllAlive).mode() == RollMode::Normal);
 }

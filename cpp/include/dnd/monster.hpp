@@ -2,6 +2,9 @@
 
 #include <string>
 
+#include "dnd/effects.hpp"
+#include "dnd/rules.hpp"
+
 namespace dnd {
 
 // A sample-data stat block, seeded read-only content -- foundation for the
@@ -27,6 +30,12 @@ struct Monster {
     int damage_dice_count = 1;
     int damage_dice_sides = 4;
     int damage_bonus = 0;
+
+    // Some attacks add an effect on a hit: the target makes a save
+    // (on_hit_save_dc > 0) or gains on_hit_condition. Wolf: DC 11 STR or prone.
+    Ability on_hit_save_ability = Ability::Strength;
+    int on_hit_save_dc = 0;  // 0 = no on-hit effect
+    Condition on_hit_condition = Condition::Prone;
 };
 
 }  // namespace dnd

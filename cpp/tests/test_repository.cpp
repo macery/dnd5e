@@ -63,6 +63,19 @@ TEST_CASE("get_monsters returns the seeded sample enemies", "[repository]") {
     REQUIRE(goblin->damage_bonus == 2);
 }
 
+TEST_CASE("the Wolf's bite can knock a target prone", "[repository]") {
+    dnd::Repository repo(":memory:");
+    for (const auto& monster : repo.get_monsters()) {
+        if (monster.name == "Wolf") {
+            REQUIRE(monster.on_hit_save_dc == 11);
+            REQUIRE(monster.on_hit_save_ability == dnd::Ability::Strength);
+            REQUIRE(monster.on_hit_condition == dnd::Condition::Prone);
+        } else {
+            REQUIRE(monster.on_hit_save_dc == 0);
+        }
+    }
+}
+
 TEST_CASE("get_weapons returns the seeded weapon list", "[repository]") {
     dnd::Repository repo(":memory:");
 

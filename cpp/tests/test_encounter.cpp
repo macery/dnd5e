@@ -6,6 +6,7 @@
 
 #include "dnd/encounter.hpp"
 #include "dnd/repository.hpp"
+#include "dnd/spellcasting.hpp"
 
 namespace {
 
@@ -705,4 +706,273 @@ TEST_CASE("a charmed monster won't attack its charmer; harming it breaks the cha
     auto lines = logs(encounter.take_events());
     REQUIRE(contains(lines, "    Goblin is no longer charmed."));
     REQUIRE(encounter.effects().empty());
+}
+
+// --- Effects system phase 3: spells and monsters apply effects ---------------
+
+namespace {
+// Aria (idx 0), Zanna (idx 1), Goblin (idx 2). Initiative Aria 10+1, Zanna 20+2,
+// Goblin 1+2: Zanna acts first, then Aria, then the Goblin.
+struct PartyVsGoblin {
+    Fixture f;
+    ScriptedRandomSource rolls;
+    dnd::Dice dice;
+    dnd::Encounter encounter;
+
+    PartyVsGoblin(std::vector<int> after_initiative, std::vector<std::string> zanna_spells,
+                  std::vector<dnd::InventoryEntry> zanna_inventory = {})
+        : rolls(with_initiative(std::move(after_initiative))), dice(rolls), encounter(f.encounter(dice)) {
+        std::vector<dnd::Spell> spells;
+        for (const auto& name : zanna_spells) spells.push_back(f.spell(name));
+        encounter.add_character(f.fighter(), {}, {});
+        encounter.add_character(f.wizard(), spells, std::move(zanna_inventory));
+        encounter.add_monsters(f.monster("Goblin"), 1);
+        encounter.roll_initiative();
+        encounter.take_events();
+    }
+
+    static std::vector<int> with_initiative(std::vector<int> rest) {
+        std::vector<int> all = {10, 20, 1};
+        all.insert(all.end(), rest.begin(), rest.end());
+        return all;
+    }
+
+    int id(const std::string& spell) { return f.spell(spell).spell_id; }
+};
+}  // namespace
+
+TEST_CASE("Guiding Bolt: the next attack against the target has advantage", "[encounter][effects][spells]") {
+    SECTION("used by the next attack") {
+        // Guiding Bolt d20 15 hits AC 15; 4d6 = 4. Aria: advantage d20s 2 and 17, d8 = 1.
+        PartyVsGoblin fight({15, 1, 1, 1, 1, 2, 17, 1}, {"Guiding Bolt"});
+        REQUIRE(fight.encounter.cast_spell(fight.id("Guiding Bolt"), 1, {2}));
+        auto lines = logs(fight.encounter.take_events());
+        REQUIRE(contains(lines, "    Goblin: d20(15) +5 -> hit for 4; Guiding Bolt. Now 3/7 HP."));
+
+        fight.encounter.next_turn();  // Zanna's turn ends, but the effect lasts until the end of her *next* turn
+        REQUIRE(dnd::has_effect(fight.encounter.effects(), 2, dnd::EffectKind::AdvantageOnNextAttackAgainst));
+        REQUIRE(fight.encounter.attack(2, 5, 1, 8, 3));
+        lines = logs(fight.encounter.take_events());
+        REQUIRE(contains(lines, "Aria attacks Goblin: d20(17) +5 with advantage (guiding bolt) -> hit for 4."));
+    }
+
+    SECTION("expires at the end of the caster's next turn") {
+        // Guiding Bolt hits for 4; Goblin picks Aria and rolls a natural 1.
+        PartyVsGoblin fight({15, 1, 1, 1, 1, 1, 1}, {"Guiding Bolt"});
+        fight.encounter.cast_spell(fight.id("Guiding Bolt"), 1, {2});
+        fight.encounter.next_turn();  // -> Aria
+        fight.encounter.dash();
+        fight.encounter.next_turn();  // -> Goblin misses, -> Zanna
+        REQUIRE(fight.encounter.current()->name == "Zanna");
+        REQUIRE(dnd::has_effect(fight.encounter.effects(), 2, dnd::EffectKind::AdvantageOnNextAttackAgainst));
+        fight.encounter.dash();
+        fight.encounter.take_events();
+        fight.encounter.next_turn();  // end of Zanna's next turn
+        REQUIRE(contains(logs(fight.encounter.take_events()), "Guiding Bolt on Goblin ends."));
+        REQUIRE(fight.encounter.effects().empty());
+    }
+}
+
+TEST_CASE("Bless: bonus dice for allies, lost with concentration", "[encounter][effects][spells]") {
+    // Bless (no roll). Aria: Bless d4 3, d20 10, d8 1. Goblin: picks Zanna (2 of 2), d20 15 hits
+    // AC 12, 1d6 = 1 (+2 = 3). Zanna's DC 10 CON save: d20 2, Bless d4 1 -> 3, fails.
+    PartyVsGoblin fight({3, 10, 1, 2, 15, 1, 2, 1}, {"Bless"});
+    auto& encounter = fight.encounter;
+
+    REQUIRE(encounter.cast_spell(fight.id("Bless"), 1, {0, 1}));
+    auto lines = logs(encounter.take_events());
+    REQUIRE(contains(lines, "    Aria: Blessed."));
+    REQUIRE(contains(lines, "    Zanna: Blessed."));
+    REQUIRE(encounter.status_text(0) == "Up (Blessed, Blessed)");  // attack and save dice
+    REQUIRE(encounter.combatants()[1].concentration == "Bless");
+
+    encounter.next_turn();
+    REQUIRE(encounter.attack(2, 5, 1, 8, 3));
+    REQUIRE(contains(logs(encounter.take_events()), "Aria attacks Goblin: d20(10) +5 +1d4(3) -> hit for 4. Goblin is now 3/7 HP."));
+
+    encounter.next_turn();  // the Goblin hits Zanna, who loses concentration
+    lines = logs(encounter.take_events());
+    REQUIRE(contains(lines, "    Zanna makes a DC 10 concentration save: CON save d20(2) +0 +1d4(1) -> fails."));
+    REQUIRE(contains(lines, "    Zanna stops concentrating on Bless (failed the save)."));
+    REQUIRE(encounter.effects().empty());
+    REQUIRE(encounter.status_text(0) == "Up");
+
+    SECTION("Bless takes one more creature per slot level above 1st") {
+        auto bless = fight.f.spell("Bless");
+        REQUIRE(dnd::spell_max_targets(bless, 1, 1) == 3);
+        REQUIRE(dnd::spell_max_targets(bless, 1, 2) == 4);
+    }
+}
+
+TEST_CASE("Vicious Mockery: disadvantage on the target's next attack", "[encounter][effects][spells]") {
+    // 1d4 = 1; Goblin WIS save d20 5 (-1) fails. Later the Goblin picks Aria; disadvantage d20s 18 and 3.
+    PartyVsGoblin fight({1, 5, 1, 18, 3}, {"Vicious Mockery"});
+    auto& encounter = fight.encounter;
+    REQUIRE(encounter.cast_spell(fight.id("Vicious Mockery"), 0, {2}));
+    REQUIRE(contains(logs(encounter.take_events()),
+                     "    Goblin: WIS save d20(5) -1 vs DC 13 -> failed, takes 1; Vicious Mockery. Now 6/7 HP."));
+    encounter.next_turn();
+    encounter.dash();
+    encounter.next_turn();
+    auto lines = logs(encounter.take_events());
+    REQUIRE(contains(lines, "Goblin attacks Aria: d20(3) +4 with disadvantage (vicious mockery) -> miss."));
+    REQUIRE_FALSE(dnd::has_effect(encounter.effects(), 2, dnd::EffectKind::DisadvantageOnNextAttack));
+}
+
+TEST_CASE("Charm Person, Faerie Fire, Shield of Faith, Divine Favor", "[encounter][effects][spells]") {
+    SECTION("Charm Person: save with advantage; charmed monsters won't attack the charmer") {
+        PartyVsGoblin fight({3, 4}, {"Charm Person"});  // advantage d20s 3 and 4 -> 4 - 1 = 3, fails
+        REQUIRE(fight.encounter.cast_spell(fight.id("Charm Person"), 1, {2}));
+        auto lines = logs(fight.encounter.take_events());
+        REQUIRE(contains(lines, "    Goblin: WIS save d20(4) -1 with advantage (in combat with the caster) vs DC 13 "
+                                "-> failed; Charmed. Now 7/7 HP."));
+        REQUIRE(dnd::has_condition(fight.encounter.effects(), 2, dnd::Condition::Charmed));
+    }
+
+    SECTION("Faerie Fire: no damage; attacks against a failed target have advantage") {
+        PartyVsGoblin fight({1}, {"Faerie Fire"});  // DEX save d20 1 fails
+        REQUIRE(fight.encounter.cast_spell(fight.id("Faerie Fire"), 1, {2}));
+        auto lines = logs(fight.encounter.take_events());
+        REQUIRE(contains(lines, "    Goblin: DEX save d20(1) +2 vs DC 13 -> failed; Faerie Fire. Now 7/7 HP."));
+        REQUIRE_FALSE(contains(lines, "Damage roll"));
+        std::vector<bool> alive(3, true);
+        auto mods = dnd::attack_roll_modifiers(fight.encounter.effects(), 0, 2, true, alive);
+        REQUIRE(mods.mode() == dnd::RollMode::Advantage);
+        REQUIRE(fight.encounter.combatants()[1].concentration == "Faerie Fire");
+    }
+
+    SECTION("Shield of Faith: +2 AC") {
+        PartyVsGoblin fight({}, {"Shield of Faith"});
+        REQUIRE(fight.encounter.cast_spell(fight.id("Shield of Faith"), 1, {0}));
+        REQUIRE(fight.encounter.armor_class(0) == 18);
+    }
+
+    SECTION("Divine Favor: self only, no target needed") {
+        PartyVsGoblin fight({}, {"Divine Favor"});
+        auto favor = fight.f.spell("Divine Favor");
+        REQUIRE(fight.encounter.spell_target_candidates(favor).empty());
+        REQUIRE(fight.encounter.cast_spell(favor.spell_id, 1, {}));
+        REQUIRE(contains(logs(fight.encounter.take_events()), "    Zanna: Divine Favor."));
+        REQUIRE(dnd::has_effect(fight.encounter.effects(), 1, dnd::EffectKind::ExtraWeaponDamageDice));
+        REQUIRE(fight.encounter.status_text(1) == "Up (Divine Favor, Concentrating: Divine Favor)");
+    }
+
+    SECTION("a new concentration spell ends the old one") {
+        PartyVsGoblin fight({}, {"Shield of Faith", "Divine Favor"});
+        fight.encounter.cast_spell(fight.id("Shield of Faith"), 1, {0});
+        fight.encounter.take_events();
+        // Next round, Zanna switches to Divine Favor.
+        fight.encounter.next_turn();
+        fight.encounter.dash();
+        fight.encounter.next_turn();  // Goblin (rolls repeat the last scripted value: 1s)
+        fight.encounter.take_events();
+        REQUIRE(fight.encounter.current()->name == "Zanna");
+        REQUIRE(fight.encounter.cast_spell(fight.id("Divine Favor"), 1, {}));
+        auto lines = logs(fight.encounter.take_events());
+        REQUIRE(contains(lines, "    Zanna stops concentrating on Shield of Faith (starts concentrating on Divine Favor)."));
+        REQUIRE(fight.encounter.armor_class(0) == 16);  // Shield of Faith is gone
+        REQUIRE(fight.encounter.combatants()[1].concentration == "Divine Favor");
+    }
+}
+
+TEST_CASE("a Wolf's bite can knock its target prone", "[encounter][effects]") {
+    Fixture f;
+    // Aria 1+1, Wolf 20+2. Wolf: pick, d20 15 hits AC 16, 2d4 = 1 + 1 (+2); STR save d20 2 (+3) vs 11 fails.
+    ScriptedRandomSource rolls({1, 20, 1, 15, 1, 1, 2});
+    dnd::Dice dice(rolls);
+    auto encounter = f.encounter(dice);
+    encounter.add_character(f.fighter(), {}, {});
+    encounter.add_monsters(f.monster("Wolf"), 1);
+    encounter.roll_initiative();
+    auto lines = logs(encounter.take_events());
+    REQUIRE(contains(lines, "Wolf attacks Aria: d20(15) +4 -> hit for 4. Aria is now 8/12 HP."));
+    REQUIRE(contains(lines, "    Aria: STR save d20(2) +3 vs DC 11 -> failed, prone."));
+    REQUIRE(contains(lines, "Aria stands up."));  // at the start of her turn
+    REQUIRE(encounter.effects().empty());
+}
+
+TEST_CASE("stabilizing a dying ally", "[encounter][effects]") {
+    Fixture f;
+    auto setup = [&f](dnd::Dice& dice, std::vector<dnd::Spell> spells, std::vector<dnd::InventoryEntry> inventory) {
+        auto encounter = f.encounter(dice);
+        auto aria = f.fighter();
+        aria.current_hp = 3;
+        encounter.add_character(aria, {}, {});
+        encounter.add_character(f.wizard(), std::move(spells), std::move(inventory));
+        encounter.add_monsters(f.monster("Orc"), 1);
+        encounter.roll_initiative();  // the Orc drops Aria; Zanna's turn
+        encounter.take_events();
+        return encounter;
+    };
+
+    SECTION("a successful Medicine check") {
+        auto script = orc_drops_aria();
+        script.push_back(12);
+        ScriptedRandomSource rolls(script);
+        dnd::Dice dice(rolls);
+        auto encounter = setup(dice, {}, {});
+        REQUIRE(encounter.stabilize_targets() == std::vector<int>{0});
+        REQUIRE(encounter.stabilize(0));
+        REQUIRE(contains(logs(encounter.take_events()),
+                         "Zanna tries to stabilize Aria: WIS (Medicine) check d20(12) +0 vs DC 10 -> success, Aria is stable."));
+        REQUIRE(encounter.status_text(0) == "Stable");
+        REQUIRE(encounter.stabilize_targets().empty());
+    }
+
+    SECTION("a failed check leaves them dying") {
+        auto script = orc_drops_aria();
+        script.push_back(5);
+        ScriptedRandomSource rolls(script);
+        dnd::Dice dice(rolls);
+        auto encounter = setup(dice, {}, {});
+        REQUIRE(encounter.stabilize(0));
+        REQUIRE(contains(logs(encounter.take_events()), "-> failure."));
+        REQUIRE(encounter.status_text(0) == "Dying (✓0 ✗0)");
+    }
+
+    SECTION("a Healer's Kit makes it automatic") {
+        ScriptedRandomSource rolls(orc_drops_aria());
+        dnd::Dice dice(rolls);
+        auto encounter = setup(dice, {}, {{f.item("Healer's Kit"), 1}});
+        REQUIRE(encounter.has_healers_kit());
+        REQUIRE(encounter.stabilize(0));
+        REQUIRE(contains(logs(encounter.take_events()), "Zanna uses a Healer's Kit on Aria: Aria is stable."));
+        REQUIRE(encounter.status_text(0) == "Stable");
+    }
+
+    SECTION("Spare the Dying") {
+        ScriptedRandomSource rolls(orc_drops_aria());
+        dnd::Dice dice(rolls);
+        auto spare = f.spell("Spare the Dying");
+        auto encounter = setup(dice, {spare}, {});
+        REQUIRE(encounter.spell_target_candidates(spare) == std::vector<int>{0});
+        REQUIRE(encounter.cast_spell(spare.spell_id, 0, {0}));
+        REQUIRE(contains(logs(encounter.take_events()), "    Aria: stable."));
+        REQUIRE(encounter.status_text(0) == "Stable");
+    }
+}
+
+TEST_CASE("effects that block healing", "[encounter][effects]") {
+    Fixture f;
+    ScriptedRandomSource rolls({20, 1, 3, 3});
+    dnd::Dice dice(rolls);
+    auto encounter = f.encounter(dice);
+    auto aria = f.fighter();
+    aria.current_hp = 2;
+    auto potion = f.item("Potion of Healing");
+    encounter.add_character(aria, {}, {{potion, 1}});
+    encounter.add_monsters(f.monster("Goblin"), 1);
+    encounter.roll_initiative();
+    encounter.take_events();
+
+    dnd::ActiveEffect chill;
+    chill.kind = dnd::EffectKind::CantRegainHitPoints;
+    chill.target = 0;
+    chill.label = "Chill Touch";
+    encounter.add_effect(chill);
+
+    REQUIRE(encounter.drink_potion(potion.item_id));
+    auto lines = logs(encounter.take_events());
+    REQUIRE(lines.at(0) == "Aria drinks a Potion of Healing and regains 0 HP (now 2/12).");
+    REQUIRE(lines.at(1) == "    Aria can't regain hit points right now.");
 }

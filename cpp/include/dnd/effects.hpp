@@ -30,6 +30,8 @@ enum class Condition {
 constexpr int kConditionCount = 14;
 
 const char* condition_name(Condition condition);
+// Inverse of condition_name. Throws std::invalid_argument on unknown text.
+Condition condition_from_name(const std::string& name);
 // A short, beginner-facing summary of the rules, for tooltips.
 const char* condition_description(Condition condition);
 
@@ -49,6 +51,11 @@ enum class EffectKind {
     SpeedReduction,               // amount feet; shown only (Ray of Frost)
 };
 
+// Stable text names for storing effect kinds (SpellEffects.Kind): the
+// enumerator's own name, e.g. "AttackBonusDice".
+const char* effect_kind_name(EffectKind kind);
+EffectKind effect_kind_from_name(const std::string& name);
+
 enum class DurationKind {
     UntilRemoved,      // until something ends it (e.g. Unconscious while dying)
     Rounds,            // `rounds` left, counted down at the start of the source's turn
@@ -61,6 +68,11 @@ struct EffectDuration {
     int rounds = 0;
     int participant = -1;
     bool until_used = false;  // also ends the first time it affects a roll
+    // UntilEndOfTurn only: the effect was applied during `participant`'s own
+    // turn, so it lasts through the end of their *next* turn instead of
+    // ending when the current one does (Guiding Bolt: "until the end of your
+    // next turn"). Cleared, rather than expiring, at the first turn end.
+    bool skip_current_turn = false;
 };
 
 // The target repeats this save at the end of each of its turns; success ends the effect.
@@ -107,6 +119,10 @@ struct RollModifiers {
 RollModifiers attack_roll_modifiers(const std::vector<ActiveEffect>& effects, int attacker, int target, bool melee,
                                     const std::vector<bool>& alive);
 RollModifiers saving_throw_modifiers(const std::vector<ActiveEffect>& effects, int target, Ability ability);
+// Ability checks (e.g. a Medicine check to stabilize): disadvantage while
+// poisoned or frightened (source alive).
+RollModifiers ability_check_modifiers(const std::vector<ActiveEffect>& effects, int target,
+                                      const std::vector<bool>& alive);
 
 // --- Death saving throws (PHB ch. 9) -----------------------------------------
 

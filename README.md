@@ -198,8 +198,9 @@ Phases 1 (core and data) and 2 (UI) are done; see [docs/magic-system.md](docs/ma
 - [x] **Spell slots**: full, half, and pact slot tables for levels 1–20, spent by casting. Long Rest restores every slot; Short Rest restores Warlock pact slots.
 - [x] **Known/prepared spells**: the wizard's "Choose Spells" step, the Spellbook dialog (learn, forget, cast out of combat), and a Spellcasting section on the character sheet. Prepared casters keep the spells they picked; re-preparing after a long rest is phase 3.
 - [x] **Starter spell list**: 18 spells with automated effects (migration 11), plus 24 *Utility* spells with no automated effect yet (migration 12), so every caster can fill its PHB level-1 picks. *Shield* moves to phase 3 with reactions.
-- [x] **Cast a Spell in combat**: pick a spell, a slot level, and targets. Monsters make saving throws with their ability modifiers, and everything is logged. Dodge doesn't affect spell attacks or DEX saves yet.
-- [ ] **Concentration**: the engine is done. One spell at a time; damage forces a CON save against DC max(10, half the damage); dropping to 0 or dying ends it. Still to do: spells that actually start concentration (effects phase 3).
+- [x] **Cast a Spell in combat**: pick a spell, a slot level, and targets. Monsters make saving throws with their ability modifiers, and everything is logged. Conditions, Dodge, and *Bless* apply to spell attacks and saves.
+- [x] **Spell side effects**: *Bless*, *Shield of Faith*, *Divine Favor*, *Guiding Bolt*, *Ray of Frost*, *Chill Touch*, *Vicious Mockery*, *Faerie Fire*, *Charm Person*, and *Spare the Dying* do what the PHB says (`SpellEffects`, effects phase 3).
+- [x] **Concentration**: one spell at a time (casting another ends the first); damage forces a CON save against DC max(10, half the damage); dropping to 0 or dying ends it, along with the spell's effects. *Bless*, *Shield of Faith*, *Divine Favor*, and *Faerie Fire* use it.
 - [x] **Scaling**: cantrips get extra dice (or extra beams, for Eldritch Blast) at levels 5, 11, and 17, and casting with a higher-level slot adds dice or darts.
 - [ ] **Magic items**: +1 weapons and armor, wands, scrolls, and so on, built on top of the inventory system.
 
@@ -228,10 +229,10 @@ Phases 1 (core and data) and 2 (UI) are done; see [docs/magic-system.md](docs/ma
 ### Combat
 
 - [ ] **Effects system**: designed in [docs/effects-system.md](docs/effects-system.md). It covers the next two items, concentration, and spell side effects.
-  - **Done:** step zero (combat logic in a tested `dnd::Encounter`) and phase 2 (the core effects engine).
-  - **Next:** phase 3, the data that makes spells and monsters apply effects.
-- [ ] **Conditions**: all 14 PHB conditions are wired into advantage, disadvantage, auto-fails, auto-crits, and skipped turns (`dnd/effects`). Still to do: something that applies them in play (phase 3: spells and the Wolf's knock-prone) and their tooltips in the UI (phase 4).
-- [x] **Death saving throws**: characters at 0 HP fall unconscious and roll death saves each turn. A natural 1 counts as two failures, and a natural 20 brings them back with 1 HP. Massive damage kills outright. Healing revives them, and the fight's end stabilizes them. Monsters ignore the dying. Still to do: the Stabilize action (phase 3) and death save pips in the UI (phase 4).
+  - **Done:** step zero (combat logic in a tested `dnd::Encounter`), phase 2 (the core effects engine), and phase 3 (spells and monsters applying effects, plus the Stabilize action).
+  - **Next:** phase 4, UI polish: condition tooltips, death save pips, and showing the dead on the main window and sheet.
+- [ ] **Conditions**: all 14 PHB conditions are wired into advantage, disadvantage, auto-fails, auto-crits, and skipped turns (`dnd/effects`). They're applied in play by *Charm Person*, the Wolf's knock-prone, and dropping to 0 HP. Still to do: tooltips in the UI (phase 4), and more sources as monsters and spells are added.
+- [x] **Death saving throws**: characters at 0 HP fall unconscious and roll death saves each turn. A natural 1 counts as two failures, and a natural 20 brings them back with 1 HP. Massive damage kills outright. Healing revives them, and the fight's end stabilizes them. Monsters ignore the dying. A **Stabilize** action (Medicine check, or automatic with a Healer's Kit) and *Spare the Dying* stabilize the dying. Still to do: death save pips in the UI (phase 4).
 - [ ] **Revival**: bring dead characters back the 2014 PHB way: *Revivify*, *Raise Dead*, *Reincarnate*, *Resurrection*, *True Resurrection*, or a temple's spellcasting service. It needs the spells, their material components, currency, and time tracking; see the effects design doc's Decisions.
 - [ ] **More actions**: Disengage, Help, Hide, Ready, and Use an Object (for potions).
 - [ ] **Monsters with several attacks**: Multiattack and more than one attack per stat block.

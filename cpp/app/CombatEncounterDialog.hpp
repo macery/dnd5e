@@ -53,6 +53,7 @@ private:
     void refreshParticipantTable();
     void refreshTargetCombo();
     void refreshPotionCombo();
+    void refreshStabilizeCombo();
     void updateAttackFieldsForCurrentTurn();
     void updateActionControlsVisibility();
 
@@ -89,6 +90,8 @@ private:
     QComboBox* actionCombo_ = nullptr;
     QComboBox* targetCombo_ = nullptr;
     QComboBox* potionCombo_ = nullptr;
+    QComboBox* stabilizeCombo_ = nullptr;
+    QLabel* stabilizeInfoLabel_ = nullptr;
     QComboBox* spellCombo_ = nullptr;
     QComboBox* spellSlotCombo_ = nullptr;
     QListWidget* spellTargetList_ = nullptr;

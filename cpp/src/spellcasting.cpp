@@ -1,6 +1,7 @@
 #include "dnd/spellcasting.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <stdexcept>
 
 #include "dnd/combat.hpp"
@@ -60,13 +61,16 @@ const char* spell_resolution_name(SpellResolution resolution) {
         case SpellResolution::AutoHit: return "AutoHit";
         case SpellResolution::Heal: return "Heal";
         case SpellResolution::Utility: return "Utility";
+        case SpellResolution::Buff: return "Buff";
+        case SpellResolution::Stabilize: return "Stabilize";
     }
     throw std::invalid_argument("unknown spell resolution");
 }
 
 SpellResolution spell_resolution_from_name(const std::string& name) {
     for (auto resolution : {SpellResolution::Attack, SpellResolution::Save, SpellResolution::AutoHit,
-                            SpellResolution::Heal, SpellResolution::Utility}) {
+                            SpellResolution::Heal, SpellResolution::Utility, SpellResolution::Buff,
+                            SpellResolution::Stabilize}) {
         if (name == spell_resolution_name(resolution)) return resolution;
     }
     throw std::invalid_argument("unknown spell resolution: " + name);
@@ -86,6 +90,45 @@ CastingTime casting_time_from_name(const std::string& name) {
         if (name == casting_time_name(casting_time)) return casting_time;
     }
     throw std::invalid_argument("unknown casting time: " + name);
+}
+
+const char* spell_effect_trigger_name(SpellEffectTrigger trigger) {
+    switch (trigger) {
+        case SpellEffectTrigger::OnHit: return "OnHit";
+        case SpellEffectTrigger::OnFailedSave: return "OnFailedSave";
+        case SpellEffectTrigger::OnCastTarget: return "OnCastTarget";
+        case SpellEffectTrigger::OnCastSelf: return "OnCastSelf";
+    }
+    throw std::invalid_argument("unknown spell effect trigger");
+}
+
+SpellEffectTrigger spell_effect_trigger_from_name(const std::string& name) {
+    for (auto trigger : {SpellEffectTrigger::OnHit, SpellEffectTrigger::OnFailedSave, SpellEffectTrigger::OnCastTarget,
+                         SpellEffectTrigger::OnCastSelf}) {
+        if (name == spell_effect_trigger_name(trigger)) return trigger;
+    }
+    throw std::invalid_argument("unknown spell effect trigger: " + name);
+}
+
+const char* spell_effect_duration_name(SpellEffectDuration duration) {
+    switch (duration) {
+        case SpellEffectDuration::UntilRemoved: return "UntilRemoved";
+        case SpellEffectDuration::Rounds: return "Rounds";
+        case SpellEffectDuration::UntilStartOfCasterTurn: return "UntilStartOfCasterTurn";
+        case SpellEffectDuration::UntilEndOfCasterTurn: return "UntilEndOfCasterTurn";
+        case SpellEffectDuration::UntilStartOfTargetTurn: return "UntilStartOfTargetTurn";
+        case SpellEffectDuration::UntilEndOfTargetTurn: return "UntilEndOfTargetTurn";
+    }
+    throw std::invalid_argument("unknown spell effect duration");
+}
+
+SpellEffectDuration spell_effect_duration_from_name(const std::string& name) {
+    for (auto duration : {SpellEffectDuration::UntilRemoved, SpellEffectDuration::Rounds,
+                          SpellEffectDuration::UntilStartOfCasterTurn, SpellEffectDuration::UntilEndOfCasterTurn,
+                          SpellEffectDuration::UntilStartOfTargetTurn, SpellEffectDuration::UntilEndOfTargetTurn}) {
+        if (name == spell_effect_duration_name(duration)) return duration;
+    }
+    throw std::invalid_argument("unknown spell effect duration: " + name);
 }
 
 const char* cantrip_scaling_name(CantripScaling scaling) {
@@ -295,7 +338,77 @@ int spell_dice_count(const Spell& spell, int caster_level, int slot_level) {
 
 int spell_max_targets(const Spell& spell, int caster_level, int slot_level) {
     int projectiles = spell_projectiles(spell, caster_level, slot_level);
-    return projectiles > 1 ? projectiles : spell.max_targets;
+    if (projectiles > 1) return projectiles;
+    return spell.max_targets + spell.upcast_targets * std::max(0, slot_level - spell.level);
+}
+
+std::string spell_summary(const Spell& spell) {
+    std::string dice = std::to_string(spell.dice_count) + "d" + std::to_string(spell.dice_sides);
+    if (spell.flat_bonus > 0) dice += "+" + std::to_string(spell.flat_bonus);
+    std::string damage = spell.damage_type.empty() ? dice : dice + " " + spell.damage_type;
+
+    auto labels = [&spell](SpellEffectTrigger trigger) {
+        std::string text;
+        for (const auto& effect : spell.effects) {
+            if (effect.trigger != trigger || effect.label.empty()) continue;
+            if (text.find(effect.label) != std::string::npos) continue;
+            text += (text.empty() ? "" : ", ") + effect.label;
+        }
+        return text;
+    };
+    auto tag = [](Ability ability) {
+        std::string text = std::string(ability_name(ability)).substr(0, 3);
+        for (char& c : text) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+        return text;
+    };
+
+    std::string summary;
+    switch (spell.resolution) {
+        case SpellResolution::Attack:
+            summary = std::string(spell.melee_attack ? "melee" : "ranged") + " spell attack, " + damage;
+            if (!labels(SpellEffectTrigger::OnHit).empty()) summary += "; on a hit: " + labels(SpellEffectTrigger::OnHit);
+            break;
+        case SpellResolution::Save:
+            summary = tag(spell.save_ability) + " save";
+            if (spell.dice_count > 0) summary += std::string(spell.save_halves ? " (half on success), " : ", ") + damage;
+            if (!labels(SpellEffectTrigger::OnFailedSave).empty()) {
+                summary += "; on a failure: " + labels(SpellEffectTrigger::OnFailedSave);
+            }
+            break;
+        case SpellResolution::AutoHit:
+            summary = std::to_string(spell.projectiles) + " × " + damage + ", always hits";
+            break;
+        case SpellResolution::Heal:
+            summary = "heals " + dice + (spell.adds_modifier ? " + modifier" : "");
+            break;
+        case SpellResolution::Utility:
+            summary = "utility (no automated effect yet)";
+            break;
+        case SpellResolution::Buff: {
+            std::string self = labels(SpellEffectTrigger::OnCastSelf);
+            std::string others = labels(SpellEffectTrigger::OnCastTarget);
+            if (!others.empty()) {
+                summary = "buff: " + others + " (" +
+                          (spell.max_targets > 1 ? "up to " + std::to_string(spell.max_targets) + " allies" : "1 ally") +
+                          ")";
+            } else {
+                summary = "buff on yourself: " + self;
+            }
+            break;
+        }
+        case SpellResolution::Stabilize:
+            summary = "a dying creature becomes stable";
+            break;
+    }
+    if (spell.concentration) summary += " (concentration)";
+    return summary;
+}
+
+bool spell_targets_nobody(const Spell& spell) {
+    if (spell.resolution == SpellResolution::Utility) return true;
+    if (spell.resolution != SpellResolution::Buff || spell.effects.empty()) return false;
+    return std::all_of(spell.effects.begin(), spell.effects.end(),
+                       [](const SpellEffectSpec& e) { return e.trigger == SpellEffectTrigger::OnCastSelf; });
 }
 
 SpellCastResult cast_spell(const Dice& dice, const Spell& spell, const CasterStats& caster, int slot_level,
@@ -307,7 +420,7 @@ SpellCastResult cast_spell(const Dice& dice, const Spell& spell, const CasterSta
 
     SpellCastResult result;
     result.slot_level = slot_level;
-    if (spell.resolution == SpellResolution::Utility) return result;  // nothing to roll or target
+    if (spell_targets_nobody(spell)) return result;  // nothing to roll or target
 
     int max_targets = spell_max_targets(spell, caster.level, slot_level);
     if (targets.empty() || static_cast<int>(targets.size()) > max_targets) {
@@ -317,6 +430,16 @@ SpellCastResult cast_spell(const Dice& dice, const Spell& spell, const CasterSta
     result.projectiles = spell_projectiles(spell, caster.level, slot_level);
     int dice_count = spell_dice_count(spell, caster.level, slot_level);
     int bonus = spell.flat_bonus + (spell.adds_modifier ? caster.spellcasting_modifier : 0);
+
+    if (spell.resolution == SpellResolution::Buff || spell.resolution == SpellResolution::Stabilize) {
+        for (size_t i = 0; i < targets.size(); ++i) {
+            SpellEffectRoll effect;
+            effect.target = static_cast<int>(i);
+            effect.hit = true;
+            result.effects.push_back(effect);
+        }
+        return result;
+    }
 
     if (spell.resolution == SpellResolution::Save) {
         // Area damage is rolled once for everyone caught in it.

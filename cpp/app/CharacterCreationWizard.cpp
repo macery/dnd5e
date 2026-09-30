@@ -96,24 +96,7 @@ bool picksSpellsAtCreation(const CharacterCreationContext& context) {
 }
 
 QString spellKindText(const dnd::Spell& spell) {
-    auto dice = QString("%1d%2").arg(spell.dice_count).arg(spell.dice_sides);
-    if (spell.flat_bonus) dice += formatModifier(spell.flat_bonus);
-    switch (spell.resolution) {
-        case dnd::SpellResolution::Attack:
-            return QString("%1 spell attack, %2 %3").arg(spell.melee_attack ? "melee" : "ranged", dice,
-                                                         q(spell.damage_type));
-        case dnd::SpellResolution::Save:
-            return QString("%1 save (%2), %3 %4")
-                .arg(dnd::ability_name(spell.save_ability), spell.save_halves ? "half on success" : "none on success",
-                     dice, q(spell.damage_type));
-        case dnd::SpellResolution::AutoHit:
-            return QString("%1 × %2 %3, always hits").arg(spell.projectiles).arg(dice, q(spell.damage_type));
-        case dnd::SpellResolution::Heal:
-            return QString("heals %1%2").arg(dice, spell.adds_modifier ? " + modifier" : "");
-        case dnd::SpellResolution::Utility:
-            return "utility (no automated effect yet)";
-    }
-    return "";
+    return q(dnd::spell_summary(spell));
 }
 
 // Shared by every page: an inline error label and the common context.

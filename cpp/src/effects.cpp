@@ -4,6 +4,7 @@
 #include <array>
 #include <cctype>
 #include <stdexcept>
+#include <utility>
 
 namespace dnd {
 
@@ -49,6 +50,43 @@ void add_used(RollModifiers& modifiers, const ActiveEffect& effect) {
 
 const char* condition_name(Condition condition) {
     return kConditionNames.at(static_cast<size_t>(condition));
+}
+
+Condition condition_from_name(const std::string& name) {
+    for (int i = 0; i < kConditionCount; ++i) {
+        if (name == kConditionNames[static_cast<size_t>(i)]) return static_cast<Condition>(i);
+    }
+    throw std::invalid_argument("unknown condition: " + name);
+}
+
+namespace {
+constexpr std::array<std::pair<EffectKind, const char*>, 11> kEffectKindNames = {{
+    {EffectKind::Condition, "Condition"},
+    {EffectKind::Dodging, "Dodging"},
+    {EffectKind::AttackBonusDice, "AttackBonusDice"},
+    {EffectKind::SaveBonusDice, "SaveBonusDice"},
+    {EffectKind::ArmorClassBonus, "ArmorClassBonus"},
+    {EffectKind::ExtraWeaponDamageDice, "ExtraWeaponDamageDice"},
+    {EffectKind::AdvantageOnNextAttackAgainst, "AdvantageOnNextAttackAgainst"},
+    {EffectKind::AdvantageOnAttacksAgainst, "AdvantageOnAttacksAgainst"},
+    {EffectKind::DisadvantageOnNextAttack, "DisadvantageOnNextAttack"},
+    {EffectKind::CantRegainHitPoints, "CantRegainHitPoints"},
+    {EffectKind::SpeedReduction, "SpeedReduction"},
+}};
+}  // namespace
+
+const char* effect_kind_name(EffectKind kind) {
+    for (const auto& [k, name] : kEffectKindNames) {
+        if (k == kind) return name;
+    }
+    throw std::invalid_argument("unknown effect kind");
+}
+
+EffectKind effect_kind_from_name(const std::string& name) {
+    for (const auto& [kind, text] : kEffectKindNames) {
+        if (name == text) return kind;
+    }
+    throw std::invalid_argument("unknown effect kind: " + name);
 }
 
 const char* condition_description(Condition condition) {
@@ -168,6 +206,22 @@ RollModifiers saving_throw_modifiers(const std::vector<ActiveEffect>& effects, i
     }
     for (const auto& effect : effects) {
         if (effect.target == target && effect.kind == EffectKind::SaveBonusDice) m.bonus_dice.push_back(effect.amount);
+    }
+    return m;
+}
+
+RollModifiers ability_check_modifiers(const std::vector<ActiveEffect>& effects, int target,
+                                      const std::vector<bool>& alive) {
+    RollModifiers m;
+    if (has_condition(effects, target, Condition::Poisoned)) m.disadvantage.push_back("poisoned");
+    for (const auto& effect : effects) {
+        if (effect.target != target || effect.kind != EffectKind::Condition ||
+            effect.condition != Condition::Frightened) {
+            continue;
+        }
+        bool source_alive = effect.source < 0 || (effect.source < static_cast<int>(alive.size()) &&
+                                                  alive[static_cast<size_t>(effect.source)]);
+        if (source_alive) m.disadvantage.push_back("frightened");
     }
     return m;
 }

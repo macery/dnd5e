@@ -18,6 +18,10 @@ const char* spell_resolution_name(SpellResolution resolution);
 SpellResolution spell_resolution_from_name(const std::string& name);
 const char* casting_time_name(CastingTime casting_time);
 CastingTime casting_time_from_name(const std::string& name);
+const char* spell_effect_trigger_name(SpellEffectTrigger trigger);
+SpellEffectTrigger spell_effect_trigger_from_name(const std::string& name);
+const char* spell_effect_duration_name(SpellEffectDuration duration);
+SpellEffectDuration spell_effect_duration_from_name(const std::string& name);
 const char* cantrip_scaling_name(CantripScaling scaling);
 CantripScaling cantrip_scaling_from_name(const std::string& name);
 // Inverse of ability_name. All *_from_name throw std::invalid_argument on
@@ -141,8 +145,18 @@ int spell_projectiles(const Spell& spell, int caster_level, int slot_level);
 // Dice count per projectile after cantrip scaling / upcasting.
 int spell_dice_count(const Spell& spell, int caster_level, int slot_level);
 // Most targets one cast can affect: its projectile count for multi-
-// projectile spells, otherwise spell.max_targets.
+// projectile spells, otherwise spell.max_targets plus upcast_targets per
+// slot level above the spell's.
 int spell_max_targets(const Spell& spell, int caster_level, int slot_level);
+
+// A one-line, player-facing summary of what a spell does, e.g.
+// "ranged spell attack, 1d10 fire", "DEX save (half on success), 3d6 fire",
+// "buff: Blessed (up to 3 allies)", "WIS save; on a failure: Charmed".
+std::string spell_summary(const Spell& spell);
+
+// True for spells that pick no targets: Utility spells, and Buff spells
+// whose effects all land on the caster (Divine Favor).
+bool spell_targets_nobody(const Spell& spell);
 
 // Resolves a cast without touching any character or monster: the caller
 // applies damage/healing and spends the slot. Rules:
@@ -150,7 +164,10 @@ int spell_max_targets(const Spell& spell, int caster_level, int slot_level);
 //  - Save: damage is rolled once and shared; each target saves separately
 //    (d20 + save_bonus >= DC), taking half (rounded down) or none on a success.
 //  - AutoHit / Heal: every projectile lands.
-//  - Utility: nothing is rolled; `targets` is ignored and effects is empty.
+//  - Utility (and self-only Buff): nothing is rolled; `targets` is ignored
+//    and effects is empty.
+//  - Buff / Stabilize: nothing is rolled; one effect entry (hit = true) per
+//    target, for the caller to apply the spell's effects to.
 // Projectiles are shared round-robin across `targets`.
 // Throws std::invalid_argument if slot_level is invalid (a cantrip must use
 // 0; a levelled spell needs slot_level in [spell.level, 9]) or the target

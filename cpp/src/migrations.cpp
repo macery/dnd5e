@@ -18,7 +18,7 @@ using detail::Statement;
 // for future schema changes -- never edit an existing one, since a
 // migration's sql is exactly what already ran on every database that has it
 // recorded in SchemaMigrations.
-constexpr std::array<Migration, 13> kMigrations = {{
+constexpr std::array<Migration, 14> kMigrations = {{
     {1, "initial schema: Players, Classes, Characters", R"sql(
         CREATE TABLE IF NOT EXISTS Players (
             PlayerID INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -398,6 +398,68 @@ constexpr std::array<Migration, 13> kMigrations = {{
     )sql"},
     {13, "add Dead to Characters", R"sql(
         ALTER TABLE Characters ADD COLUMN Dead INTEGER NOT NULL DEFAULT 0;
+    )sql"},
+    {14, "add SpellEffects (seeded), Buff and Stabilize spells, and monster on-hit effects", R"sql(
+        CREATE TABLE IF NOT EXISTS SpellEffects (
+            SpellEffectID INTEGER PRIMARY KEY AUTOINCREMENT,
+            SpellID INTEGER NOT NULL REFERENCES Spells(SpellID),
+            EffectTrigger TEXT NOT NULL,
+            Kind TEXT NOT NULL,
+            ConditionName TEXT NOT NULL DEFAULT '',
+            Amount INTEGER NOT NULL DEFAULT 0,
+            Duration TEXT NOT NULL,
+            Rounds INTEGER NOT NULL DEFAULT 0,
+            UntilUsed INTEGER NOT NULL DEFAULT 0,
+            Label TEXT NOT NULL DEFAULT ''
+        );
+
+        ALTER TABLE Spells ADD COLUMN UpcastTargets INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE Spells ADD COLUMN CombatSaveAdvantage INTEGER NOT NULL DEFAULT 0;
+
+        UPDATE Spells SET Resolution = 'Buff', MaxTargets = 3, UpcastTargets = 1 WHERE Name = 'Bless';
+        UPDATE Spells SET Resolution = 'Buff', MaxTargets = 1 WHERE Name = 'Shield of Faith';
+        UPDATE Spells SET Resolution = 'Buff', MaxTargets = 1 WHERE Name = 'Divine Favor';
+        UPDATE Spells SET Resolution = 'Save', SaveAbility = 'Dexterity', DiceCount = 0, DiceSides = 1,
+                          MaxTargets = 4 WHERE Name = 'Faerie Fire';
+        UPDATE Spells SET Resolution = 'Save', SaveAbility = 'Wisdom', DiceCount = 0, DiceSides = 1,
+                          MaxTargets = 1, CombatSaveAdvantage = 1 WHERE Name = 'Charm Person';
+        UPDATE Spells SET Resolution = 'Stabilize', DiceCount = 0, DiceSides = 1 WHERE Name = 'Spare the Dying';
+        UPDATE Spells SET Description = 'Up to three creatures add 1d4 to their attack rolls and saving throws for up to 1 minute. One more creature per slot level above 1st.' WHERE Name = 'Bless';
+        UPDATE Spells SET Description = 'A creature gains +2 AC for up to 10 minutes. (A bonus action in the rules; cast as an action here for now.)' WHERE Name = 'Shield of Faith';
+        UPDATE Spells SET Description = 'Your weapon attacks deal an extra 1d4 radiant damage on a hit for up to 1 minute. (A bonus action in the rules; cast as an action here for now.)' WHERE Name = 'Divine Favor';
+        UPDATE Spells SET Description = 'Each creature in a 20-foot cube makes a DEX save or is outlined in light: attacks against it have advantage for up to 1 minute. Affects up to 4 creatures.' WHERE Name = 'Faerie Fire';
+        UPDATE Spells SET Description = 'A humanoid makes a WIS save, with advantage because you''re fighting it, or is charmed by you for 1 hour: it won''t attack you. Harming it ends the charm. (Creature types aren''t modeled yet, so any monster can be targeted.)' WHERE Name = 'Charm Person';
+        UPDATE Spells SET Description = 'You touch a living creature that has 0 hit points, and it becomes stable.' WHERE Name = 'Spare the Dying';
+        UPDATE Spells SET Description = 'A frigid beam of blue-white light streaks toward a creature. On a hit, its speed drops by 10 feet until the start of your next turn (shown only; speed isn''t tracked).' WHERE Name = 'Ray of Frost';
+        UPDATE Spells SET Description = 'A ghostly, skeletal hand assails a creature with the chill of the grave. On a hit, it can''t regain hit points until the start of your next turn.' WHERE Name = 'Chill Touch';
+        UPDATE Spells SET Description = 'A flash of light streaks toward a creature. On a hit, the next attack roll against it before the end of your next turn has advantage.' WHERE Name = 'Guiding Bolt';
+        UPDATE Spells SET Description = 'You unleash a string of insults laced with subtle enchantments. On a failed save, it has disadvantage on its next attack roll before the end of its next turn.' WHERE Name = 'Vicious Mockery';
+
+        INSERT INTO SpellEffects (SpellID, EffectTrigger, Kind, ConditionName, Amount, Duration, Rounds, UntilUsed, Label)
+            SELECT SpellID, 'OnCastTarget', 'AttackBonusDice', '', 4, 'Rounds', 10, 0, 'Blessed' FROM Spells WHERE Name = 'Bless';
+        INSERT INTO SpellEffects (SpellID, EffectTrigger, Kind, ConditionName, Amount, Duration, Rounds, UntilUsed, Label)
+            SELECT SpellID, 'OnCastTarget', 'SaveBonusDice', '', 4, 'Rounds', 10, 0, 'Blessed' FROM Spells WHERE Name = 'Bless';
+        INSERT INTO SpellEffects (SpellID, EffectTrigger, Kind, ConditionName, Amount, Duration, Rounds, UntilUsed, Label)
+            SELECT SpellID, 'OnCastTarget', 'ArmorClassBonus', '', 2, 'Rounds', 100, 0, 'Shield of Faith (+2 AC)' FROM Spells WHERE Name = 'Shield of Faith';
+        INSERT INTO SpellEffects (SpellID, EffectTrigger, Kind, ConditionName, Amount, Duration, Rounds, UntilUsed, Label)
+            SELECT SpellID, 'OnCastSelf', 'ExtraWeaponDamageDice', '', 4, 'Rounds', 10, 0, 'Divine Favor' FROM Spells WHERE Name = 'Divine Favor';
+        INSERT INTO SpellEffects (SpellID, EffectTrigger, Kind, ConditionName, Amount, Duration, Rounds, UntilUsed, Label)
+            SELECT SpellID, 'OnHit', 'AdvantageOnNextAttackAgainst', '', 0, 'UntilEndOfCasterTurn', 0, 1, 'Guiding Bolt' FROM Spells WHERE Name = 'Guiding Bolt';
+        INSERT INTO SpellEffects (SpellID, EffectTrigger, Kind, ConditionName, Amount, Duration, Rounds, UntilUsed, Label)
+            SELECT SpellID, 'OnHit', 'SpeedReduction', '', 10, 'UntilStartOfCasterTurn', 0, 0, 'Ray of Frost (-10 ft)' FROM Spells WHERE Name = 'Ray of Frost';
+        INSERT INTO SpellEffects (SpellID, EffectTrigger, Kind, ConditionName, Amount, Duration, Rounds, UntilUsed, Label)
+            SELECT SpellID, 'OnHit', 'CantRegainHitPoints', '', 0, 'UntilStartOfCasterTurn', 0, 0, 'Chill Touch' FROM Spells WHERE Name = 'Chill Touch';
+        INSERT INTO SpellEffects (SpellID, EffectTrigger, Kind, ConditionName, Amount, Duration, Rounds, UntilUsed, Label)
+            SELECT SpellID, 'OnFailedSave', 'DisadvantageOnNextAttack', '', 0, 'UntilEndOfTargetTurn', 0, 1, 'Vicious Mockery' FROM Spells WHERE Name = 'Vicious Mockery';
+        INSERT INTO SpellEffects (SpellID, EffectTrigger, Kind, ConditionName, Amount, Duration, Rounds, UntilUsed, Label)
+            SELECT SpellID, 'OnFailedSave', 'AdvantageOnAttacksAgainst', '', 0, 'Rounds', 10, 0, 'Faerie Fire' FROM Spells WHERE Name = 'Faerie Fire';
+        INSERT INTO SpellEffects (SpellID, EffectTrigger, Kind, ConditionName, Amount, Duration, Rounds, UntilUsed, Label)
+            SELECT SpellID, 'OnFailedSave', 'Condition', 'Charmed', 0, 'Rounds', 600, 0, 'Charmed' FROM Spells WHERE Name = 'Charm Person';
+
+        ALTER TABLE Monsters ADD COLUMN OnHitSaveAbility TEXT NOT NULL DEFAULT '';
+        ALTER TABLE Monsters ADD COLUMN OnHitSaveDC INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE Monsters ADD COLUMN OnHitCondition TEXT NOT NULL DEFAULT '';
+        UPDATE Monsters SET OnHitSaveAbility = 'Strength', OnHitSaveDC = 11, OnHitCondition = 'Prone' WHERE Name = 'Wolf';
     )sql"},
 }};
 

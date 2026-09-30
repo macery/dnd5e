@@ -38,7 +38,7 @@ QString abilityTag(dnd::Ability ability) {
     return QString(dnd::ability_name(ability)).left(3).toUpper();
 }
 
-enum Action { AttackAction, DashAction, DodgeAction, DrinkPotionAction, CastSpellAction };
+enum Action { AttackAction, DashAction, DodgeAction, DrinkPotionAction, CastSpellAction, StabilizeAction };
 }  // namespace
 
 CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::vector<dnd::Character> characters,
@@ -116,8 +116,16 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
     actionCombo_->setItemData(CastSpellAction,
         "Cast one of your spells. Cantrips are free; other spells use a spell slot of their level or higher.",
         Qt::ToolTipRole);
+    actionCombo_->addItem("Stabilize");
+    actionCombo_->setItemData(StabilizeAction,
+        "Keep a dying ally from dying: a DC 10 Wisdom (Medicine) check, or automatic with a Healer's Kit. "
+        "A stable creature stops making death saves.",
+        Qt::ToolTipRole);
     targetCombo_ = new QComboBox(attackGroup);
     potionCombo_ = new QComboBox(attackGroup);
+    stabilizeCombo_ = new QComboBox(attackGroup);
+    stabilizeInfoLabel_ = new QLabel(attackGroup);
+    stabilizeInfoLabel_->setWordWrap(true);
     spellCombo_ = new QComboBox(attackGroup);
     spellSlotCombo_ = new QComboBox(attackGroup);
     spellSlotCombo_->setToolTip("A higher-level slot makes many spells stronger.");
@@ -141,6 +149,8 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
     attackForm->addRow("Action", actionCombo_);
     attackForm->addRow("Target", targetCombo_);
     attackForm->addRow("Potion", potionCombo_);
+    attackForm->addRow("Ally", stabilizeCombo_);
+    attackForm->addRow(stabilizeInfoLabel_);
     attackForm->addRow("Spell", spellCombo_);
     attackForm->addRow("Slot", spellSlotCombo_);
     attackForm->addRow("Targets", spellTargetList_);
@@ -236,6 +246,7 @@ void CombatEncounterDialog::onTurnStarted() {
         actionCombo_->setCurrentIndex(AttackAction);
         refreshTargetCombo();
         refreshPotionCombo();
+        refreshStabilizeCombo();
         refreshSpellControls();
         updateAttackFieldsForCurrentTurn();
         updateActionControlsVisibility();
@@ -300,6 +311,13 @@ void CombatEncounterDialog::onTakeActionClicked() {
         case DrinkPotionAction:
             acted = encounter_.drink_potion(potionCombo_->currentData().toInt());
             break;
+        case StabilizeAction:
+            if (stabilizeCombo_->count() == 0) {
+                log("No one is dying -- choose another action.");
+                return;
+            }
+            acted = encounter_.stabilize(stabilizeCombo_->currentData().toInt());
+            break;
         case CastSpellAction: {
             const dnd::Spell* spell = selectedSpell();
             std::vector<int> targets;
@@ -323,6 +341,7 @@ void CombatEncounterDialog::onTakeActionClicked() {
     processEvents();
     if (acted) {
         refreshPotionCombo();
+        refreshStabilizeCombo();
         refreshSpellControls();
     }
     if (encounter_.status() != dnd::EncounterStatus::InProgress) onTurnStarted();
@@ -343,10 +362,16 @@ void CombatEncounterDialog::updateActionControlsVisibility() {
     potionCombo_->setVisible(is_potion);
     if (auto* row_label = attackFormLayout_->labelForField(potionCombo_)) row_label->setVisible(is_potion);
 
+    bool is_stabilize = actionCombo_->currentIndex() == StabilizeAction;
+    for (auto* field : {static_cast<QWidget*>(stabilizeCombo_), static_cast<QWidget*>(stabilizeInfoLabel_)}) {
+        field->setVisible(is_stabilize);
+        if (auto* row_label = attackFormLayout_->labelForField(field)) row_label->setVisible(is_stabilize);
+    }
+
     bool is_spell = actionCombo_->currentIndex() == CastSpellAction;
     const dnd::Spell* spell = is_spell ? selectedSpell() : nullptr;
     bool show_slot = spell && spell->level > 0;
-    bool show_targets = spell && spell->resolution != dnd::SpellResolution::Utility;
+    bool show_targets = spell && !dnd::spell_targets_nobody(*spell);
     for (auto [field, visible] : {std::pair<QWidget*, bool>{spellCombo_, is_spell}, {spellSlotCombo_, show_slot},
                                   {spellTargetList_, show_targets}, {spellInfoLabel_, is_spell}}) {
         field->setVisible(visible);
@@ -358,6 +383,7 @@ void CombatEncounterDialog::updateActionControlsVisibility() {
         case DodgeAction: takeActionButton_->setText("Take Dodge Action"); break;
         case DrinkPotionAction: takeActionButton_->setText("Drink Potion"); break;
         case CastSpellAction: takeActionButton_->setText("Cast Spell"); break;
+        case StabilizeAction: takeActionButton_->setText("Stabilize"); break;
         default: takeActionButton_->setText("Roll Attack"); break;
     }
 }
@@ -392,6 +418,20 @@ void CombatEncounterDialog::refreshPotionCombo() {
     potionCombo_->clear();
     for (const auto& entry : encounter_.healing_items()) {
         potionCombo_->addItem(QString("%1 (×%2)").arg(q(entry.item.name)).arg(entry.quantity), entry.item.item_id);
+    }
+}
+
+void CombatEncounterDialog::refreshStabilizeCombo() {
+    stabilizeCombo_->clear();
+    for (int index : encounter_.stabilize_targets()) {
+        stabilizeCombo_->addItem(q(encounter_.combatants()[static_cast<size_t>(index)].name), index);
+    }
+    if (stabilizeCombo_->count() == 0) {
+        stabilizeInfoLabel_->setText("No one is dying.");
+    } else if (encounter_.has_healers_kit()) {
+        stabilizeInfoLabel_->setText("Automatic: you have a Healer's Kit.");
+    } else {
+        stabilizeInfoLabel_->setText("DC 10 Wisdom (Medicine) check.");
     }
 }
 
@@ -484,10 +524,15 @@ void CombatEncounterDialog::refreshSpellInfo() {
                             q(spell->damage_type));
             break;
         case dnd::SpellResolution::Save:
-            text = QString("Each target makes a %1 save vs DC %2: %3 %4 damage, %5 on a success.")
-                       .arg(abilityTag(spell->save_ability))
-                       .arg(caster.spell_save_dc)
-                       .arg(roll, q(spell->damage_type), spell->save_halves ? "half" : "none");
+            text = spell->dice_count > 0
+                ? QString("Each target makes a %1 save vs DC %2: %3 %4 damage, %5 on a success.")
+                      .arg(abilityTag(spell->save_ability))
+                      .arg(caster.spell_save_dc)
+                      .arg(roll, q(spell->damage_type), spell->save_halves ? "half" : "none")
+                : QString("Each target makes a %1 save vs DC %2%3.")
+                      .arg(abilityTag(spell->save_ability))
+                      .arg(caster.spell_save_dc)
+                      .arg(spell->combat_save_advantage ? " (with advantage, since you're fighting it)" : "");
             break;
         case dnd::SpellResolution::AutoHit:
             text = QString("Always hits: %1 %2 damage.").arg(roll, q(spell->damage_type));
@@ -498,8 +543,27 @@ void CombatEncounterDialog::refreshSpellInfo() {
         case dnd::SpellResolution::Utility:
             text = "No automated effect yet -- casting uses the action (and slot) and shows the description.";
             break;
+        case dnd::SpellResolution::Buff:
+        case dnd::SpellResolution::Stabilize: {
+            // "buff: Blessed (up to 3 allies) (concentration)" -> "Buff: Blessed (up to 3 allies)."
+            QString summary = q(dnd::spell_summary(*spell)).remove(" (concentration)");
+            text = summary.left(1).toUpper() + summary.mid(1) + ".";
+            break;
+        }
     }
-    if (spell->resolution != dnd::SpellResolution::Utility) {
+
+    // Riders from the spell's effects, e.g. "On a hit: Guiding Bolt."
+    QStringList onHit;
+    QStringList onFail;
+    for (const auto& effect : spell->effects) {
+        QString label = q(effect.label);
+        if (effect.trigger == dnd::SpellEffectTrigger::OnHit && !onHit.contains(label)) onHit << label;
+        if (effect.trigger == dnd::SpellEffectTrigger::OnFailedSave && !onFail.contains(label)) onFail << label;
+    }
+    if (!onHit.isEmpty()) text += " On a hit: " + onHit.join(", ") + ".";
+    if (!onFail.isEmpty()) text += " On a failure: " + onFail.join(", ") + ".";
+    if (spell->concentration) text += " Requires concentration.";
+    if (!dnd::spell_targets_nobody(*spell)) {
         int max_targets = dnd::spell_max_targets(*spell, caster.level, slot);
         text += max_targets > 1 ? QString(" Choose up to %1 targets.").arg(max_targets) : " Choose 1 target.";
     }

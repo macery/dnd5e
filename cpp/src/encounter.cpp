@@ -131,6 +131,9 @@ void Encounter::add_monsters(const Monster& monster, int count) {
         combatant.xp = xp_for_challenge_rating(monster.challenge_rating);
         combatant.ability_scores = {monster.strength,     monster.dexterity, monster.constitution,
                                     monster.intelligence, monster.wisdom,    monster.charisma};
+        combatant.on_hit_save_ability = monster.on_hit_save_ability;
+        combatant.on_hit_save_dc = monster.on_hit_save_dc;
+        combatant.on_hit_condition = monster.on_hit_condition;
         combatants_.push_back(combatant);
     }
 }
@@ -144,6 +147,12 @@ void Encounter::set_victory_reward(std::string victory_text, std::vector<LootGra
 
 int Encounter::add_effect(ActiveEffect effect) {
     effect.id = next_effect_id_++;
+    // "Until the end of X's next turn", applied during X's own turn, must
+    // survive the end of this one.
+    if (effect.duration.kind == DurationKind::UntilEndOfTurn && effect.duration.participant >= 0 &&
+        effect.duration.participant == current_index()) {
+        effect.duration.skip_current_turn = true;
+    }
     effects_.push_back(std::move(effect));
     return effects_.back().id;
 }
@@ -330,13 +339,27 @@ void Encounter::start_turn(int index) {
 }
 
 void Encounter::end_turn(int index) {
-    // "Until the end of X's next turn" effects end now.
+    // "Until the end of X's next turn" effects end now -- unless they were
+    // applied during this very turn, in which case they last one more.
+    std::vector<std::string> expired;
     effects_.erase(std::remove_if(effects_.begin(), effects_.end(),
-                                  [index](const ActiveEffect& e) {
-                                      return e.duration.kind == DurationKind::UntilEndOfTurn &&
-                                             e.duration.participant == index;
+                                  [&](ActiveEffect& e) {
+                                      if (e.duration.kind != DurationKind::UntilEndOfTurn ||
+                                          e.duration.participant != index) {
+                                          return false;
+                                      }
+                                      if (e.duration.skip_current_turn) {
+                                          e.duration.skip_current_turn = false;
+                                          return false;
+                                      }
+                                      if (!e.label.empty()) {
+                                          expired.push_back(e.label + " on " +
+                                                            combatants_[static_cast<size_t>(e.target)].name);
+                                      }
+                                      return true;
                                   }),
                    effects_.end());
+    for (const auto& what : expired) log(what + " ends.");
 
     // Effects on this combatant that it can shake off with a save.
     std::vector<ActiveEffect> saves;
@@ -483,6 +506,72 @@ void Encounter::weapon_attack(int attacker_index, int target_index, int attack_b
         attack_outcome(result.hit, result.critical, result.damage_total) + extra_note + ". " + target.name +
         " is now " + hp_text(target) + " HP.");
     for (const auto& line : followups) log(line);
+
+    // A monster attack's rider (Wolf: DC 11 STR save or knocked prone).
+    if (result.hit && attacker.on_hit_save_dc > 0 && target.current_hp > 0) {
+        std::string detail;
+        bool saved = roll_save(target_index, attacker.on_hit_save_ability, attacker.on_hit_save_dc, detail);
+        std::string condition = condition_name(attacker.on_hit_condition);
+        for (char& c : condition) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        log("    " + target.name + ": " + detail + " vs DC " + std::to_string(attacker.on_hit_save_dc) + " -> " +
+            (saved ? "saved." : "failed, " + condition + "."));
+        if (!saved) {
+            ActiveEffect effect;
+            effect.kind = EffectKind::Condition;
+            effect.condition = attacker.on_hit_condition;
+            effect.target = target_index;
+            effect.source = attacker_index;
+            effect.label = condition_name(attacker.on_hit_condition);
+            add_effect(effect);
+        }
+    }
+}
+
+std::vector<std::string> Encounter::apply_spell_effects(const Spell& spell, SpellEffectTrigger trigger, int caster,
+                                                        int target) {
+    std::vector<std::string> labels;
+    for (const auto& spec : spell.effects) {
+        if (spec.trigger != trigger) continue;
+        ActiveEffect effect;
+        effect.kind = spec.kind;
+        effect.condition = spec.condition;
+        effect.target = target;
+        effect.source = caster;
+        effect.amount = spec.amount;
+        effect.concentration = spell.concentration;
+        effect.label = spec.label;
+        effect.duration.until_used = spec.until_used;
+        switch (spec.duration) {
+            case SpellEffectDuration::UntilRemoved:
+                effect.duration.kind = DurationKind::UntilRemoved;
+                break;
+            case SpellEffectDuration::Rounds:
+                effect.duration.kind = DurationKind::Rounds;
+                effect.duration.rounds = spec.rounds;
+                break;
+            case SpellEffectDuration::UntilStartOfCasterTurn:
+                effect.duration.kind = DurationKind::UntilStartOfTurn;
+                effect.duration.participant = caster;
+                break;
+            case SpellEffectDuration::UntilEndOfCasterTurn:
+                effect.duration.kind = DurationKind::UntilEndOfTurn;
+                effect.duration.participant = caster;
+                break;
+            case SpellEffectDuration::UntilStartOfTargetTurn:
+                effect.duration.kind = DurationKind::UntilStartOfTurn;
+                effect.duration.participant = target;
+                break;
+            case SpellEffectDuration::UntilEndOfTargetTurn:
+                effect.duration.kind = DurationKind::UntilEndOfTurn;
+                effect.duration.participant = target;
+                break;
+        }
+        add_effect(effect);
+        if (!spec.label.empty() && std::find(labels.begin(), labels.end(), spec.label) == labels.end()) {
+            labels.push_back(spec.label);
+        }
+    }
+    return labels;
 }
 
 std::vector<std::string> Encounter::apply_damage(int target_index, int amount, bool critical, int source) {
@@ -840,17 +929,53 @@ std::vector<int> Encounter::spell_slot_options(const Spell& spell) const {
 
 std::vector<int> Encounter::spell_target_candidates(const Spell& spell) const {
     std::vector<int> candidates;
-    bool heals = spell.resolution == SpellResolution::Heal;
+    if (spell_targets_nobody(spell)) return candidates;
     int actor_index = current_index();
     for (int i = 0; i < static_cast<int>(combatants_.size()); ++i) {
         const auto& candidate = combatants_[static_cast<size_t>(i)];
         if (candidate.death_saves.dead) continue;
-        // Heals go to the party (including anyone down); everything else at living enemies.
-        if (heals ? !candidate.is_character : (candidate.is_character || candidate.current_hp <= 0)) continue;
-        if (!heals && actor_index >= 0 && charmed_by(actor_index, i)) continue;
-        candidates.push_back(i);
+        bool eligible = false;
+        switch (spell.resolution) {
+            case SpellResolution::Heal:  // the party, including anyone down
+                eligible = candidate.is_character;
+                break;
+            case SpellResolution::Buff:  // the party, conscious
+                eligible = candidate.is_character && candidate.current_hp > 0;
+                break;
+            case SpellResolution::Stabilize:  // the dying
+                eligible = candidate.is_character && candidate.current_hp <= 0 && !candidate.death_saves.stable;
+                break;
+            default:  // living enemies (not whoever charmed the caster)
+                eligible = !candidate.is_character && candidate.current_hp > 0 &&
+                           !(actor_index >= 0 && charmed_by(actor_index, i));
+                break;
+        }
+        if (eligible) candidates.push_back(i);
     }
     return candidates;
+}
+
+std::vector<int> Encounter::stabilize_targets() const {
+    std::vector<int> targets;
+    if (!current_character()) return targets;
+    for (int i = 0; i < static_cast<int>(combatants_.size()); ++i) {
+        const auto& candidate = combatants_[static_cast<size_t>(i)];
+        if (candidate.is_character && candidate.current_hp <= 0 && !candidate.death_saves.stable &&
+            !candidate.death_saves.dead) {
+            targets.push_back(i);
+        }
+    }
+    return targets;
+}
+
+bool Encounter::has_healers_kit() const {
+    const Combatant* actor = current_character();
+    if (!actor) return false;
+    auto inventory = inventories_.find(actor->character_id);
+    if (inventory == inventories_.end()) return false;
+    return std::any_of(inventory->second.begin(), inventory->second.end(), [](const InventoryEntry& entry) {
+        return entry.item.name == "Healer's Kit" && entry.quantity > 0;
+    });
 }
 
 // --- Actions -----------------------------------------------------------------
@@ -929,6 +1054,36 @@ bool Encounter::drink_potion(int item_id) {
     return true;
 }
 
+bool Encounter::stabilize(int target_index) {
+    if (!can_act()) return false;
+    auto targets = stabilize_targets();
+    if (std::find(targets.begin(), targets.end(), target_index) == targets.end()) return false;
+
+    int actor_index = current_index();
+    const Combatant& actor = combatants_[static_cast<size_t>(actor_index)];
+    Combatant& target = combatants_[static_cast<size_t>(target_index)];
+
+    bool success = true;
+    if (has_healers_kit()) {
+        log(actor.name + " uses a Healer's Kit on " + target.name + ": " + target.name + " is stable.");
+    } else {
+        RollModifiers mods = ability_check_modifiers(effects_, actor_index, alive_flags());
+        int roll = dice_.roll_d20(mods.mode()).result;
+        int bonus = skill_bonus(*character(actor.character_id), Skill::Medicine);
+        success = roll + bonus >= 10;
+        log(actor.name + " tries to stabilize " + target.name + ": WIS (Medicine) check d20(" + std::to_string(roll) +
+            ") " + format_modifier(bonus) + mode_note(mods) + " vs DC 10 -> " +
+            (success ? "success, " + target.name + " is stable." : "failure."));
+    }
+    if (success) {
+        target.death_saves = DeathSaveState{};
+        target.death_saves.stable = true;
+    }
+    action_taken_ = true;
+    check_for_victory_or_defeat();
+    return true;
+}
+
 bool Encounter::cast_spell(int spell_id, int slot_level, const std::vector<int>& target_indices) {
     if (!can_act()) return false;
     int actor_index = current_index();
@@ -946,7 +1101,8 @@ bool Encounter::cast_spell(int spell_id, int slot_level, const std::vector<int>&
     CasterStats caster = caster_stats(caster_character, info);
     int slot = spell.level == 0 ? 0 : slot_level;
 
-    if (spell.resolution != SpellResolution::Utility) {
+    bool no_targets = spell_targets_nobody(spell);
+    if (!no_targets) {
         int max_targets = spell_max_targets(spell, caster.level, slot);
         auto candidates = spell_target_candidates(spell);
         bool all_valid = std::all_of(target_indices.begin(), target_indices.end(), [&](int index) {
@@ -968,7 +1124,7 @@ bool Encounter::cast_spell(int spell_id, int slot_level, const std::vector<int>&
     changed(actor.character_id);  // the spent slot
 
     // Each target's roll modifiers, from every effect in play.
-    std::vector<int> indices = spell.resolution == SpellResolution::Utility ? std::vector<int>{} : target_indices;
+    std::vector<int> indices = no_targets ? std::vector<int>{} : target_indices;
     std::vector<SpellTarget> targets;
     std::vector<RollModifiers> target_mods;
     auto alive = alive_flags();
@@ -984,6 +1140,7 @@ bool Encounter::cast_spell(int spell_id, int slot_level, const std::vector<int>&
             spell_target.attack_bonus_dice = mods.bonus_dice;
         } else if (spell.resolution == SpellResolution::Save) {
             mods = saving_throw_modifiers(effects_, index, spell.save_ability);
+            if (spell.combat_save_advantage) mods.advantage.push_back("in combat with the caster");
             spell_target.save_mode = mods.mode();
             spell_target.save_auto_fail = mods.auto_fail;
             spell_target.save_bonus_dice = mods.bonus_dice;
@@ -996,13 +1153,23 @@ bool Encounter::cast_spell(int spell_id, int slot_level, const std::vector<int>&
     for (const auto& mods : target_mods) use_effects(mods.used_effects);
 
     log(actor.name + " casts " + spell.name + (slot > 0 ? " (" + ordinal(slot) + "-level slot)" : "") + ".");
+    // Casting a concentration spell ends any earlier concentration.
+    if (spell.concentration) start_concentration(actor_index, spell.name);
+
+    auto self_labels = apply_spell_effects(spell, SpellEffectTrigger::OnCastSelf, actor_index, actor_index);
+    if (!self_labels.empty()) log("    " + actor.name + ": " + join(self_labels, ", ") + ".");
     if (spell.resolution == SpellResolution::Utility) {
         log("    " + spell.description);
         action_taken_ = true;
         check_for_victory_or_defeat();
         return true;
     }
-    if (spell.resolution == SpellResolution::Save) {
+    if (no_targets) {
+        action_taken_ = true;
+        check_for_victory_or_defeat();
+        return true;
+    }
+    if (spell.resolution == SpellResolution::Save && !result.dice.empty()) {
         std::string dice;
         for (int die : result.dice) dice += (dice.empty() ? "" : " + ") + std::to_string(die);
         log("    Damage roll: " + dice);
@@ -1015,22 +1182,39 @@ bool Encounter::cast_spell(int spell_id, int slot_level, const std::vector<int>&
         const RollModifiers& mods = target_mods[slot_index];
         std::string outcome;
         std::vector<std::string> followups;
+        std::vector<std::string> labels;
         switch (spell.resolution) {
             case SpellResolution::Attack:
                 followups = effect.hit ? apply_damage(target_index, effect.amount, effect.critical, actor_index)
                                        : std::vector<std::string>{};
+                if (effect.hit && target.current_hp > 0) {
+                    labels = apply_spell_effects(spell, SpellEffectTrigger::OnHit, actor_index, target_index);
+                }
                 outcome = "d20(" + std::to_string(effect.attack_roll) + ") " +
                           format_modifier(caster.spell_attack_bonus) + bonus_note(mods.bonus_dice, effect.bonus_rolls) +
                           mode_note(mods) + " -> " + attack_outcome(effect.hit, effect.critical, effect.amount);
                 break;
             case SpellResolution::Save:
                 followups = apply_damage(target_index, effect.amount, false, actor_index);
+                if (!effect.saved && target.current_hp > 0) {
+                    labels = apply_spell_effects(spell, SpellEffectTrigger::OnFailedSave, actor_index, target_index);
+                }
                 outcome = ability_tag(spell.save_ability) + " save d20(" + std::to_string(effect.save_roll) + ") " +
                           format_modifier(targets[slot_index].save_bonus) +
                           bonus_note(mods.bonus_dice, effect.bonus_rolls) + mode_note(mods) +
                           (effect.auto_failed ? " (automatic failure)" : "") + " vs DC " +
-                          std::to_string(caster.spell_save_dc) + " -> " + (effect.saved ? "saved" : "failed") +
-                          ", takes " + std::to_string(effect.amount);
+                          std::to_string(caster.spell_save_dc) + " -> " + (effect.saved ? "saved" : "failed");
+                if (!result.dice.empty()) outcome += ", takes " + std::to_string(effect.amount);
+                break;
+            case SpellResolution::Buff:
+                labels = apply_spell_effects(spell, SpellEffectTrigger::OnCastTarget, actor_index, target_index);
+                outcome = labels.empty() ? "affected" : join(labels, ", ");
+                labels.clear();  // already in the outcome
+                break;
+            case SpellResolution::Stabilize:
+                target.death_saves = DeathSaveState{};
+                target.death_saves.stable = true;
+                outcome = "stable";
                 break;
             case SpellResolution::AutoHit:
                 followups = apply_damage(target_index, effect.amount, false, actor_index);
@@ -1045,7 +1229,9 @@ bool Encounter::cast_spell(int spell_id, int slot_level, const std::vector<int>&
             case SpellResolution::Utility:
                 break;
         }
-        log("    " + target.name + ": " + outcome + ". Now " + hp_text(target) + " HP.");
+        if (!labels.empty()) outcome += "; " + join(labels, ", ");
+        bool shows_hp = spell.resolution != SpellResolution::Buff && spell.resolution != SpellResolution::Stabilize;
+        log("    " + target.name + ": " + outcome + (shows_hp ? ". Now " + hp_text(target) + " HP." : "."));
         for (const auto& line : followups) log(line);
     }
 

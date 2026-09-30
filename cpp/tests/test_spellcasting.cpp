@@ -160,14 +160,48 @@ TEST_CASE("seeded spells load with their class lists", "[spellcasting][repositor
         INFO(spell.name);
         REQUIRE_FALSE(spell.class_names.empty());
         for (const auto& class_name : spell.class_names) REQUIRE(dnd::find_class_info(class_name) != nullptr);
-        if (spell.resolution == dnd::SpellResolution::Utility) continue;
-        REQUIRE(spell.dice_count >= 1);
-        REQUIRE_FALSE(spell.concentration);  // automated spells avoid concentration until phase 3
+        bool deals_or_heals = spell.resolution == dnd::SpellResolution::Attack ||
+                              spell.resolution == dnd::SpellResolution::AutoHit ||
+                              spell.resolution == dnd::SpellResolution::Heal;
+        if (deals_or_heals) REQUIRE(spell.dice_count >= 1);
+        // Spells that roll need at least one die side, even for zero dice (Dice::roll's contract).
+        if (deals_or_heals || spell.resolution == dnd::SpellResolution::Save) REQUIRE(spell.dice_sides >= 1);
+        // A Buff with no effects, or a no-damage Save with no effects, would do nothing.
+        if (spell.resolution == dnd::SpellResolution::Buff ||
+            (spell.resolution == dnd::SpellResolution::Save && spell.dice_count == 0)) {
+            REQUIRE_FALSE(spell.effects.empty());
+        }
     }
 
     auto light = spell_named(spells, "Light");
     REQUIRE(light.resolution == dnd::SpellResolution::Utility);
-    REQUIRE(spell_named(spells, "Bless").concentration);
+
+    auto bless = spell_named(spells, "Bless");
+    REQUIRE(bless.concentration);
+    REQUIRE(bless.resolution == dnd::SpellResolution::Buff);
+    REQUIRE(bless.max_targets == 3);
+    REQUIRE(bless.upcast_targets == 1);
+    REQUIRE(bless.effects.size() == 2);
+    REQUIRE(bless.effects[0].kind == dnd::EffectKind::AttackBonusDice);
+    REQUIRE(bless.effects[0].amount == 4);
+    REQUIRE(bless.effects[0].duration == dnd::SpellEffectDuration::Rounds);
+    REQUIRE(bless.effects[0].rounds == 10);
+
+    auto guiding = spell_named(spells, "Guiding Bolt");
+    REQUIRE(guiding.effects.size() == 1);
+    REQUIRE(guiding.effects[0].trigger == dnd::SpellEffectTrigger::OnHit);
+    REQUIRE(guiding.effects[0].until_used);
+    REQUIRE(guiding.effects[0].duration == dnd::SpellEffectDuration::UntilEndOfCasterTurn);
+
+    auto charm = spell_named(spells, "Charm Person");
+    REQUIRE(charm.resolution == dnd::SpellResolution::Save);
+    REQUIRE(charm.combat_save_advantage);
+    REQUIRE(charm.effects[0].condition == dnd::Condition::Charmed);
+
+    REQUIRE(spell_named(spells, "Spare the Dying").resolution == dnd::SpellResolution::Stabilize);
+    REQUIRE(dnd::spell_targets_nobody(spell_named(spells, "Divine Favor")));
+    REQUIRE_FALSE(dnd::spell_targets_nobody(bless));
+    REQUIRE(dnd::spell_max_targets(bless, 3, 2) == 4);  // one more creature per slot level above 1st
 
     auto missile = spell_named(spells, "Magic Missile");
     REQUIRE(missile.resolution == dnd::SpellResolution::AutoHit);
@@ -474,4 +508,23 @@ TEST_CASE("cast_spell applies per-target roll modifiers", "[spellcasting]") {
         REQUIRE(result.effects[1].amount == 3);
         REQUIRE(result.effects[0].amount == 1);  // half of 3, rounded down
     }
+}
+
+TEST_CASE("spell_summary describes each kind of spell", "[spellcasting]") {
+    dnd::Repository repo(":memory:");
+    auto spells = repo.get_spells();
+    auto summary = [&](const char* name) { return dnd::spell_summary(spell_named(spells, name)); };
+
+    REQUIRE(summary("Fire Bolt") == "ranged spell attack, 1d10 fire");
+    REQUIRE(summary("Guiding Bolt") == "ranged spell attack, 4d6 radiant; on a hit: Guiding Bolt");
+    REQUIRE(summary("Burning Hands") == "DEX save (half on success), 3d6 fire");
+    REQUIRE(summary("Vicious Mockery") == "WIS save, 1d4 psychic; on a failure: Vicious Mockery");
+    REQUIRE(summary("Charm Person") == "WIS save; on a failure: Charmed");
+    REQUIRE(summary("Faerie Fire") == "DEX save; on a failure: Faerie Fire (concentration)");
+    REQUIRE(summary("Magic Missile") == "3 × 1d4+1 force, always hits");
+    REQUIRE(summary("Cure Wounds") == "heals 1d8 + modifier");
+    REQUIRE(summary("Bless") == "buff: Blessed (up to 3 allies) (concentration)");
+    REQUIRE(summary("Divine Favor") == "buff on yourself: Divine Favor (concentration)");
+    REQUIRE(summary("Spare the Dying") == "a dying creature becomes stable");
+    REQUIRE(summary("Light") == "utility (no automated effect yet)");
 }
