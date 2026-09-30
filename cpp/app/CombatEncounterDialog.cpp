@@ -44,14 +44,14 @@ enum Action { AttackAction, DashAction, DodgeAction, DrinkPotionAction, CastSpel
 }  // namespace
 
 CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::vector<dnd::Character> characters,
-                                              std::vector<dnd::Monster> monsters, std::vector<dnd::Weapon> weapons,
-                                              QWidget* parent, const dnd::AdventureTemplate* adventure)
+                                              std::vector<dnd::Monster> monsters, QWidget* parent,
+                                              const dnd::AdventureTemplate* adventure)
     : QDialog(parent),
       repository_(repository),
       monsters_(std::move(monsters)),
       classes_(repository.get_classes()),
       dice_(randomSource_),
-      encounter_(dice_, classes_, std::move(weapons)) {
+      encounter_(dice_, classes_, repository.get_races()) {
     setWindowTitle("Combat Encounter");
 
     statusLabel_ = new QLabel("Status: In Progress", this);
@@ -138,7 +138,7 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
     attackBonusSpin_ = new QSpinBox(attackGroup);
     attackBonusSpin_->setRange(-10, 20);
     damageDiceCountSpin_ = new QSpinBox(attackGroup);
-    damageDiceCountSpin_->setRange(1, 20);
+    damageDiceCountSpin_->setRange(0, 20);  // 0: an unarmed strike's flat damage
     damageDiceSidesSpin_ = new QSpinBox(attackGroup);
     damageDiceSidesSpin_->setRange(1, 100);
     damageBonusSpin_ = new QSpinBox(attackGroup);
@@ -299,6 +299,7 @@ void CombatEncounterDialog::onNextTurnClicked() {
 
 void CombatEncounterDialog::onActionChanged(int /*index*/) {
     updateActionControlsVisibility();
+    refreshSpellInfo();
 }
 
 void CombatEncounterDialog::onTakeActionClicked() {
@@ -386,7 +387,13 @@ void CombatEncounterDialog::updateActionControlsVisibility() {
         case DrinkPotionAction: takeActionButton_->setText("Drink Potion"); break;
         case CastSpellAction: takeActionButton_->setText("Cast Spell"); break;
         case StabilizeAction: takeActionButton_->setText("Stabilize"); break;
-        default: takeActionButton_->setText("Roll Attack"); break;
+        default: {
+            const dnd::Combatant* current = encounter_.current();
+            takeActionButton_->setText(current && !current->attack_name.empty()
+                                           ? QString("Roll Attack (%1)").arg(q(current->attack_name))
+                                           : QString("Roll Attack"));
+            break;
+        }
     }
 }
 
@@ -510,8 +517,12 @@ void CombatEncounterDialog::onSpellChanged() {
 void CombatEncounterDialog::refreshSpellInfo() {
     const dnd::Spell* spell = selectedSpell();
     if (!spell) {
+        const dnd::Combatant* current = encounter_.current();
+        QString why = current && current->armor_not_proficient
+            ? "Can't cast spells while wearing armor you aren't proficient with (take it off in the Inventory)."
+            : "No spells to cast (none known, or no slots left).";
         spellInfoLabel_->setText(spellCombo_->count() == 0 && actionCombo_->currentIndex() == CastSpellAction
-                                     ? "No spells to cast (none known, or no slots left)."
+                                     ? why
                                      : "");
         return;
     }

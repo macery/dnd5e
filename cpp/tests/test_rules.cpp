@@ -72,37 +72,6 @@ TEST_CASE("passive_perception and initiative are derived correctly", "[rules]") 
     REQUIRE(dnd::passive_perception(character) == 10 + 3 + 2);  // 10 + wis mod + proficiency bonus
 }
 
-TEST_CASE("weapon_attack_ability_modifier picks the right ability", "[rules]") {
-    dnd::Character character;
-    character.strength = 16;   // modifier +3
-    character.dexterity = 14;  // modifier +2
-
-    dnd::Weapon longsword;
-    longsword.is_finesse = false;
-    longsword.is_ranged = false;
-    REQUIRE(dnd::weapon_attack_ability_modifier(character, longsword) == 3);
-
-    dnd::Weapon longbow;
-    longbow.is_ranged = true;
-    REQUIRE(dnd::weapon_attack_ability_modifier(character, longbow) == 2);
-
-    dnd::Weapon rapier;
-    rapier.is_finesse = true;
-    REQUIRE(dnd::weapon_attack_ability_modifier(character, rapier) == 3);  // STR still higher
-
-    character.dexterity = 18;  // modifier +4, now higher than STR
-    REQUIRE(dnd::weapon_attack_ability_modifier(character, rapier) == 4);
-}
-
-TEST_CASE("weapon_attack_bonus adds the level's proficiency bonus", "[rules]") {
-    dnd::Character character;
-    character.level = 5;       // proficiency bonus +3
-    character.strength = 16;   // modifier +3
-
-    dnd::Weapon longsword;
-    REQUIRE(dnd::weapon_attack_bonus(character, longsword) == 6);
-}
-
 TEST_CASE("every Ability and Skill has a non-empty description", "[rules]") {
     for (int i = 0; i < dnd::kAbilityCount; ++i) {
         const char* description = dnd::ability_description(static_cast<dnd::Ability>(i));

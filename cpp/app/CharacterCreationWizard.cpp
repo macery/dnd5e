@@ -23,6 +23,7 @@
 #include <array>
 #include <stdexcept>
 
+#include "dnd/equipment.hpp"
 #include "dnd/rules.hpp"
 #include "dnd/spellcasting.hpp"
 
@@ -85,6 +86,54 @@ dnd::Character previewCharacter(const CharacterCreationContext& context) {
     character.wisdom = scores[4];
     character.charisma = scores[5];
     return character;
+}
+
+const dnd::Item* itemNamed(const CharacterCreationContext& context, const std::string& name) {
+    for (const auto& item : context.items) {
+        if (item.name == name) return &item;
+    }
+    return nullptr;
+}
+
+// The equipment the new character will start with: the class kit (if taken)
+// plus the chosen weapon, with the kit's armor and shield worn and the chosen
+// weapon wielded -- resolved through dnd::equip, so a two-handed weapon
+// leaves the shield in the pack.
+std::vector<dnd::InventoryEntry> plannedEquipment(const CharacterCreationContext& context,
+                                                  const dnd::Character& character) {
+    std::vector<dnd::InventoryEntry> inventory;
+    auto add = [&](const std::string& name, int quantity) {
+        const dnd::Item* item = itemNamed(context, name);
+        if (!item) return;
+        for (auto& entry : inventory) {
+            if (entry.item.item_id == item->item_id) {
+                entry.quantity += quantity;
+                return;
+            }
+        }
+        inventory.push_back({*item, quantity, false});
+    };
+    const dnd::ClassEquipment* kit = dnd::class_equipment(context.choices.class_name);
+    if (context.take_starting_kit && kit) {
+        for (const auto& starting : kit->starting_kit) add(starting.item_name, starting.quantity);
+    }
+    if (!context.main_weapon.empty()) {
+        bool held = std::any_of(inventory.begin(), inventory.end(),
+                                [&](const dnd::InventoryEntry& e) { return e.item.name == context.main_weapon; });
+        if (!held) add(context.main_weapon, 1);
+    }
+
+    std::vector<int> toEquip;
+    for (const auto& entry : inventory) {
+        if (entry.item.category == dnd::ItemCategory::Armor || entry.item.category == dnd::ItemCategory::Shield) {
+            toEquip.push_back(entry.item.item_id);
+        }
+    }
+    if (const dnd::Item* weapon = itemNamed(context, context.main_weapon)) toEquip.push_back(weapon->item_id);
+    for (int id : toEquip) {
+        dnd::equip(inventory, id, character, context.choices.class_name, context.choices.race_name);
+    }
+    return inventory;
 }
 
 // True if the chosen class picks spells at level 1.
@@ -742,10 +791,22 @@ private:
 class EquipmentPage : public CreationPage {
 public:
     explicit EquipmentPage(CharacterCreationContext& context)
-        : CreationPage(context, "Starting Equipment", "Pick a weapon and some gear to start with.") {
+        : CreationPage(context, "Starting Equipment",
+                       "Your class's starting kit, the weapon you'll wield, and some adventuring gear. Armor, a "
+                       "shield, and DEX set your AC.") {
+        kitBox_ = new QCheckBox(this);
+        kitBox_->setChecked(true);
+        kitContents_ = new QLabel(this);
+        kitContents_->setWordWrap(true);
+
         weaponCombo_ = new QComboBox(this);
-        for (const auto& weapon : context_.weapons) weaponCombo_->addItem(q(weapon.name), weapon.weapon_id);
+        for (const auto& item : context_.items) {
+            if (item.weapon) weaponCombo_->addItem(q(item.name));
+        }
         weaponDetails_ = new QLabel(this);
+        weaponDetails_->setWordWrap(true);
+        armorClassLabel_ = new QLabel(this);
+        armorClassLabel_->setWordWrap(true);
 
         QStringList pack;
         for (const auto& item : dnd::explorers_pack()) pack << QString("%1 × %2").arg(item.quantity).arg(q(item.item_name));
@@ -755,8 +816,11 @@ public:
         packContents->setWordWrap(true);
 
         auto* form = new QFormLayout();
-        form->addRow("Weapon", weaponCombo_);
+        form->addRow(kitBox_);
+        form->addRow(kitContents_);
+        form->addRow("Wield", weaponCombo_);
         form->addRow("", weaponDetails_);
+        form->addRow("Armor Class", armorClassLabel_);
         form->addRow(packBox_);
         form->addRow(packContents);
 
@@ -765,44 +829,74 @@ public:
         layout->addStretch(1);
         layout->addWidget(errorLabel_);
 
-        connect(weaponCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-                [this](int) { refreshWeaponDetails(); });
+        connect(weaponCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int) { refresh(); });
+        connect(kitBox_, &QCheckBox::toggled, this, [this](bool) { refresh(); });
     }
 
     void initializePage() override {
+        const auto& className = context_.choices.class_name;
         // Re-suggest only when the class changes, so a manual pick survives Back/Next.
-        if (context_.choices.class_name != suggestedFor_) {
-            suggestedFor_ = context_.choices.class_name;
-            if (const dnd::ClassInfo* info = dnd::find_class_info(suggestedFor_)) {
+        if (className != suggestedFor_) {
+            suggestedFor_ = className;
+            if (const dnd::ClassInfo* info = dnd::find_class_info(className)) {
                 int index = weaponCombo_->findText(q(info->suggested_weapon));
                 if (index >= 0) weaponCombo_->setCurrentIndex(index);
             }
         }
-        refreshWeaponDetails();
+        kitBox_->setText(QString("Take the %1 starting kit").arg(q(className)));
+        QStringList kit;
+        if (const dnd::ClassEquipment* equipment = dnd::class_equipment(className)) {
+            for (const auto& item : equipment->starting_kit) {
+                kit << (item.quantity > 1 ? QString("%1 × %2").arg(item.quantity).arg(q(item.item_name))
+                                          : q(item.item_name));
+            }
+        }
+        kitContents_->setText(kit.join(", "));
+        refresh();
     }
 
     bool validatePage() override {
-        context_.choices.weapon_id = weaponCombo_->currentData().toInt();
+        collect();
         context_.take_explorers_pack = packBox_->isChecked();
         return accepted(std::nullopt);
     }
 
 private:
-    void refreshWeaponDetails() {
-        for (const auto& weapon : context_.weapons) {
-            if (weapon.weapon_id != weaponCombo_->currentData().toInt()) continue;
-            QStringList properties;
-            if (weapon.is_finesse) properties << "finesse (uses STR or DEX)";
-            if (weapon.is_ranged) properties << "ranged (uses DEX)";
-            weaponDetails_->setText(QString("%1d%2 damage%3")
-                                        .arg(weapon.damage_dice_count)
-                                        .arg(weapon.damage_dice_sides)
-                                        .arg(properties.isEmpty() ? "" : ", " + properties.join(", ")));
-        }
+    void collect() {
+        context_.main_weapon = weaponCombo_->currentText().toStdString();
+        context_.take_starting_kit = kitBox_->isChecked();
     }
 
+    void refresh() {
+        collect();
+        dnd::Character preview = previewCharacter(context_);
+        auto planned = plannedEquipment(context_, preview);
+        const auto& choices = context_.choices;
+
+        auto attack = dnd::weapon_attack(preview, choices.class_name, choices.race_name, planned);
+        const dnd::Item* weapon = itemNamed(context_, context_.main_weapon);
+        QString details = weapon ? q(weapon->description) : QString();
+        details += QString(" Attack: %1 to hit, %2d%3%4.")
+                       .arg(formatModifier(attack.attack_bonus))
+                       .arg(attack.damage_dice_count)
+                       .arg(attack.damage_dice_sides)
+                       .arg(attack.damage_bonus ? formatModifier(attack.damage_bonus) : QString());
+        if (!attack.proficient) {
+            details += QString(" <span style='color:#b00020'>A %1 isn't proficient with this weapon: no "
+                               "proficiency bonus.</span>").arg(q(choices.class_name));
+        }
+        weaponDetails_->setText(details);
+
+        auto armorClass = dnd::calculate_armor_class(preview, choices.class_name, planned);
+        armorClassLabel_->setText(QString("<b>%1</b> (%2)").arg(armorClass.total).arg(q(armorClass.text())));
+        errorLabel_->clear();
+    }
+
+    QCheckBox* kitBox_ = nullptr;
+    QLabel* kitContents_ = nullptr;
     QComboBox* weaponCombo_ = nullptr;
     QLabel* weaponDetails_ = nullptr;
+    QLabel* armorClassLabel_ = nullptr;
     QCheckBox* packBox_ = nullptr;
     std::string suggestedFor_;
 };
@@ -840,7 +934,6 @@ public:
 private:
     QString render(const dnd::Character& character) const {
         const auto& choices = context_.choices;
-        const dnd::RaceInfo* race = dnd::find_race_info(choices.race_name);
 
         QString abilities;
         for (int a = 0; a < dnd::kAbilityCount; ++a) {
@@ -861,16 +954,22 @@ private:
             }
         }
 
-        QString weaponText = "-";
-        for (const auto& weapon : context_.weapons) {
-            if (weapon.weapon_id != character.weapon_id) continue;
-            int damageModifier = dnd::weapon_attack_ability_modifier(character, weapon);
-            weaponText = QString("%1: %2 to hit, %3d%4%5")
-                             .arg(q(weapon.name), formatModifier(dnd::weapon_attack_bonus(character, weapon)))
-                             .arg(weapon.damage_dice_count)
-                             .arg(weapon.damage_dice_sides)
-                             .arg(damageModifier ? formatModifier(damageModifier) : "");
+        auto planned = plannedEquipment(context_, character);
+        auto attack = dnd::weapon_attack(character, choices.class_name, choices.race_name, planned);
+        QString weaponText = QString("%1: %2 to hit, %3d%4%5 %6")
+                                 .arg(q(attack.name), formatModifier(attack.attack_bonus))
+                                 .arg(attack.damage_dice_count)
+                                 .arg(attack.damage_dice_sides)
+                                 .arg(attack.damage_bonus ? formatModifier(attack.damage_bonus) : QString(),
+                                      q(attack.damage_type));
+        auto armorClass = dnd::calculate_armor_class(character, choices.class_name, planned);
+        QStringList gear;
+        for (const auto& entry : planned) {
+            QString name = entry.quantity > 1 ? QString("%1 × %2").arg(entry.quantity).arg(q(entry.item.name))
+                                              : q(entry.item.name);
+            gear << (entry.equipped ? name + " (equipped)" : name);
         }
+        if (context_.take_explorers_pack) gear << "Explorer's Pack";
 
         return QString("<h2>%1</h2>"
                        "<p>Level 1 %2 %3 · %4 · %5</p>"
@@ -882,13 +981,13 @@ private:
             .arg(q(character.character_name), q(choices.race_name), q(choices.class_name),
                  q(choices.background_name), nameFor(context_.alignments, character.alignment))
             .arg(character.max_hp)
-            .arg(character.armor_class)
+            .arg(QString("%1 (%2)").arg(armorClass.total).arg(q(armorClass.text())))
             .arg(formatModifier(dnd::initiative(character)))
-            .arg(race ? race->speed : 30)
+            .arg(dnd::walking_speed(character, choices.race_name, planned))
             .arg(formatModifier(dnd::proficiency_bonus(character.level)))
             .arg(dnd::passive_perception(character))
-            .arg(abilities, skills.join(", "), weaponText,
-                 context_.take_explorers_pack ? "Explorer's Pack" : "none", spellsText(character));
+            .arg(abilities, skills.join(", "), weaponText, gear.isEmpty() ? QString("none") : gear.join(", "),
+                 spellsText(character));
     }
 
     QString spellsText(const dnd::Character& character) const {
@@ -914,8 +1013,7 @@ private:
 
 }  // namespace
 
-CharacterCreationWizard::CharacterCreationWizard(dnd::Repository& repository, int player_id,
-                                                 const std::vector<dnd::Weapon>& weapons, QWidget* parent)
+CharacterCreationWizard::CharacterCreationWizard(dnd::Repository& repository, int player_id, QWidget* parent)
     : QWizard(parent), repository_(repository), context_(std::make_unique<CharacterCreationContext>()) {
     setWindowTitle("Create a Character");
 
@@ -923,7 +1021,7 @@ CharacterCreationWizard::CharacterCreationWizard(dnd::Repository& repository, in
     context_->classes = repository_.get_classes();
     context_->races = repository_.get_races();
     context_->alignments = repository_.get_alignments();
-    context_->weapons = weapons;
+    context_->items = repository_.get_items();
     context_->spells = repository_.get_spells();
     for (const auto& character : repository_.get_characters()) context_->existing_names.push_back(character.character_name);
 
@@ -952,6 +1050,10 @@ void CharacterCreationWizard::accept() {
     }
 
     int character_id = repository_.add_character(character);
+    for (const auto& entry : plannedEquipment(*context_, character)) {
+        repository_.add_to_inventory(character_id, entry.item.item_id, entry.quantity);
+        if (entry.equipped) repository_.set_equipped(character_id, entry.item.item_id, true);
+    }
     if (picksSpellsAtCreation(*context_)) {
         for (int spell_id : context_->chosen_spell_ids) repository_.add_character_spell(character_id, spell_id);
     }

@@ -1,5 +1,7 @@
 #include "CharacterSheetDialog.hpp"
 
+#include <algorithm>
+
 #include <QComboBox>
 #include <QFormLayout>
 #include <QGroupBox>
@@ -11,6 +13,7 @@
 #include <QWidget>
 
 #include "dnd/character_creation.hpp"
+#include "dnd/equipment.hpp"
 #include "dnd/progression.hpp"
 #include "dnd/rules.hpp"
 #include "dnd/spellcasting.hpp"
@@ -28,19 +31,18 @@ QString nameFor(const std::vector<dnd::LookupEntry>& entries, int id) {
     return QString("#%1").arg(id);
 }
 
-QString weaponSummaryFor(const dnd::Character& character, const std::vector<dnd::Weapon>& weapons) {
-    for (const auto& weapon : weapons) {
-        if (weapon.weapon_id != character.weapon_id) continue;
-
-        int bonus = dnd::weapon_attack_bonus(character, weapon);
-        int damage_modifier = dnd::weapon_attack_ability_modifier(character, weapon);
-        QString damage = QString("%1d%2").arg(weapon.damage_dice_count).arg(weapon.damage_dice_sides);
-        if (damage_modifier != 0) damage += formatModifier(damage_modifier);
-
-        return QString("%1 (%2 to hit, %3 damage)")
-            .arg(QString::fromStdString(weapon.name), formatModifier(bonus), damage);
-    }
-    return "None";
+// "Longsword: +5 to hit, 1d10+3 slashing (two-handed)".
+QString weaponSummaryFor(const dnd::WeaponAttack& attack) {
+    QString damage = attack.damage_dice_count > 0
+        ? QString("%1d%2").arg(attack.damage_dice_count).arg(attack.damage_dice_sides) +
+              (attack.damage_bonus != 0 ? formatModifier(attack.damage_bonus) : QString())
+        : QString::number(std::max(0, attack.damage_bonus));
+    QString text = QString("%1: %2 to hit, %3 %4")
+                       .arg(QString::fromStdString(attack.name), formatModifier(attack.attack_bonus), damage,
+                            QString::fromStdString(attack.damage_type));
+    if (attack.versatile_two_handed) text += " (two-handed)";
+    if (!attack.proficient) text += " — not proficient";
+    return text;
 }
 
 }  // namespace
@@ -49,7 +51,7 @@ CharacterSheetDialog::CharacterSheetDialog(const dnd::Character& character,
                                             const std::vector<dnd::LookupEntry>& classes,
                                             const std::vector<dnd::LookupEntry>& races,
                                             const std::vector<dnd::LookupEntry>& alignments,
-                                            const std::vector<dnd::Weapon>& weapons,
+                                            const std::vector<dnd::InventoryEntry>& inventory,
                                             const std::vector<dnd::Spell>& spells, QWidget* parent)
     : QDialog(parent), dice_(randomSource_) {
     setWindowTitle(QString::fromStdString(character.character_name));
@@ -102,8 +104,13 @@ CharacterSheetDialog::CharacterSheetDialog(const dnd::Character& character,
             summaryForm->addRow("Background", new QLabel(background, summaryGroup));
         }
     }
-    addExplainedRow(summaryForm, "Weapon", new QLabel(weaponSummaryFor(character, weapons), summaryGroup),
-                     "The weapon this character has equipped, its bonus to hit, and its damage roll.");
+    std::string className = nameFor(classes, character.class_id).toStdString();
+    std::string raceName = nameFor(races, character.race).toStdString();
+    auto attack = dnd::weapon_attack(character, className, raceName, inventory);
+    addExplainedRow(summaryForm, "Weapon", new QLabel(weaponSummaryFor(attack), summaryGroup),
+                     "The weapon this character wields (equip one from the Inventory), its bonus to hit, and its "
+                     "damage. Proficiency is added only with weapons the class is trained in; with nothing "
+                     "wielded, it's an unarmed strike (1 + STR).");
     addExplainedRow(summaryForm, "Hit Points",
         new QLabel(QString("%1 / %2").arg(character.current_hp).arg(character.max_hp), summaryGroup),
         "How much damage this character can take before falling unconscious. Current / maximum.");
@@ -122,9 +129,24 @@ CharacterSheetDialog::CharacterSheetDialog(const dnd::Character& character,
                    summaryGroup),
         "Spent on a short rest to heal (roll the die + Constitution modifier). You have one per level; a long "
         "rest recovers up to half of them.");
+    auto armorClass = dnd::calculate_armor_class(character, className, inventory);
     addExplainedRow(summaryForm, "Armor Class",
-        new QLabel(QString::number(character.armor_class), summaryGroup),
-        "How hard this character is to hit. An attack roll must meet or beat this number to hit.");
+        new QLabel(QString("%1  (%2)").arg(armorClass.total).arg(QString::fromStdString(armorClass.text())),
+                   summaryGroup),
+        "How hard this character is to hit. An attack roll must meet or beat this number to hit. Calculated "
+        "from worn armor, DEX, a shield, and class features -- equip armor from the Inventory.");
+    addExplainedRow(summaryForm, "Speed",
+        new QLabel(QString("%1 ft.").arg(dnd::walking_speed(character, raceName, inventory)), summaryGroup),
+        "How far this character can move in a turn, from their race. Heavy armor without enough STR costs 10 ft. "
+        "(Movement isn't tracked in combat yet.)");
+    if (dnd::wearing_armor_without_proficiency(className, inventory)) {
+        auto* warning = new QLabel("Wearing armor this class isn't proficient with: disadvantage on STR and DEX "
+                                   "attacks, checks, and saves, and no spellcasting.",
+                                   summaryGroup);
+        warning->setWordWrap(true);
+        warning->setStyleSheet("color: #b00020;");
+        summaryForm->addRow(warning);
+    }
     addExplainedRow(summaryForm, "Proficiency Bonus",
         new QLabel(formatModifier(dnd::proficiency_bonus(character.level)), summaryGroup),
         "A bonus added to attack rolls, saving throws, and skill checks this character is proficient in. "

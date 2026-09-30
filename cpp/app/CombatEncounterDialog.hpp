@@ -11,7 +11,6 @@
 #include "dnd/monster.hpp"
 #include "dnd/repository.hpp"
 #include "dnd/spell.hpp"
-#include "dnd/weapon.hpp"
 
 class QComboBox;
 class QFormLayout;
@@ -33,8 +32,8 @@ class CombatEncounterDialog : public QDialog {
 
 public:
     CombatEncounterDialog(dnd::Repository& repository, std::vector<dnd::Character> characters,
-                           std::vector<dnd::Monster> monsters, std::vector<dnd::Weapon> weapons,
-                           QWidget* parent = nullptr, const dnd::AdventureTemplate* adventure = nullptr);
+                           std::vector<dnd::Monster> monsters, QWidget* parent = nullptr,
+                           const dnd::AdventureTemplate* adventure = nullptr);
 
 private slots:
     void onAddMonsterClicked();

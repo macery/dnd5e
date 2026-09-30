@@ -12,7 +12,6 @@
 #include "dnd/lookup_entry.hpp"
 #include "dnd/monster.hpp"
 #include "dnd/spell.hpp"
-#include "dnd/weapon.hpp"
 
 namespace dnd {
 
@@ -32,6 +31,10 @@ struct Combatant {
     int damage_dice_sides = 4;
     int damage_bonus = 0;
     bool melee_attack = true;  // the weapon/attack above; ranged changes how Prone applies
+    std::string attack_name;   // "Longsword", "Unarmed Strike", or the monster's attack
+    // Characters only: wearing armor they aren't proficient with, which also
+    // rules out spellcasting (PHB ch. 5).
+    bool armor_not_proficient = false;
     int xp = 0;  // monsters only: awarded to the party on victory
     // Monsters only: STR..CHA, for saving throws. (Characters use their sheet.)
     std::array<int, 6> ability_scores{10, 10, 10, 10, 10, 10};
@@ -80,13 +83,16 @@ struct LootGrant {
 // them with take_events() to update its log and persist changes.
 class Encounter {
 public:
-    // `dice` must outlive the encounter. `classes` resolves each character's
-    // class (hit die, spellcasting); `weapons` their equipped weapon.
-    Encounter(const Dice& dice, std::vector<LookupEntry> classes, std::vector<Weapon> weapons);
+    // `dice` must outlive the encounter. `classes` and `races` resolve each
+    // character's class (hit die, spellcasting, proficiencies) and race
+    // (weapon training).
+    Encounter(const Dice& dice, std::vector<LookupEntry> classes, std::vector<LookupEntry> races);
 
     // --- Setup ---------------------------------------------------------------
     // `known_spells` and `inventory` are the character's at the start of the
     // fight; the encounter keeps its own copies up to date as they're used.
+    // AC and the weapon attack come from the inventory's equipped items
+    // (dnd/equipment.hpp).
     void add_character(const Character& character, std::vector<Spell> known_spells,
                        std::vector<InventoryEntry> inventory);
     // Adds `count` copies (numbered "#1", "#2", ... when count > 1).
@@ -230,7 +236,7 @@ private:
 
     const Dice& dice_;
     std::vector<LookupEntry> classes_;
-    std::vector<Weapon> weapons_;
+    std::vector<LookupEntry> races_;
 
     std::vector<Character> characters_;
     std::map<int, std::vector<Spell>> known_spells_;

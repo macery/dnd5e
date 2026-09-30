@@ -5,6 +5,7 @@
 
 #include "dnd/character_creation.hpp"
 #include "dnd/combat.hpp"
+#include "dnd/equipment.hpp"
 #include "dnd/inventory.hpp"
 #include "dnd/progression.hpp"
 #include "dnd/rules.hpp"
@@ -81,8 +82,8 @@ int sum(const std::vector<int>& values) {
 
 }  // namespace
 
-Encounter::Encounter(const Dice& dice, std::vector<LookupEntry> classes, std::vector<Weapon> weapons)
-    : dice_(dice), classes_(std::move(classes)), weapons_(std::move(weapons)) {}
+Encounter::Encounter(const Dice& dice, std::vector<LookupEntry> classes, std::vector<LookupEntry> races)
+    : dice_(dice), classes_(std::move(classes)), races_(std::move(races)) {}
 
 // --- Setup -------------------------------------------------------------------
 
@@ -90,35 +91,47 @@ void Encounter::add_character(const Character& character, std::vector<Spell> kno
                               std::vector<InventoryEntry> inventory) {
     characters_.push_back(character);
     known_spells_[character.character_id] = std::move(known_spells);
-    inventories_[character.character_id] = std::move(inventory);
 
-    Weapon weapon;  // defaults to an unarmed-like fallback if not found
-    for (const auto& candidate : weapons_) {
-        if (candidate.weapon_id == character.weapon_id) {
-            weapon = candidate;
-            break;
-        }
+    std::string class_name;
+    for (const auto& entry : classes_) {
+        if (entry.id == character.class_id) class_name = entry.name;
     }
+    std::string race_name;
+    for (const auto& entry : races_) {
+        if (entry.id == character.race) race_name = entry.name;
+    }
+    WeaponAttack weapon = dnd::weapon_attack(character, class_name, race_name, inventory);
 
     Combatant combatant;
     combatant.name = character.character_name;
     combatant.is_character = true;
     combatant.character_id = character.character_id;
-    combatant.armor_class = character.armor_class;
+    combatant.armor_class = calculate_armor_class(character, class_name, inventory).total;
     combatant.current_hp = character.dead ? 0 : character.current_hp;
     combatant.max_hp = character.max_hp;
     combatant.dex_modifier = ability_modifier(character.dexterity);
-    combatant.attack_bonus = weapon_attack_bonus(character, weapon);
+    combatant.attack_name = weapon.name;
+    combatant.attack_bonus = weapon.attack_bonus;
     combatant.damage_dice_count = weapon.damage_dice_count;
     combatant.damage_dice_sides = weapon.damage_dice_sides;
-    combatant.damage_bonus = weapon_attack_ability_modifier(character, weapon);
-    combatant.melee_attack = !weapon.is_ranged;
+    combatant.damage_bonus = weapon.damage_bonus;
+    combatant.melee_attack = weapon.melee;
+    combatant.armor_not_proficient = wearing_armor_without_proficiency(class_name, inventory);
     combatant.death_saves.dead = character.dead;
     combatants_.push_back(combatant);
+    inventories_[character.character_id] = std::move(inventory);
+
+    int index = static_cast<int>(combatants_.size()) - 1;
+    if (combatant.armor_not_proficient) {
+        ActiveEffect untrained;
+        untrained.kind = EffectKind::ArmorNotProficient;
+        untrained.target = index;
+        untrained.label = "Armor not proficient";
+        add_effect(untrained);
+    }
 
     // Joining at 0 HP: unconscious but stable, not dying.
     if (!character.dead && character.current_hp <= 0) {
-        int index = static_cast<int>(combatants_.size()) - 1;
         combatants_.back().death_saves.stable = true;
         fall_unconscious(index);
     }
@@ -137,6 +150,7 @@ void Encounter::add_monsters(const Monster& monster, int count) {
         combatant.damage_dice_sides = monster.damage_dice_sides;
         combatant.damage_bonus = monster.damage_bonus;
         combatant.melee_attack = true;  // every seeded monster attack is a melee attack
+        combatant.attack_name = monster.attack_name;
         combatant.xp = xp_for_challenge_rating(monster.challenge_rating);
         combatant.ability_scores = {monster.strength,     monster.dexterity, monster.constitution,
                                     monster.intelligence, monster.wisdom,    monster.charisma};
@@ -983,6 +997,7 @@ std::vector<InventoryEntry> Encounter::healing_items() const {
 std::vector<Spell> Encounter::castable_spells() const {
     std::vector<Spell> spells;
     const Combatant* actor = current_character();
+    if (actor && actor->armor_not_proficient) return spells;  // PHB ch. 5: no spellcasting
     const Character* caster = actor ? character(actor->character_id) : nullptr;
     const ClassInfo* info = caster ? find_class_info_by_id(classes_, caster->class_id) : nullptr;
     if (!caster || !info) return spells;
@@ -1171,6 +1186,10 @@ bool Encounter::cast_spell(int spell_id, int slot_level, const std::vector<int>&
     int actor_index = current_index();
     const Combatant& actor = combatants_[static_cast<size_t>(actor_index)];
 
+    if (actor.armor_not_proficient) {
+        log(actor.name + " can't cast spells while wearing armor they aren't proficient with.");
+        return false;
+    }
     auto castable = castable_spells();
     auto chosen = std::find_if(castable.begin(), castable.end(), [&](const Spell& s) { return s.spell_id == spell_id; });
     if (chosen == castable.end()) {

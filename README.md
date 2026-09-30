@@ -18,8 +18,8 @@ It manages players and characters, computes a full character sheet from the 5e r
   - **Background:** grants two skill proficiencies.
   - **Skills:** class picks and free picks, checked against the rules.
   - **Name and alignment.**
-  - **Starting weapon and Explorer's Pack.**
-  - **Review:** the finished sheet, before saving. HP and AC (including Unarmored Defense) are calculated for you.
+  - **Starting equipment:** the class's PHB kit (e.g. a Fighter's chain mail, shield, longsword, and light crossbow), a choice of weapon to wield, and the Explorer's Pack.
+  - **Review:** the finished sheet, before saving. HP, AC, and the weapon attack are calculated for you.
 
   Editing an existing character still uses the free-form editor.
 - **Character sheet**: every derived stat is computed from the 5e rules, never stored: ability modifiers, proficiency bonus, saving throws, skills, initiative, passive Perception, and weapon attack/damage. Saves and skills can be rolled directly, with advantage or disadvantage.
@@ -27,7 +27,12 @@ It manages players and characters, computes a full character sheet from the 5e r
 - **HP quick-adjust**: Damage and Heal buttons for the selected character.
 - **Initiative tracker**: a standalone turn-order tracker.
 - **Monsters**: a seeded list of low-CR enemies (Kobold, Goblin, Skeleton, Wolf, Zombie, Orc) with stat blocks and attacks.
-- **Weapons**: a seeded weapon list with finesse/ranged handling (finesse weapons use the better of STR or DEX).
+- **Weapons, armor & AC** (2014 PHB ch. 5): 16 weapons, 12 armors, and a shield, all ordinary inventory items.
+  - **Equipping:** equip them from the Inventory: one armor, one shield, and one weapon at a time; two-handed weapons and shields don't mix.
+  - **AC is always calculated:** from armor (light adds DEX, medium up to +2, heavy none), a shield, and Barbarian/Monk Unarmored Defense. The sheet shows the breakdown.
+  - **Attacks** use the wielded weapon (finesse, ranged, versatile, unarmed strike), adding proficiency only with weapons your class or race is trained in.
+  - **Untrained armor** gives disadvantage on STR/DEX rolls and blocks spellcasting.
+  - **Heavy armor** without enough STR costs 10 ft of speed.
 - **Combat encounters**:
   - Real initiative order.
   - Monster turns resolve automatically.
@@ -187,9 +192,9 @@ Any pending schema migrations run on launch, so older save files are upgraded in
 - [x] **Basic items**: seed common adventuring gear (rations, rope, torches, bedroll, waterskin, thieves' tools) and consumables (Potion of Healing: 2d4+2).
 - [x] **Inventory UI**: an Inventory dialog (opened from the main window) to add, drop, and use items.
 - [x] **Use items in combat**: drinking a potion as an action (or a bonus action, depending on the rules variant).
-- [x] **Equipment design**: see [docs/equipment-system.md](docs/equipment-system.md). Phase 1 (data and rules) is done; phase 2 (combat, Inventory, sheet, wizard) is next. It covers the next two items and *Weapon proficiencies*, with its decisions settled: calculated AC, warnings plus combat penalties for armor you aren't proficient with, fixed starting kits per class, weapon proficiency included, and existing weapons converted to inventory items.
-- [ ] **Equipping & weapons in the inventory**: add an equipped flag to inventory entries, and make the equipped weapon one of the character's inventory items instead of the single `WeaponID` column.
-- [ ] **Armor & shields**: seed armor (light/medium/heavy) and calculate AC from the equipped armor, DEX (capped for medium armor), and a shield, instead of entering AC by hand.
+- [x] **Equipment design**: see [docs/equipment-system.md](docs/equipment-system.md). Phases 1 (data and rules) and 2 (combat, Inventory, sheet, wizard) are done. It covers the next two items and *Weapon proficiencies*, with its decisions settled: calculated AC, warnings plus combat penalties for armor you aren't proficient with, fixed starting kits per class, weapon proficiency included, and existing weapons converted to inventory items.
+- [x] **Equipping & weapons in the inventory**: weapons are inventory items, and the Inventory dialog equips one armor, one shield, and one weapon at a time. The old `WeaponID` column is retired.
+- [x] **Armor & shields**: the PHB armor table and the shield are seeded. AC is calculated from the worn armor, DEX (capped for medium), a shield, and Unarmored Defense, and is never entered by hand.
 - [ ] **Currency**: track CP/SP/EP/GP/PP and have adventures award gold alongside XP.
 - [ ] **Encumbrance** (optional): item weights compared with carrying capacity (STR × 15).
 - [ ] **Item uses**: a Healer's Kit has 10 uses in the PHB, but they aren't tracked, so stabilizing with one never uses it up. The same applies to other limited-use gear later (torches burning out, rations eaten).
@@ -233,7 +238,7 @@ Phases 1 (core and data) and 2 (UI) are done; see [docs/magic-system.md](docs/ma
 - [ ] **Level-up choices**: Ability Score Improvements at levels 4/8/12/16/19, and an option to roll HP instead of taking the average.
 - [x] **Starting HP**: level-1 max HP is the class hit die plus CON, calculated by the wizard.
 - [ ] **Keep level and XP in sync**: editing the level by hand in the editor can leave it out of step with XP.
-- [ ] **Weapon proficiencies**: attack bonuses currently assume the character is proficient with every weapon.
+- [x] **Weapon proficiencies**: class (PHB ch. 3) and base-Dwarf weapon training. Proficiency is added only with trained weapons, and the wizard and Inventory warn about untrained ones. The Elf's training waits for subraces.
 - [x] **Backgrounds**: 13 PHB backgrounds, each granting two skill proficiencies, stored on the character and shown on the sheet. Background features and tool proficiencies aren't modeled.
 
 ### Combat

@@ -64,14 +64,14 @@ struct Fixture {
         return 0;
     }
 
-    int weapon_id(const std::string& name) {
-        for (const auto& w : repo.get_weapons()) {
-            if (w.name == name) return w.weapon_id;
-        }
-        return 0;
+    // Aria's equipment: chain mail (AC 16) and a longsword, both equipped.
+    std::vector<dnd::InventoryEntry> fighter_gear(std::vector<dnd::InventoryEntry> extra = {}) {
+        std::vector<dnd::InventoryEntry> gear = {{item("Chain Mail"), 1, true}, {item("Longsword"), 1, true}};
+        gear.insert(gear.end(), extra.begin(), extra.end());
+        return gear;
     }
 
-    // A level-1 fighter with a longsword: +5 to hit, 1d8+3.
+    // A level-1 fighter; with fighter_gear(), AC 16 and a longsword: +5 to hit, 1d10+3 two-handed.
     dnd::Character fighter(int id = 1) {
         dnd::Character c;
         c.character_id = id;
@@ -82,12 +82,10 @@ struct Fixture {
         c.constitution = 14;
         c.max_hp = 12;
         c.current_hp = 12;
-        c.armor_class = 16;
-        c.weapon_id = weapon_id("Longsword");
         return c;
     }
 
-    // A level-1 wizard: INT 16, spell attack +5, save DC 13, two 1st-level slots.
+    // A level-1 wizard: INT 16, spell attack +5, save DC 13, two 1st-level slots; AC 12 unarmored.
     dnd::Character wizard(int id = 2) {
         dnd::Character c;
         c.character_id = id;
@@ -97,12 +95,11 @@ struct Fixture {
         c.dexterity = 14;
         c.max_hp = 8;
         c.current_hp = 8;
-        c.armor_class = 12;
         return c;
     }
 
     dnd::Encounter encounter(const dnd::Dice& dice) {
-        return dnd::Encounter(dice, repo.get_classes(), repo.get_weapons());
+        return dnd::Encounter(dice, repo.get_classes(), repo.get_races());
     }
 };
 
@@ -133,14 +130,16 @@ TEST_CASE("setup builds combatants from characters and monsters", "[encounter]")
     ScriptedRandomSource rolls({10});
     dnd::Dice dice(rolls);
     auto encounter = f.encounter(dice);
-    encounter.add_character(f.fighter(), {}, {});
+    encounter.add_character(f.fighter(), {}, f.fighter_gear());
     encounter.add_monsters(f.monster("Goblin"), 2);
 
     const auto& combatants = encounter.combatants();
     REQUIRE(combatants.size() == 3);
     REQUIRE(combatants[0].name == "Aria");
     REQUIRE(combatants[0].attack_bonus == 5);  // +2 proficiency, +3 STR
-    REQUIRE(combatants[0].damage_dice_sides == 8);
+    REQUIRE(combatants[0].attack_name == "Longsword");
+    REQUIRE(combatants[0].armor_class == 16);                // chain mail
+    REQUIRE(combatants[0].damage_dice_sides == 10);          // versatile, held two-handed (no shield)
     REQUIRE(combatants[0].damage_bonus == 3);
     REQUIRE(combatants[1].name == "Goblin #1");
     REQUIRE(combatants[2].name == "Goblin #2");
@@ -160,7 +159,7 @@ TEST_CASE("initiative order, then monsters act until a character's turn", "[enco
     ScriptedRandomSource rolls({5, 15, 1, 3});
     dnd::Dice dice(rolls);
     auto encounter = f.encounter(dice);
-    encounter.add_character(f.fighter(), {}, {});
+    encounter.add_character(f.fighter(), {}, f.fighter_gear());
     encounter.add_monsters(f.monster("Goblin"), 1);
 
     encounter.roll_initiative();
@@ -180,7 +179,7 @@ TEST_CASE("a character gets one action per turn", "[encounter]") {
     ScriptedRandomSource rolls({20, 1, 1, 1});  // Aria first; goblin misses on 1s
     dnd::Dice dice(rolls);
     auto encounter = f.encounter(dice);
-    encounter.add_character(f.fighter(), {}, {});
+    encounter.add_character(f.fighter(), {}, f.fighter_gear());
     encounter.add_monsters(f.monster("Goblin"), 1);
     encounter.roll_initiative();
     encounter.take_events();
@@ -203,7 +202,7 @@ TEST_CASE("dodge gives monsters disadvantage until the dodger's next turn", "[en
     ScriptedRandomSource rolls({20, 1, 1, 18, 2});
     dnd::Dice dice(rolls);
     auto encounter = f.encounter(dice);
-    encounter.add_character(f.fighter(), {}, {});
+    encounter.add_character(f.fighter(), {}, f.fighter_gear());
     encounter.add_monsters(f.monster("Goblin"), 1);
     encounter.roll_initiative();
     encounter.take_events();
@@ -223,7 +222,7 @@ TEST_CASE("attacking to victory awards XP and loot", "[encounter]") {
     ScriptedRandomSource rolls({20, 1, 15, 8});
     dnd::Dice dice(rolls);
     auto encounter = f.encounter(dice);
-    encounter.add_character(f.fighter(), {}, {});
+    encounter.add_character(f.fighter(), {}, f.fighter_gear());
     encounter.add_monsters(f.monster("Goblin"), 1);
     encounter.set_victory_reward("The trail is clear.", {{f.item("Potion of Healing"), 2}});
     encounter.roll_initiative();
@@ -256,7 +255,7 @@ TEST_CASE("victory can level a character up", "[encounter]") {
     auto encounter = f.encounter(dice);
     auto aria = f.fighter();
     aria.experience = 280;  // 300 is level 2
-    encounter.add_character(aria, {}, {});
+    encounter.add_character(aria, {}, f.fighter_gear());
     encounter.add_monsters(f.monster("Goblin"), 1);
     encounter.roll_initiative();
     encounter.attack(1, 5, 1, 8, 3);
@@ -273,7 +272,7 @@ TEST_CASE("defeat when every character is down", "[encounter]") {
     ScriptedRandomSource rolls({1, 20, 1, 20, 12, 12});
     dnd::Dice dice(rolls);
     auto encounter = f.encounter(dice);
-    encounter.add_character(f.fighter(), {}, {});
+    encounter.add_character(f.fighter(), {}, f.fighter_gear());
     encounter.add_monsters(f.monster("Orc"), 1);
     encounter.roll_initiative();
 
@@ -295,7 +294,7 @@ TEST_CASE("next_turn skips combatants who are down", "[encounter]") {
     ScriptedRandomSource rolls({20, 10, 5, 15, 8, 1, 1});
     dnd::Dice dice(rolls);
     auto encounter = f.encounter(dice);
-    encounter.add_character(f.fighter(), {}, {});
+    encounter.add_character(f.fighter(), {}, f.fighter_gear());
     encounter.add_monsters(f.monster("Goblin"), 2);
     encounter.roll_initiative();
     REQUIRE(encounter.attack(1, 5, 1, 8, 3));
@@ -317,7 +316,7 @@ TEST_CASE("drinking a potion heals and uses it up", "[encounter]") {
     auto aria = f.fighter();
     aria.current_hp = 2;
     auto potion = f.item("Potion of Healing");
-    encounter.add_character(aria, {}, {{potion, 1}, {f.item("Torch"), 5}});
+    encounter.add_character(aria, {}, f.fighter_gear({{potion, 1}, {f.item("Torch"), 5}}));
     encounter.add_monsters(f.monster("Goblin"), 1);
     encounter.roll_initiative();
     encounter.take_events();
@@ -342,7 +341,7 @@ TEST_CASE("an invalid choice doesn't use up the action", "[encounter]") {
     ScriptedRandomSource rolls({20, 1});
     dnd::Dice dice(rolls);
     auto encounter = f.encounter(dice);
-    encounter.add_character(f.fighter(), {}, {});
+    encounter.add_character(f.fighter(), {}, f.fighter_gear());
     encounter.add_monsters(f.monster("Goblin"), 1);
     encounter.roll_initiative();
     encounter.take_events();
@@ -436,7 +435,7 @@ TEST_CASE("joining at 0 HP means unconscious but stable", "[encounter]") {
     auto encounter = f.encounter(dice);
     auto aria = f.fighter();
     aria.current_hp = 0;
-    encounter.add_character(aria, {}, {});
+    encounter.add_character(aria, {}, f.fighter_gear());
     REQUIRE(encounter.status_text(0) == "Stable");
     REQUIRE(dnd::has_condition(encounter.effects(), 0, dnd::Condition::Unconscious));
 }
@@ -456,7 +455,7 @@ TEST_CASE("healing spells target the party, including anyone down", "[encounter]
     ScriptedRandomSource rolls({1, 20, 1, 5});
     dnd::Dice dice(rolls);
     auto encounter = f.encounter(dice);
-    encounter.add_character(downed, {}, {});
+    encounter.add_character(downed, {}, f.fighter_gear());
     encounter.add_character(cleric, {cure}, {});
     encounter.add_monsters(f.monster("Goblin"), 1);
     encounter.roll_initiative();
@@ -491,7 +490,7 @@ TEST_CASE("dropping to 0 HP: dying, and monsters ignore the dying", "[encounter]
     auto encounter = f.encounter(dice);
     auto aria = f.fighter();
     aria.current_hp = 3;
-    encounter.add_character(aria, {}, {});
+    encounter.add_character(aria, {}, f.fighter_gear());
     encounter.add_character(f.wizard(), {}, {});
     encounter.add_monsters(f.monster("Orc"), 1);
 
@@ -531,7 +530,7 @@ TEST_CASE("a natural 20 death save wakes a character up for their turn", "[encou
     auto encounter = f.encounter(dice);
     auto aria = f.fighter();
     aria.current_hp = 3;
-    encounter.add_character(aria, {}, {});
+    encounter.add_character(aria, {}, f.fighter_gear());
     encounter.add_character(f.wizard(), {}, {});
     encounter.add_monsters(f.monster("Orc"), 1);
     encounter.roll_initiative();
@@ -554,7 +553,7 @@ TEST_CASE("defeat stabilizes anyone still dying", "[encounter][effects]") {
     auto encounter = f.encounter(dice);
     auto aria = f.fighter();
     aria.current_hp = 3;
-    encounter.add_character(aria, {}, {});
+    encounter.add_character(aria, {}, f.fighter_gear());
     encounter.add_monsters(f.monster("Orc"), 1);
     encounter.roll_initiative();
 
@@ -575,7 +574,7 @@ TEST_CASE("dead characters don't act, can't be healed, and earn no XP", "[encoun
     auto encounter = f.encounter(dice);
     auto aria = f.fighter();
     aria.dead = true;
-    encounter.add_character(aria, {}, {});
+    encounter.add_character(aria, {}, f.fighter_gear());
     encounter.add_character(f.wizard(), {fire_bolt, cure}, {});
     encounter.add_monsters(f.monster("Goblin"), 1);
     encounter.roll_initiative();
@@ -599,7 +598,7 @@ TEST_CASE("prone, bonus dice, and effect durations", "[encounter][effects]") {
     ScriptedRandomSource rolls({20, 1, 3, 5, 12, 1, 1, 2});
     dnd::Dice dice(rolls);
     auto encounter = f.encounter(dice);
-    encounter.add_character(f.fighter(), {}, {});
+    encounter.add_character(f.fighter(), {}, f.fighter_gear());
     encounter.add_monsters(f.monster("Goblin"), 1);
     encounter.roll_initiative();
     encounter.take_events();
@@ -689,7 +688,7 @@ TEST_CASE("a charmed monster won't attack its charmer; harming it breaks the cha
     ScriptedRandomSource rolls({1, 20, 15, 1});  // Goblin first; Aria then hits for 1d8 = 1 (+3 = 4)
     dnd::Dice dice(rolls);
     auto encounter = f.encounter(dice);
-    encounter.add_character(f.fighter(), {}, {});
+    encounter.add_character(f.fighter(), {}, f.fighter_gear());
     encounter.add_monsters(f.monster("Goblin"), 1);
 
     dnd::ActiveEffect charmed;
@@ -724,7 +723,7 @@ struct PartyVsGoblin {
         : rolls(with_initiative(std::move(after_initiative))), dice(rolls), encounter(f.encounter(dice)) {
         std::vector<dnd::Spell> spells;
         for (const auto& name : zanna_spells) spells.push_back(f.spell(name));
-        encounter.add_character(f.fighter(), {}, {});
+        encounter.add_character(f.fighter(), {}, f.fighter_gear());
         encounter.add_character(f.wizard(), spells, std::move(zanna_inventory));
         encounter.add_monsters(f.monster("Goblin"), 1);
         encounter.roll_initiative();
@@ -881,7 +880,7 @@ TEST_CASE("a Wolf's bite can knock its target prone", "[encounter][effects]") {
     ScriptedRandomSource rolls({1, 20, 1, 15, 1, 1, 2});
     dnd::Dice dice(rolls);
     auto encounter = f.encounter(dice);
-    encounter.add_character(f.fighter(), {}, {});
+    encounter.add_character(f.fighter(), {}, f.fighter_gear());
     encounter.add_monsters(f.monster("Wolf"), 1);
     encounter.roll_initiative();
     auto lines = logs(encounter.take_events());
@@ -897,7 +896,7 @@ TEST_CASE("stabilizing a dying ally", "[encounter][effects]") {
         auto encounter = f.encounter(dice);
         auto aria = f.fighter();
         aria.current_hp = 3;
-        encounter.add_character(aria, {}, {});
+        encounter.add_character(aria, {}, f.fighter_gear());
         encounter.add_character(f.wizard(), std::move(spells), std::move(inventory));
         encounter.add_monsters(f.monster("Orc"), 1);
         encounter.roll_initiative();  // the Orc drops Aria; Zanna's turn
@@ -960,7 +959,7 @@ TEST_CASE("effects that block healing", "[encounter][effects]") {
     auto aria = f.fighter();
     aria.current_hp = 2;
     auto potion = f.item("Potion of Healing");
-    encounter.add_character(aria, {}, {{potion, 1}});
+    encounter.add_character(aria, {}, f.fighter_gear({{potion, 1}}));
     encounter.add_monsters(f.monster("Goblin"), 1);
     encounter.roll_initiative();
     encounter.take_events();
@@ -982,7 +981,7 @@ TEST_CASE("status tooltips explain effects in plain language", "[encounter][effe
     ScriptedRandomSource rolls({10, 20, 1});
     dnd::Dice dice(rolls);
     auto encounter = f.encounter(dice);
-    encounter.add_character(f.fighter(), {}, {});
+    encounter.add_character(f.fighter(), {}, f.fighter_gear());
     encounter.add_character(f.wizard(), {}, {});
     encounter.add_monsters(f.monster("Goblin"), 1);
     encounter.roll_initiative();  // Zanna's turn
@@ -1028,11 +1027,57 @@ TEST_CASE("status tooltips for dying, stable, and dead", "[encounter][effects]")
     stable.current_hp = 0;
     auto dead = f.wizard(2);
     dead.dead = true;
-    encounter.add_character(stable, {}, {});
+    encounter.add_character(stable, {}, f.fighter_gear());
     encounter.add_character(dead, {}, {});
 
     auto lines = encounter.status_tooltip(0);
     REQUIRE(lines.at(0) == "Stable: unconscious at 0 HP, but no longer dying. Any healing wakes them.");
     REQUIRE(lines.at(1).rfind("Unconscious: Incapacitated and prone.", 0) == 0);
     REQUIRE(encounter.status_tooltip(1) == std::vector<std::string>{"Dead. Only revival magic can bring them back."});
+}
+
+// --- Equipment ---------------------------------------------------------------
+
+TEST_CASE("combatants' AC and attacks come from their equipment", "[encounter][equipment]") {
+    Fixture f;
+    ScriptedRandomSource rolls({20, 10, 1});
+    dnd::Dice dice(rolls);
+    auto encounter = f.encounter(dice);
+    encounter.add_character(f.fighter(1), {}, {{f.item("Chain Mail"), 1, true}, {f.item("Shield"), 1, true},
+                                              {f.item("Longsword"), 1, true}});
+    encounter.add_character(f.wizard(2), {}, {});  // nothing equipped
+    encounter.add_monsters(f.monster("Goblin"), 1);
+
+    const auto& aria = encounter.combatants()[0];
+    REQUIRE(aria.armor_class == 18);  // chain mail + shield
+    REQUIRE(aria.attack_name == "Longsword");
+    REQUIRE(aria.damage_dice_sides == 8);  // one-handed with a shield
+
+    const auto& zanna = encounter.combatants()[1];
+    REQUIRE(zanna.armor_class == 12);  // 10 + DEX
+    REQUIRE(zanna.attack_name == "Unarmed Strike");
+    REQUIRE(zanna.damage_dice_count == 0);
+    REQUIRE(zanna.damage_bonus == 1);  // 1 + STR +0
+}
+
+TEST_CASE("armor without proficiency: disadvantage and no spellcasting", "[encounter][equipment]") {
+    Fixture f;
+    auto fire_bolt = f.spell("Fire Bolt");
+    ScriptedRandomSource rolls({20, 1});  // Zanna first
+    dnd::Dice dice(rolls);
+    auto encounter = f.encounter(dice);
+    encounter.add_character(f.wizard(), {fire_bolt}, {{f.item("Plate Armor"), 1, true}});
+    encounter.add_monsters(f.monster("Goblin"), 1);
+    encounter.roll_initiative();
+    encounter.take_events();
+
+    REQUIRE(encounter.combatants()[0].armor_not_proficient);
+    REQUIRE(encounter.combatants()[0].armor_class == 18);
+    REQUIRE(dnd::has_effect(encounter.effects(), 0, dnd::EffectKind::ArmorNotProficient));
+    REQUIRE(encounter.status_text(0) == "Up (Armor not proficient)");
+    REQUIRE(encounter.castable_spells().empty());
+    REQUIRE_FALSE(encounter.cast_spell(fire_bolt.spell_id, 0, {1}));
+    REQUIRE(logs(encounter.take_events()) ==
+            std::vector<std::string>{"Zanna can't cast spells while wearing armor they aren't proficient with."});
+    REQUIRE(encounter.awaiting_action());  // the action isn't used up
 }

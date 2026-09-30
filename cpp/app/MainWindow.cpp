@@ -159,7 +159,6 @@ void MainWindow::reloadLookupTables() {
     classes_ = repository_.get_classes();
     races_ = repository_.get_races();
     alignments_ = repository_.get_alignments();
-    weapons_ = repository_.get_weapons();
     characterModel_->setClasses(classes_);
     characterModel_->setRaces(races_);
     characterModel_->setAlignments(alignments_);
@@ -226,7 +225,7 @@ void MainWindow::onAddCharacterClicked() {
         return;
     }
 
-    CharacterCreationWizard wizard(repository_, currentPlayerId(), weapons_, this);
+    CharacterCreationWizard wizard(repository_, currentPlayerId(), this);
     if (wizard.exec() == QDialog::Accepted) reloadCharactersForCurrentPlayer();
 }
 
@@ -238,7 +237,7 @@ void MainWindow::onEditCharacterClicked() {
     }
 
     const dnd::Character& existing = characterModel_->characterAt(index.row());
-    CharacterEditorDialog dialog(classes_, races_, alignments_, weapons_, &existing, this);
+    CharacterEditorDialog dialog(classes_, races_, alignments_, &existing, this);
     if (dialog.exec() == QDialog::Accepted) {
         dnd::Character updated = dialog.character();
         updated.character_id = existing.character_id;
@@ -273,7 +272,8 @@ void MainWindow::onCharacterActivated(const QModelIndex& index) {
     if (!index.isValid()) return;
 
     const dnd::Character& character = characterModel_->characterAt(index.row());
-    CharacterSheetDialog dialog(character, classes_, races_, alignments_, weapons_,
+    CharacterSheetDialog dialog(character, classes_, races_, alignments_,
+                                repository_.get_inventory(character.character_id),
                                 repository_.get_character_spells(character.character_id), this);
     dialog.exec();
 }
@@ -314,7 +314,7 @@ void MainWindow::onInventoryClicked() {
     const dnd::Character* selected = selectedCharacter("Inventory");
     if (!selected) return;
 
-    InventoryDialog dialog(repository_, *selected, this);
+    InventoryDialog dialog(repository_, *selected, classes_, races_, this);
     dialog.exec();
     reloadCharactersForCurrentPlayer();  // using a potion changes HP
 }
@@ -422,7 +422,7 @@ void MainWindow::onMonstersClicked() {
 void MainWindow::onCombatEncounterClicked() {
     auto characters = charactersWhoCanFight("Combat Encounter");
     if (characters.empty() && !repository_.get_characters().empty()) return;
-    CombatEncounterDialog dialog(repository_, characters, repository_.get_monsters(), weapons_, this);
+    CombatEncounterDialog dialog(repository_, characters, repository_.get_monsters(), this);
     dialog.exec();
     reloadCharactersForCurrentPlayer();
 }
@@ -437,7 +437,7 @@ void MainWindow::onSoloAdventureClicked() {
 
     auto characters = charactersWhoCanFight("Solo Adventure");
     if (characters.empty() && !repository_.get_characters().empty()) return;
-    CombatEncounterDialog dialog(repository_, characters, repository_.get_monsters(), weapons_, this,
+    CombatEncounterDialog dialog(repository_, characters, repository_.get_monsters(), this,
                                   &templates[static_cast<size_t>(index)]);
     dialog.exec();
     reloadCharactersForCurrentPlayer();

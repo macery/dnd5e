@@ -7,14 +7,29 @@
 #include <QHeaderView>
 #include <QLabel>
 #include <QPushButton>
+#include <QStringList>
 #include <QSpinBox>
 #include <QTableWidget>
 #include <QVBoxLayout>
 
+#include "dnd/equipment.hpp"
 #include "dnd/inventory.hpp"
 
-InventoryDialog::InventoryDialog(dnd::Repository& repository, dnd::Character character, QWidget* parent)
+namespace {
+std::string nameFor(const std::vector<dnd::LookupEntry>& entries, int id) {
+    for (const auto& entry : entries) {
+        if (entry.id == id) return entry.name;
+    }
+    return "";
+}
+}  // namespace
+
+InventoryDialog::InventoryDialog(dnd::Repository& repository, dnd::Character character,
+                                 const std::vector<dnd::LookupEntry>& classes,
+                                 const std::vector<dnd::LookupEntry>& races, QWidget* parent)
     : QDialog(parent), repository_(repository), character_(std::move(character)) {
+    className_ = nameFor(classes, character_.class_id);
+    raceName_ = nameFor(races, character_.race);
     setWindowTitle(QString("Inventory — %1").arg(QString::fromStdString(character_.character_name)));
 
     hpLabel_ = new QLabel(this);
@@ -27,8 +42,13 @@ InventoryDialog::InventoryDialog(dnd::Repository& repository, dnd::Character cha
     headerRow->addStretch(1);
     headerRow->addWidget(weightLabel_);
 
-    table_ = new QTableWidget(0, 4, this);
-    table_->setHorizontalHeaderLabels({"Item", "Qty", "Weight", "Value"});
+    equipmentLabel_ = new QLabel(this);
+    equipmentLabel_->setWordWrap(true);
+
+    table_ = new QTableWidget(0, 5, this);
+    table_->setHorizontalHeaderLabels({"Item", "Qty", "Weight", "Value", "Equipped"});
+    table_->horizontalHeaderItem(4)->setToolTip(
+        "Worn armor and shield, and the wielded weapon. They set AC and the attack used in combat.");
     table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
     table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table_->setSelectionBehavior(QAbstractItemView::SelectRows);
@@ -36,10 +56,14 @@ InventoryDialog::InventoryDialog(dnd::Repository& repository, dnd::Character cha
     table_->verticalHeader()->setVisible(false);
 
     auto* rowButtons = new QHBoxLayout();
+    equipButton_ = new QPushButton("Equip", this);
+    equipButton_->setToolTip("Wear armor or a shield, or wield a weapon. One of each at a time; a two-handed "
+                             "weapon can't be used with a shield.");
     useButton_ = new QPushButton("Use", this);
     useButton_->setToolTip("Use the selected consumable, e.g. drink a Potion of Healing to regain HP.");
     dropButton_ = new QPushButton("Drop One", this);
     rowButtons->addStretch(1);
+    rowButtons->addWidget(equipButton_);
     rowButtons->addWidget(useButton_);
     rowButtons->addWidget(dropButton_);
 
@@ -64,6 +88,7 @@ InventoryDialog::InventoryDialog(dnd::Repository& repository, dnd::Character cha
 
     auto* layout = new QVBoxLayout(this);
     layout->addLayout(headerRow);
+    layout->addWidget(equipmentLabel_);
     layout->addWidget(table_, 1);
     layout->addLayout(rowButtons);
     layout->addWidget(messageLabel_);
@@ -74,6 +99,7 @@ InventoryDialog::InventoryDialog(dnd::Repository& repository, dnd::Character cha
     connect(addButton_, &QPushButton::clicked, this, &InventoryDialog::onAddClicked);
     connect(dropButton_, &QPushButton::clicked, this, &InventoryDialog::onDropClicked);
     connect(useButton_, &QPushButton::clicked, this, &InventoryDialog::onUseClicked);
+    connect(equipButton_, &QPushButton::clicked, this, &InventoryDialog::onEquipClicked);
     connect(table_, &QTableWidget::itemSelectionChanged, this, &InventoryDialog::onSelectionChanged);
 
     reload();
@@ -92,11 +118,22 @@ void InventoryDialog::reload() {
         table_->setItem(row, 1, new QTableWidgetItem(QString::number(entry.quantity)));
         table_->setItem(row, 2, new QTableWidgetItem(QString("%1 lb").arg(entry.item.weight_lb * entry.quantity)));
         table_->setItem(row, 3, new QTableWidgetItem(QString::fromStdString(dnd::format_cost(entry.item.cost_cp))));
+        table_->setItem(row, 4, new QTableWidgetItem(entry.equipped ? "✓" : ""));
     }
     if (selectedRow >= 0 && selectedRow < table_->rowCount()) table_->selectRow(selectedRow);
 
     hpLabel_->setText(QString("HP: %1 / %2").arg(character_.current_hp).arg(character_.max_hp));
     weightLabel_->setText(QString("Carrying: %1 lb").arg(dnd::total_weight(inventory_)));
+
+    auto armorClass = dnd::calculate_armor_class(character_, className_, inventory_);
+    auto attack = dnd::weapon_attack(character_, className_, raceName_, inventory_);
+    equipmentLabel_->setText(QString("<b>AC %1</b> (%2) · <b>Attack:</b> %3 %4%5")
+                                 .arg(armorClass.total)
+                                 .arg(QString::fromStdString(armorClass.text()),
+                                      QString::fromStdString(attack.name),
+                                      attack.attack_bonus >= 0 ? QString("+%1").arg(attack.attack_bonus)
+                                                               : QString::number(attack.attack_bonus),
+                                      attack.proficient ? "" : " (not proficient)"));
     onSelectionChanged();
 }
 
@@ -109,6 +146,9 @@ const dnd::InventoryEntry* InventoryDialog::selectedEntry() const {
 void InventoryDialog::onSelectionChanged() {
     const dnd::InventoryEntry* entry = selectedEntry();
     dropButton_->setEnabled(entry != nullptr);
+    bool equippable = entry && (entry->item.weapon || entry->item.armor);
+    equipButton_->setEnabled(equippable);
+    equipButton_->setText(entry && entry->equipped ? "Unequip" : "Equip");
     useButton_->setEnabled(entry != nullptr && dnd::is_healing_item(entry->item));
 }
 
@@ -146,5 +186,40 @@ void InventoryDialog::onUseClicked() {
     repository_.remove_from_inventory(character_.character_id, item.item_id);
     repository_.update_character(character_);
     messageLabel_->setText(QString("Used %1: regained %2 HP.").arg(QString::fromStdString(item.name)).arg(regained));
+    reload();
+}
+
+void InventoryDialog::onEquipClicked() {
+    const dnd::InventoryEntry* entry = selectedEntry();
+    if (!entry) return;
+    int itemId = entry->item.item_id;
+    QString name = QString::fromStdString(entry->item.name);
+
+    if (entry->equipped) {
+        dnd::unequip(inventory_, itemId);
+        repository_.set_equipped(character_.character_id, itemId, false);
+        messageLabel_->setText(QString("Unequipped %1.").arg(name));
+        reload();
+        return;
+    }
+
+    auto result = dnd::equip(inventory_, itemId, character_, className_, raceName_);
+    if (!result.ok) {
+        messageLabel_->setText(QString::fromStdString(result.error));
+        return;
+    }
+    repository_.set_equipped(character_.character_id, itemId, true);
+    QStringList removed;
+    for (int other : result.unequipped) {
+        repository_.set_equipped(character_.character_id, other, false);
+        for (const auto& e : inventory_) {
+            if (e.item.item_id == other) removed << QString::fromStdString(e.item.name);
+        }
+    }
+    QString message = QString("Equipped %1.").arg(name);
+    if (!removed.isEmpty()) message += QString(" (Took off %1.)").arg(removed.join(", "));
+    for (const auto& warning : result.warnings) message += "<br><span style='color:#b00020'>" +
+                                                           QString::fromStdString(warning).toHtmlEscaped() + "</span>";
+    messageLabel_->setText(message);
     reload();
 }

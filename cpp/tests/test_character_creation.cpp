@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "dnd/character_creation.hpp"
+#include "dnd/equipment.hpp"
 #include "dnd/progression.hpp"
 #include "dnd/repository.hpp"
 
@@ -52,10 +53,25 @@ TEST_CASE("class, race, and background data cover the seeded tables", "[creation
         REQUIRE(info->skill_choice_count <= static_cast<int>(info->skill_options.size()));
         REQUIRE(info->saving_throws[0] != info->saving_throws[1]);
 
-        auto weapons = repo.get_weapons();
-        bool weapon_seeded = std::any_of(weapons.begin(), weapons.end(),
-                                         [&](const dnd::Weapon& w) { return w.name == info->suggested_weapon; });
+        // The suggested weapon is a seeded weapon item, and the kit's main (first) weapon.
+        auto items = repo.get_items();
+        bool weapon_seeded = std::any_of(items.begin(), items.end(), [&](const dnd::Item& item) {
+            return item.name == info->suggested_weapon && item.weapon.has_value();
+        });
         REQUIRE(weapon_seeded);
+        const dnd::ClassEquipment* kit = dnd::class_equipment(info->name);
+        REQUIRE(kit != nullptr);
+        std::string first_weapon;
+        for (const auto& starting : kit->starting_kit) {
+            bool is_weapon = std::any_of(items.begin(), items.end(), [&](const dnd::Item& item) {
+                return item.name == starting.item_name && item.weapon.has_value();
+            });
+            if (is_weapon) {
+                first_weapon = starting.item_name;
+                break;
+            }
+        }
+        REQUIRE(first_weapon == info->suggested_weapon);
     }
     for (const auto& entry : repo.get_races()) {
         INFO(entry.name);
@@ -204,23 +220,12 @@ TEST_CASE("validate_skills", "[creation]") {
     }
 }
 
-TEST_CASE("starting_armor_class uses Unarmored Defense where the class has it", "[creation]") {
-    std::array<int, dnd::kAbilityCount> scores = {14, 14, 16, 8, 14, 8};  // DEX +2, CON +3, WIS +2
-    REQUIRE(dnd::starting_armor_class(*dnd::find_class_info("Fighter"), scores) == 12);
-    REQUIRE(dnd::starting_armor_class(*dnd::find_class_info("Barbarian"), scores) == 15);
-    REQUIRE(dnd::starting_armor_class(*dnd::find_class_info("Monk"), scores) == 14);
-
-    scores = {14, 14, 6, 8, 14, 8};  // CON -2: never worse than 10 + DEX
-    REQUIRE(dnd::starting_armor_class(*dnd::find_class_info("Barbarian"), scores) == 12);
-}
-
 TEST_CASE("build_character assembles a full level-1 character", "[creation]") {
     auto choices = fighter_choices();
     choices.class_id = 5;
     choices.race_id = 8;
     choices.alignment_id = 2;
     choices.player_id = 3;
-    choices.weapon_id = 4;
 
     dnd::Character character = dnd::build_character(choices);
     REQUIRE(character.character_name == "Aria");
@@ -228,7 +233,6 @@ TEST_CASE("build_character assembles a full level-1 character", "[creation]") {
     REQUIRE(character.race == 8);
     REQUIRE(character.alignment == 2);
     REQUIRE(character.player_id == 3);
-    REQUIRE(character.weapon_id == 4);
     REQUIRE(character.background == "Soldier");
     REQUIRE(character.level == 1);
 
@@ -251,7 +255,6 @@ TEST_CASE("build_character assembles a full level-1 character", "[creation]") {
 
     REQUIRE(character.max_hp == 12);  // d10 + CON +2
     REQUIRE(character.current_hp == 12);
-    REQUIRE(character.armor_class == 12);  // 10 + DEX +2
 
     choices.name = "   ";
     REQUIRE_THROWS_AS(dnd::build_character(choices), std::invalid_argument);

@@ -94,6 +94,8 @@ TEST_CASE("armor class from armor, DEX, shields, and class features", "[equipmen
         REQUIRE(dnd::calculate_armor_class(barbarian, "Barbarian", {}).text() ==
                 "Unarmored Defense 10 + DEX 2 + CON 3 = 15");
         REQUIRE(dnd::calculate_armor_class(barbarian, "Barbarian", items.wearing({"Shield"})).total == 17);
+        // A low CON never makes Unarmored Defense worse than plain 10 + DEX.
+        REQUIRE(dnd::calculate_armor_class(stats(16, 14, 6), "Barbarian", {}).text() == "Unarmored 10 + DEX 2 = 12");
     }
 
     SECTION("Monk Unarmored Defense, lost with a shield") {

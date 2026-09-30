@@ -289,14 +289,6 @@ std::array<int, kAbilityCount> final_ability_scores(const CreationChoices& choic
     return scores;
 }
 
-int starting_armor_class(const ClassInfo& class_info, const std::array<int, kAbilityCount>& scores) {
-    auto modifier = [&scores](Ability ability) { return ability_modifier(scores[index_of(ability)]); };
-    int armor_class = 10 + modifier(A::Dexterity);
-    if (class_info.name == "Barbarian") armor_class += modifier(A::Constitution);
-    if (class_info.name == "Monk") armor_class += modifier(A::Wisdom);
-    return std::max(10 + modifier(A::Dexterity), armor_class);
-}
-
 Character build_character(const CreationChoices& choices) {
     if (auto error = validate_choices(choices)) throw std::invalid_argument(*error);
 
@@ -312,7 +304,6 @@ Character build_character(const CreationChoices& choices) {
     character.race = choices.race_id;
     character.alignment = choices.alignment_id;
     character.background = background.name;
-    character.weapon_id = choices.weapon_id;
     character.level = 1;
 
     character.strength = scores[index_of(A::Strength)];
@@ -330,7 +321,6 @@ Character build_character(const CreationChoices& choices) {
 
     character.max_hp = std::max(1, class_info.hit_die + ability_modifier(character.constitution));
     character.current_hp = character.max_hp;
-    character.armor_class = starting_armor_class(class_info, scores);
     return character;
 }
 

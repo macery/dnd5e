@@ -5,6 +5,7 @@
 #include <QDialogButtonBox>
 #include <QFormLayout>
 #include <QGroupBox>
+#include <QLabel>
 #include <QLineEdit>
 #include <QSpinBox>
 #include <QTabWidget>
@@ -21,13 +22,12 @@ void populateLookupCombo(QComboBox* combo, const std::vector<dnd::LookupEntry>& 
 CharacterEditorDialog::CharacterEditorDialog(const std::vector<dnd::LookupEntry>& classes,
                                               const std::vector<dnd::LookupEntry>& races,
                                               const std::vector<dnd::LookupEntry>& alignments,
-                                              const std::vector<dnd::Weapon>& weapons,
                                               const dnd::Character* existing, QWidget* parent)
     : QDialog(parent) {
     setWindowTitle(existing ? "Edit Character" : "Add Character");
 
     auto* tabs = new QTabWidget(this);
-    tabs->addTab(buildBasicsTab(classes, races, alignments, weapons), "Basics");
+    tabs->addTab(buildBasicsTab(classes, races, alignments), "Basics");
     tabs->addTab(buildAbilityScoresTab(), "Ability Scores");
     tabs->addTab(buildProficienciesTab(), "Proficiencies");
 
@@ -45,8 +45,7 @@ CharacterEditorDialog::CharacterEditorDialog(const std::vector<dnd::LookupEntry>
 
 QWidget* CharacterEditorDialog::buildBasicsTab(const std::vector<dnd::LookupEntry>& classes,
                                                 const std::vector<dnd::LookupEntry>& races,
-                                                const std::vector<dnd::LookupEntry>& alignments,
-                                                const std::vector<dnd::Weapon>& weapons) {
+                                                const std::vector<dnd::LookupEntry>& alignments) {
     auto* page = new QWidget(this);
     auto* form = new QFormLayout(page);
 
@@ -57,10 +56,6 @@ QWidget* CharacterEditorDialog::buildBasicsTab(const std::vector<dnd::LookupEntr
     populateLookupCombo(raceCombo_, races);
     alignmentCombo_ = new QComboBox(page);
     populateLookupCombo(alignmentCombo_, alignments);
-    weaponCombo_ = new QComboBox(page);
-    for (const auto& weapon : weapons) {
-        weaponCombo_->addItem(QString::fromStdString(weapon.name), weapon.weapon_id);
-    }
     levelSpin_ = new QSpinBox(page);
     levelSpin_->setRange(1, 20);
     levelSpin_->setValue(1);
@@ -68,19 +63,19 @@ QWidget* CharacterEditorDialog::buildBasicsTab(const std::vector<dnd::LookupEntr
     currentHpSpin_->setRange(0, 999);
     maxHpSpin_ = new QSpinBox(page);
     maxHpSpin_->setRange(0, 999);
-    armorClassSpin_ = new QSpinBox(page);
-    armorClassSpin_->setRange(0, 30);
-    armorClassSpin_->setValue(10);
 
     form->addRow("Name", nameEdit_);
     form->addRow("Class", classCombo_);
     form->addRow("Race", raceCombo_);
     form->addRow("Alignment", alignmentCombo_);
-    form->addRow("Weapon", weaponCombo_);
     form->addRow("Level", levelSpin_);
     form->addRow("Current HP", currentHpSpin_);
     form->addRow("Max HP", maxHpSpin_);
-    form->addRow("Armor Class", armorClassSpin_);
+    auto* equipmentNote = new QLabel("Armor Class and the wielded weapon are calculated from equipped items: "
+                                     "use Inventory to equip armor, a shield, and a weapon.",
+                                     page);
+    equipmentNote->setWordWrap(true);
+    form->addRow("Equipment", equipmentNote);
     return page;
 }
 
@@ -138,11 +133,9 @@ void CharacterEditorDialog::populateFrom(const dnd::Character& existing) {
     classCombo_->setCurrentIndex(classCombo_->findData(existing.class_id));
     raceCombo_->setCurrentIndex(raceCombo_->findData(existing.race));
     alignmentCombo_->setCurrentIndex(alignmentCombo_->findData(existing.alignment));
-    weaponCombo_->setCurrentIndex(weaponCombo_->findData(existing.weapon_id));
     levelSpin_->setValue(existing.level);
     currentHpSpin_->setValue(existing.current_hp);
     maxHpSpin_->setValue(existing.max_hp);
-    armorClassSpin_->setValue(existing.armor_class);
 
     abilityScoreSpins_[static_cast<int>(dnd::Ability::Strength)]->setValue(existing.strength);
     abilityScoreSpins_[static_cast<int>(dnd::Ability::Dexterity)]->setValue(existing.dexterity);
@@ -165,11 +158,9 @@ dnd::Character CharacterEditorDialog::character() const {
     character.class_id = classCombo_->currentData().toInt();
     character.race = raceCombo_->currentData().toInt();
     character.alignment = alignmentCombo_->currentData().toInt();
-    character.weapon_id = weaponCombo_->currentData().toInt();
     character.level = levelSpin_->value();
     character.current_hp = currentHpSpin_->value();
     character.max_hp = maxHpSpin_->value();
-    character.armor_class = armorClassSpin_->value();
 
     character.strength = abilityScoreSpins_[static_cast<int>(dnd::Ability::Strength)]->value();
     character.dexterity = abilityScoreSpins_[static_cast<int>(dnd::Ability::Dexterity)]->value();

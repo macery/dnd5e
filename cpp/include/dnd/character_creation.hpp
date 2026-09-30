@@ -40,7 +40,7 @@ struct ClassInfo {
     std::array<Ability, 2> saving_throws{};
     int skill_choice_count = 2;
     std::vector<Skill> skill_options;  // pick skill_choice_count of these
-    std::string suggested_weapon;      // a seeded Weapon.name
+    std::string suggested_weapon;      // a seeded weapon Item name (the kit's main weapon)
     std::string summary;               // one line for the wizard
     SpellcastingInfo spellcasting;     // caster_type None for non-casters
 };
@@ -129,7 +129,6 @@ struct CreationChoices {
     std::vector<Ability> flexible_bonus_abilities;
 
     std::vector<Skill> chosen_skills;  // class picks + free picks together
-    int weapon_id = 0;
 };
 
 // Each returns an error message for the player, or nullopt if that part of
@@ -144,13 +143,10 @@ std::optional<std::string> validate_choices(const CreationChoices& choices);
 // Base score + racial and flexible bonuses, indexed by Ability.
 std::array<int, kAbilityCount> final_ability_scores(const CreationChoices& choices);
 
-// 10 + DEX, or the class's Unarmored Defense (Barbarian + CON, Monk + WIS),
-// whichever is higher. There's no armor system yet.
-int starting_armor_class(const ClassInfo& class_info, const std::array<int, kAbilityCount>& scores);
-
 // A full level-1 character: final scores, class saving throws, all skill
 // proficiencies, max HP = hit die + CON modifier (minimum 1) at full health,
-// starting AC, and the background. Throws std::invalid_argument with the
+// and the background. (AC and weapons come from the starting kit's equipped
+// items -- see dnd/equipment.hpp.) Throws std::invalid_argument with the
 // validate_choices message if the choices aren't valid.
 Character build_character(const CreationChoices& choices);
 

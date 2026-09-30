@@ -30,7 +30,7 @@ const std::map<std::string, ClassEquipment>& class_equipment_table() {
         {"Paladin", {{true, true, true, true}, {true, true, {}},
                      {{"Chain Mail", 1}, {"Shield", 1}, {"Longsword", 1}}}},
         {"Ranger", {{true, true, false, true}, {true, true, {}},
-                    {{"Scale Mail", 1}, {"Shortsword", 2}, {"Longbow", 1}}}},
+                    {{"Scale Mail", 1}, {"Longbow", 1}, {"Shortsword", 2}}}},
         {"Rogue", {{true, false, false, false}, {true, false, {"Hand Crossbow", "Longsword", "Rapier", "Shortsword"}},
                    {{"Leather Armor", 1}, {"Rapier", 1}, {"Shortbow", 1}, {"Dagger", 2}}}},
         {"Sorcerer", {{false, false, false, false},

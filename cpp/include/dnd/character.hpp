@@ -24,8 +24,8 @@ struct Character {
 
     int current_hp = 0;
     int max_hp = 0;
-    int armor_class = 10;
-    int weapon_id = 0;
+    // AC and the wielded weapon aren't stored: they come from equipped
+    // inventory items (dnd/equipment.hpp).
     std::string background;  // a dnd::BackgroundInfo name; empty if none
     // Failed three death saves (or took massive damage). Stays dead until
     // revived by a spell -- see docs/effects-system.md, Decisions.

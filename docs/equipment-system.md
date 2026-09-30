@@ -1,6 +1,16 @@
 # Equipment design: weapons, armor, and AC
 
-Status: **phase 1 (core and data) done;** phase 2 (integration and UI) is next. The open questions were settled on 2026-09-30; see [Decisions](#decisions).
+Status: **phases 1 (core and data) and 2 (integration and UI) done.** What's left is under Build phases → Later.
+
+**Phase 2 as built:**
+- **`Character` no longer stores AC or a weapon.** `armor_class` and `weapon_id` are gone, along with the old `Weapon` type, `Repository::get_weapons`, and the old weapon-bonus rules. The database columns remain but are ignored.
+- **`Encounter`** takes classes and races. It builds each character's AC and attack from their equipped items, applies the untrained-armor effect, and refuses spellcasting in untrained armor.
+- **Combat dialog:** "Roll Attack (Longsword)" on the attack button, a damage-dice box that allows 0 (for unarmed strikes), and an explanation when armor blocks spellcasting.
+- **Inventory dialog:** an Equipped column, Equip/Unequip (taking off whatever an item replaces), proficiency and STR warnings, and an AC and attack summary.
+- **Character sheet:** AC with its breakdown, the wielded weapon's attack (with a "not proficient" note), speed, and an untrained-armor warning.
+- **Creation wizard:** the class starting kit (on by default), any seeded weapon to wield (with a proficiency warning), a live AC preview, and a review showing the kit. The kit is saved with armor, shield, and weapon equipped.
+- **Character editor:** a read-only note in place of the AC and weapon fields.
+- **One kit change:** the Ranger's kit lists the Longbow first, so it matches the class's suggested weapon. The open questions were settled on 2026-09-30; see [Decisions](#decisions).
 
 **Phase 1 as built:**
 - **Migration 15:**
@@ -139,7 +149,7 @@ Racial weapon training: the base Dwarf is proficient with battleaxes, handaxes, 
 | Fighter | Chain mail, Shield | Longsword, Light crossbow |
 | Monk | none (Unarmored Defense) | Shortsword |
 | Paladin | Chain mail, Shield | Longsword |
-| Ranger | Scale mail | 2 Shortswords, Longbow |
+| Ranger | Scale mail | Longbow, 2 Shortswords |
 | Rogue | Leather | Rapier, Shortbow, 2 Daggers |
 | Sorcerer | none | Light crossbow, 2 Daggers |
 | Warlock | Leather | Light crossbow, 2 Daggers |
