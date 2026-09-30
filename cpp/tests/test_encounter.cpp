@@ -1371,3 +1371,173 @@ TEST_CASE("Martial Arts: a bonus unarmed strike after the Attack action", "[enco
                 return l.rfind("Kai attacks Orc: d20(15) +5 -> hit for 5.", 0) == 0;
             }) == 2);
 }
+
+TEST_CASE("Flurry of Blows and Patient Defense spend ki", "[encounter][class_features]") {
+    Fixture f;
+    auto monk = classed(f, 1, "Kai", "Monk", 2);
+    monk.strength = 10;
+    monk.dexterity = 16;
+
+    SECTION("Flurry of Blows: two unarmed strikes after the Attack action") {
+        // Kai first. Three hits on the Orc, d20 15 and d4 2 each (+3): 5 + 5 + 5.
+        ScriptedRandomSource rolls({20, 1, 15, 2, 15, 2, 15, 2});
+        dnd::Dice dice(rolls);
+        auto encounter = f.encounter(dice);
+        encounter.add_character(monk, {}, {});
+        encounter.add_monsters(f.monster("Orc"), 1);
+        encounter.roll_initiative();
+        encounter.take_events();
+
+        REQUIRE_FALSE(offers(encounter, BonusAction::FlurryOfBlows));  // not before the Attack action
+        REQUIRE(offers(encounter, BonusAction::PatientDefense));
+        const auto& kai = encounter.combatants()[0];
+        REQUIRE(encounter.attack(1, kai.attack_bonus, kai.damage_dice_count, kai.damage_dice_sides, kai.damage_bonus));
+        REQUIRE(encounter.use_bonus_action(BonusAction::FlurryOfBlows, 1));
+        auto lines = logs(encounter.take_events());
+        REQUIRE(contains(lines, "Kai spends 1 ki on Flurry of Blows."));
+        REQUIRE(std::count_if(lines.begin(), lines.end(), [](const std::string& l) {
+                    return l.rfind("Kai attacks Orc: d20(15) +5 -> hit for 5.", 0) == 0;
+                }) == 3);
+        REQUIRE(encounter.character(1)->feature_uses_spent.at("Ki") == 1);
+    }
+
+    SECTION("Patient Defense: Dodge as a bonus action") {
+        ScriptedRandomSource rolls({20, 1});
+        dnd::Dice dice(rolls);
+        auto encounter = f.encounter(dice);
+        encounter.add_character(monk, {}, {});
+        encounter.add_monsters(f.monster("Orc"), 1);
+        encounter.roll_initiative();
+        encounter.take_events();
+        REQUIRE(encounter.use_bonus_action(BonusAction::PatientDefense));
+        REQUIRE(dnd::has_effect(encounter.effects(), 0, dnd::EffectKind::Dodging));
+        REQUIRE(encounter.awaiting_action());  // the action is still free
+        REQUIRE(encounter.character(1)->feature_uses_spent.at("Ki") == 1);
+    }
+
+    SECTION("no ki left, no ki options") {
+        monk.feature_uses_spent["Ki"] = 2;
+        ScriptedRandomSource rolls({20, 1});
+        dnd::Dice dice(rolls);
+        auto encounter = f.encounter(dice);
+        encounter.add_character(monk, {}, {});
+        encounter.add_monsters(f.monster("Orc"), 1);
+        encounter.roll_initiative();
+        REQUIRE_FALSE(offers(encounter, BonusAction::PatientDefense));
+        REQUIRE_FALSE(offers(encounter, BonusAction::StepOfTheWindDash));
+    }
+}
+
+TEST_CASE("Divine Smite spends a slot on a hit", "[encounter][class_features]") {
+    Fixture f;
+    auto paladin = classed(f, 1, "Sera", "Paladin", 2);  // two 1st-level slots
+
+    SECTION("a hit") {
+        // Sera first. d20 15 hits the Orc; longsword two-handed d10 5 (+3); smite 2d8: 4 + 4.
+        ScriptedRandomSource rolls({20, 1, 15, 5, 4, 4});
+        dnd::Dice dice(rolls);
+        auto encounter = f.encounter(dice);
+        encounter.add_character(paladin, {}, f.fighter_gear());
+        encounter.add_monsters(f.monster("Orc"), 1);
+        encounter.roll_initiative();
+        encounter.take_events();
+
+        REQUIRE(encounter.divine_smite_slots() == std::vector<int>{1});
+        const auto& sera = encounter.combatants()[0];
+        dnd::AttackOptions smite;
+        smite.divine_smite_slot = 2;
+        REQUIRE_FALSE(encounter.attack(1, sera.attack_bonus, 1, 10, 3, smite));  // no 2nd-level slots
+        smite.divine_smite_slot = 1;
+        REQUIRE(encounter.attack(1, sera.attack_bonus, 1, 10, 3, smite));
+        auto events = encounter.take_events();
+        REQUIRE(contains(logs(events), "-> hit for 16 (+8 radiant, Divine Smite 2d8, level 1 slot)."));
+        REQUIRE(encounter.character(1)->spell_slots_used[0] == 1);
+        REQUIRE(has_event(events, EncounterEvent::Kind::CharacterChanged, 1));
+    }
+
+    SECTION("a miss spends nothing") {
+        ScriptedRandomSource rolls({20, 1, 1});
+        dnd::Dice dice(rolls);
+        auto encounter = f.encounter(dice);
+        encounter.add_character(paladin, {}, f.fighter_gear());
+        encounter.add_monsters(f.monster("Orc"), 1);
+        encounter.roll_initiative();
+        dnd::AttackOptions smite;
+        smite.divine_smite_slot = 1;
+        REQUIRE(encounter.attack(1, 5, 1, 10, 3, smite));
+        REQUIRE(encounter.character(1)->spell_slots_used[0] == 0);
+    }
+}
+
+TEST_CASE("Lay on Hands heals from a pool", "[encounter][class_features]") {
+    Fixture f;
+    auto aria = f.fighter(1);
+    aria.current_hp = 3;
+    // Sera 20, Aria 1, Goblin 1: Sera first.
+    ScriptedRandomSource rolls({1, 20, 1});
+    dnd::Dice dice(rolls);
+    auto encounter = f.encounter(dice);
+    encounter.add_character(aria, {}, f.fighter_gear());
+    encounter.add_character(classed(f, 2, "Sera", "Paladin"), {}, f.fighter_gear());
+    encounter.add_monsters(f.monster("Goblin"), 1);
+    encounter.roll_initiative();
+    encounter.take_events();
+    REQUIRE(encounter.current()->name == "Sera");
+
+    REQUIRE(encounter.lay_on_hands_pool() == 5);
+    REQUIRE(encounter.lay_on_hands_targets() == std::vector<int>{0, 1});
+    REQUIRE_FALSE(encounter.lay_on_hands(0, 6));  // more than the pool
+    REQUIRE(encounter.lay_on_hands(0, 4));
+    REQUIRE(contains(logs(encounter.take_events()),
+                     "Sera uses Lay on Hands on Aria: 4 from the pool, 4 HP restored (now 7/12; 1 left in the pool)."));
+    REQUIRE(encounter.character(1)->current_hp == 7);
+    REQUIRE(encounter.character(2)->feature_uses_spent.at("LayOnHands") == 4);
+    REQUIRE_FALSE(encounter.awaiting_action());  // it took the action
+}
+
+TEST_CASE("Reckless Attack: advantage both ways", "[encounter][class_features]") {
+    Fixture f;
+    // Grog first. Reckless: d20 3 and 15 with advantage, d12 5 (+3).
+    // Orc: pick, d20 4 and 16 with advantage (+5 = 21) hits, d12 2 (+3).
+    ScriptedRandomSource rolls({20, 1, 3, 15, 5, 1, 4, 16, 2});
+    dnd::Dice dice(rolls);
+    auto encounter = f.encounter(dice);
+    encounter.add_character(classed(f, 1, "Grog", "Barbarian", 2), {}, {{f.item("Greataxe"), 1, true}});
+    encounter.add_monsters(f.monster("Orc"), 1);
+    encounter.roll_initiative();
+    encounter.take_events();
+
+    REQUIRE(encounter.can_attack_recklessly());
+    dnd::AttackOptions reckless;
+    reckless.reckless = true;
+    REQUIRE(encounter.attack(1, 5, 1, 12, 3, reckless));
+    auto lines = logs(encounter.take_events());
+    REQUIRE(contains(lines, "Grog attacks recklessly"));
+    REQUIRE(contains(lines, "Grog attacks Orc: d20(15)"));
+    REQUIRE(contains(lines, "Reckless Attack"));
+    REQUIRE_FALSE(encounter.can_attack_recklessly());
+
+    encounter.next_turn();  // the Orc attacks with advantage; then Grog's turn ends the exposure
+    lines = logs(encounter.take_events());
+    REQUIRE(contains(lines, "Orc attacks Grog: d20(16)"));
+    REQUIRE_FALSE(dnd::has_effect(encounter.effects(), 0, dnd::EffectKind::AdvantageOnAttacksAgainst));
+    REQUIRE(encounter.can_attack_recklessly());  // a new turn, a new choice
+}
+
+TEST_CASE("Great Weapon Fighting in a fight", "[encounter][class_features]") {
+    Fixture f;
+    auto aria = f.fighter(1);
+    aria.fighting_style = "GreatWeaponFighting";
+    // Aria first. d20 15 hits; 2d6 1 and 5, the 1 rerolled to 6: 6 + 5 + 3 = 14.
+    ScriptedRandomSource rolls({20, 1, 15, 1, 5, 6});
+    dnd::Dice dice(rolls);
+    auto encounter = f.encounter(dice);
+    encounter.add_character(aria, {}, {{f.item("Greatsword"), 1, true}});
+    encounter.add_monsters(f.monster("Orc"), 1);
+    encounter.roll_initiative();
+    encounter.take_events();
+    REQUIRE(encounter.combatants()[0].attack_great_weapon_fighting);
+    REQUIRE(encounter.attack(1, 5, 2, 6, 3));
+    REQUIRE(contains(logs(encounter.take_events()),
+                     "-> hit for 14 (Great Weapon Fighting rerolled 1 die). Orc is now 1/15 HP."));
+}

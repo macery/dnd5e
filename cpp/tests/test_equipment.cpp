@@ -291,3 +291,44 @@ TEST_CASE("weapon attacks report STR use and Sneak Attack eligibility", "[equipm
     REQUIRE(dnd::weapon_attack(strong, "Ranger", "Human", items.wearing({"Longbow"})).finesse_or_ranged);
     REQUIRE(dnd::weapon_attack(strong, "Fighter", "Human", {}).unarmed);
 }
+
+TEST_CASE("Fighting Styles change AC and weapon attacks", "[equipment][class_features]") {
+    Items items;
+    auto fighter = stats(16, 14);  // STR +3, DEX +2, proficiency +2
+
+    SECTION("Defense: +1 AC in armor only") {
+        fighter.fighting_style = "Defense";
+        REQUIRE(dnd::calculate_armor_class(fighter, "Fighter", items.wearing({"Chain Mail"})).text() ==
+                "Chain Mail 16 + Defense 1 = 17");
+        REQUIRE(dnd::calculate_armor_class(fighter, "Fighter", {}).total == 12);
+    }
+
+    SECTION("Archery: +2 to hit with ranged weapons") {
+        fighter.fighting_style = "Archery";
+        REQUIRE(dnd::weapon_attack(fighter, "Fighter", "Human", items.wearing({"Longbow"})).attack_bonus == 6);
+        REQUIRE(dnd::weapon_attack(fighter, "Fighter", "Human", items.wearing({"Longsword"})).attack_bonus == 5);
+    }
+
+    SECTION("Dueling: +2 damage one-handed, not two-handed") {
+        fighter.fighting_style = "Dueling";
+        REQUIRE(dnd::weapon_attack(fighter, "Fighter", "Human", items.wearing({"Longsword", "Shield"})).damage_bonus ==
+                5);
+        // No shield: the longsword is used two-handed (d10), so no Dueling.
+        auto two_handed = dnd::weapon_attack(fighter, "Fighter", "Human", items.wearing({"Longsword"}));
+        REQUIRE(two_handed.damage_dice_sides == 10);
+        REQUIRE(two_handed.damage_bonus == 3);
+    }
+
+    SECTION("Great Weapon Fighting: two-handed melee weapons only") {
+        fighter.fighting_style = "GreatWeaponFighting";
+        REQUIRE(dnd::weapon_attack(fighter, "Fighter", "Human", items.wearing({"Greatsword"})).great_weapon_fighting);
+        REQUIRE_FALSE(
+            dnd::weapon_attack(fighter, "Fighter", "Human", items.wearing({"Longsword", "Shield"})).great_weapon_fighting);
+        REQUIRE_FALSE(dnd::weapon_attack(fighter, "Fighter", "Human", items.wearing({"Longbow"})).great_weapon_fighting);
+    }
+
+    SECTION("only Fighters") {
+        fighter.fighting_style = "Archery";
+        REQUIRE(dnd::weapon_attack(fighter, "Ranger", "Human", items.wearing({"Longbow"})).attack_bonus == 4);
+    }
+}

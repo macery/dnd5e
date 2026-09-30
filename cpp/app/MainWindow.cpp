@@ -247,6 +247,9 @@ void MainWindow::onEditCharacterClicked() {
         updated.experience = existing.experience;
         updated.hit_dice_used = existing.hit_dice_used;
         updated.background = existing.background;
+        updated.spell_slots_used = existing.spell_slots_used;
+        updated.feature_uses_spent = existing.feature_uses_spent;
+        updated.dead = existing.dead;
         repository_.update_character(updated);
         reloadCharactersForCurrentPlayer();
     }

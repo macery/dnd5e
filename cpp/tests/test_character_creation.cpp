@@ -38,6 +38,7 @@ dnd::CreationChoices fighter_choices() {
     choices.method = dnd::AbilityScoreMethod::StandardArray;
     choices.base_scores = {15, 13, 14, 8, 12, 10};  // STR DEX CON INT WIS CHA
     choices.chosen_skills = {Skill::Perception, Skill::Survival};
+    choices.fighting_style = "Defense";
     return choices;
 }
 
@@ -255,9 +256,26 @@ TEST_CASE("build_character assembles a full level-1 character", "[creation]") {
 
     REQUIRE(character.max_hp == 12);  // d10 + CON +2
     REQUIRE(character.current_hp == 12);
+    REQUIRE(character.fighting_style == "Defense");
 
     choices.name = "   ";
     REQUIRE_THROWS_AS(dnd::build_character(choices), std::invalid_argument);
+}
+
+TEST_CASE("Fighters choose a Fighting Style; other classes don't", "[creation][class_features]") {
+    auto choices = fighter_choices();
+    choices.fighting_style = "";
+    REQUIRE(dnd::validate_fighting_style(choices) == "Choose a Fighting Style.");
+    REQUIRE(dnd::validate_choices(choices) == "Choose a Fighting Style.");
+    choices.fighting_style = "Juggling";
+    REQUIRE(dnd::validate_fighting_style(choices).has_value());
+    choices.fighting_style = "Archery";
+    REQUIRE_FALSE(dnd::validate_fighting_style(choices).has_value());
+
+    choices.class_name = "Barbarian";
+    choices.chosen_skills = {Skill::Perception, Skill::Survival};
+    REQUIRE_FALSE(dnd::validate_fighting_style(choices).has_value());
+    REQUIRE(dnd::build_character(choices).fighting_style.empty());  // ignored for other classes
 }
 
 TEST_CASE("a built character round-trips through the repository", "[creation][repository]") {

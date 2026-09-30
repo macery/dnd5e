@@ -35,11 +35,13 @@ private:
     QWidget* buildAbilityScoresTab();
     QWidget* buildProficienciesTab();
     void populateFrom(const dnd::Character& existing);
+    void refreshFightingStyle();
 
     QLineEdit* nameEdit_ = nullptr;
     QComboBox* classCombo_ = nullptr;
     QComboBox* raceCombo_ = nullptr;
     QComboBox* alignmentCombo_ = nullptr;
+    QComboBox* fightingStyleCombo_ = nullptr;  // enabled for Fighters only
     QSpinBox* levelSpin_ = nullptr;
     QSpinBox* currentHpSpin_ = nullptr;
     QSpinBox* maxHpSpin_ = nullptr;

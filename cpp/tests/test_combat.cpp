@@ -110,3 +110,14 @@ TEST_CASE("resolve_attack: critical_on_hit makes any hit critical", "[combat]") 
     REQUIRE_FALSE(missed.hit);
     REQUIRE_FALSE(missed.critical);
 }
+
+TEST_CASE("resolve_attack: Great Weapon Fighting rerolls 1s and 2s once", "[combat]") {
+    // d20 15 hits; 2d6 come up 1 and 5; the 1 is rerolled to a 2, which stays.
+    SequenceRandomSource rolls({15, 1, 5, 2});
+    dnd::Dice dice(rolls);
+    auto result = dnd::resolve_attack(dice, 5, 13, 2, 6, 3, dnd::RollMode::Normal, false, true);
+    REQUIRE(result.hit);
+    REQUIRE(result.rerolled == 1);
+    REQUIRE(result.damage_dice == std::vector<int>{2, 5});
+    REQUIRE(result.damage_total == 10);
+}

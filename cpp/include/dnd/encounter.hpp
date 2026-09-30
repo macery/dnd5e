@@ -39,6 +39,7 @@ struct Combatant {
     bool attack_uses_strength = true;       // for Rage's damage bonus
     bool attack_finesse_or_ranged = false;  // for Sneak Attack
     bool attack_martial_arts = false;       // an unarmed strike or monk weapon (Martial Arts)
+    bool attack_great_weapon_fighting = false;  // Fighting Style: reroll 1s and 2s on damage dice
 
     // Characters only: class features (dnd/class_features.hpp).
     std::string class_name;
@@ -46,6 +47,7 @@ struct Combatant {
     int sneak_attack_dice = 0;  // Rogue: d6s, once per turn
     bool wearing_heavy_armor = false;  // no raging in heavy armor
     std::optional<WeaponAttack> martial_arts_strike;  // Monk: the bonus-action unarmed strike
+    std::optional<WeaponAttack> unarmed_strike;       // Monk: Flurry of Blows (with or without Martial Arts)
     bool rage_kept_up = false;  // attacked or took damage since its last turn (else Rage ends)
     // Characters only: wearing armor they aren't proficient with, which also
     // rules out spellcasting (PHB ch. 5).
@@ -87,6 +89,16 @@ enum class EncounterStatus { InProgress, Victory, Defeat };
 struct LootGrant {
     Item item;
     int quantity = 1;
+};
+
+// Choices made with a character's attack (Encounter::attack).
+struct AttackOptions {
+    // Reckless Attack; ignored unless Encounter::can_attack_recklessly().
+    bool reckless = false;
+    // Divine Smite: spend a slot of this level on a hit (0 = no smite). The
+    // attack is refused if it isn't in Encounter::divine_smite_slots(). A
+    // miss spends nothing.
+    int divine_smite_slot = 0;
 };
 
 // The combat engine: characters and (possibly several copies of) monsters
@@ -183,7 +195,18 @@ public:
     bool has_healers_kit() const;
 
     // --- Class features -----------------------------------------------------
-    enum class BonusAction { SecondWind, Rage, CunningDash, CunningDisengage, BardicInspiration, MartialArtsStrike };
+    enum class BonusAction {
+        SecondWind,
+        Rage,
+        CunningDash,
+        CunningDisengage,
+        BardicInspiration,
+        MartialArtsStrike,
+        FlurryOfBlows,          // Monk, 1 ki: two unarmed strikes after the Attack action
+        PatientDefense,         // Monk, 1 ki: Dodge
+        StepOfTheWindDash,      // Monk, 1 ki: Dash (shown only)
+        StepOfTheWindDisengage, // Monk, 1 ki: Disengage (shown only)
+    };
     enum class BonusTarget { None, Ally, Enemy };
     struct BonusActionOption {
         BonusAction kind;
@@ -201,6 +224,18 @@ public:
     // Fighter Action Surge: one more action this turn.
     bool can_action_surge() const;
     bool action_surge();
+    // Barbarian Reckless Attack (level 2): decided on the first attack of the
+    // turn (see AttackOptions).
+    bool can_attack_recklessly() const;
+    // Paladin Divine Smite (level 2): slot levels the current character could
+    // smite with on a melee hit; empty if none.
+    std::vector<int> divine_smite_slots() const;
+    // Paladin Lay on Hands: hit points left in the pool (0 without the
+    // feature), who can be touched (any character not dead, self included),
+    // and the action itself: restores `amount` (1..pool) hit points.
+    int lay_on_hands_pool() const;
+    std::vector<int> lay_on_hands_targets() const;
+    bool lay_on_hands(int target, int amount);
 
     // --- Actions ------------------------------------------------------------
     // Each returns false -- using nothing up, with a log line saying why where
@@ -211,7 +246,9 @@ public:
     // defaults are the combatant's attack_bonus / damage_* fields). The first
     // attack takes the action; with Extra Attack, the rest of that Attack
     // action's attacks follow without one.
-    bool attack(int target, int attack_bonus, int damage_dice_count, int damage_dice_sides, int damage_bonus);
+    // See AttackOptions for Reckless Attack and Divine Smite.
+    bool attack(int target, int attack_bonus, int damage_dice_count, int damage_dice_sides, int damage_bonus,
+                AttackOptions options = {});
     bool dash();
     bool dodge();
     bool drink_potion(int item_id);
@@ -234,8 +271,10 @@ private:
     std::vector<std::string> apply_healing(int target, int amount, int& healed);
 
     // Resolves a weapon attack with every effect and class feature applied
-    // (Rage, Sneak Attack, Divine Favor, a monster's rider), and logs it.
-    void weapon_attack(int attacker, int target, const WeaponAttack& attack);
+    // (Rage, Sneak Attack, Divine Favor, Reckless Attack, Great Weapon
+    // Fighting, a monster's rider), and logs it. `smite_slot` > 0 spends a
+    // slot of that level on a hit for Divine Smite.
+    void weapon_attack(int attacker, int target, const WeaponAttack& attack, int smite_slot = 0);
     bool is_raging(int index) const;
     // Ends a rage early; returns the log line ("" if not raging).
     std::string end_rage(int index, const std::string& reason);

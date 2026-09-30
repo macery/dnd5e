@@ -165,6 +165,9 @@ ArmorClassBreakdown calculate_armor_class(const Character& character, const std:
         ac.parts = best;
     }
     if (shield && shield->item.armor) ac.parts.push_back({"Shield", shield->item.armor->base_ac});
+    if (armor && armor->item.armor && fighting_style(character, class_name) == FightingStyle::Defense) {
+        ac.parts.push_back({"Defense", 1});
+    }
 
     ac.total = 0;
     for (const auto& part : ac.parts) ac.total += part.value;
@@ -229,6 +232,21 @@ WeaponAttack weapon_attack(const Character& character, const std::string& class_
     attack.damage_bonus = ability;
     attack.damage_type = stats.damage_type;
     attack.melee = !stats.ranged;
+
+    switch (fighting_style(character, class_name)) {
+        case FightingStyle::Archery:
+            if (stats.ranged) attack.attack_bonus += 2;
+            break;
+        case FightingStyle::Dueling:
+            if (attack.melee && !stats.two_handed && !attack.versatile_two_handed) attack.damage_bonus += 2;
+            break;
+        case FightingStyle::GreatWeaponFighting:
+            attack.great_weapon_fighting = attack.melee && (stats.two_handed || attack.versatile_two_handed);
+            break;
+        case FightingStyle::Defense:
+        case FightingStyle::None:
+            break;
+    }
     return attack;
 }
 

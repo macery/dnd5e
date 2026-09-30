@@ -41,11 +41,12 @@ It manages players and characters, computes a full character sheet from the 5e r
   - **Death saving throws:** characters at 0 HP are dying and roll each turn. Stabilize them, heal them, or lose them. The dead stay dead until revival magic exists.
   - **Concentration:** one spell at a time, and damage can break it.
   - **Actions and class features:** one action and one bonus action per turn, plus class features:
-    - **Barbarian:** Rage.
-    - **Fighter:** Second Wind, Action Surge.
+    - **Barbarian:** Rage, Reckless Attack.
+    - **Fighter:** Fighting Style (Archery, Defense, Dueling, Great Weapon Fighting), Second Wind, Action Surge.
     - **Rogue:** Sneak Attack, Cunning Action.
     - **Bard:** Bardic Inspiration.
-    - **Monk:** Martial Arts.
+    - **Monk:** Martial Arts, Ki (Flurry of Blows, Patient Defense, Step of the Wind).
+    - **Paladin:** Lay on Hands, Divine Smite.
     - **Level 5:** Extra Attack.
 
     Bonus-action spells follow the PHB rule.
@@ -244,8 +245,13 @@ Phases 1 (core and data) and 2 (UI) are done; see [docs/magic-system.md](docs/ma
 - [x] **Ability score generation**: 4d6 drop the lowest, point buy, and the standard array, in the wizard.
 - [ ] **Race traits**: ability score increases and racial skills are applied. Speed and traits (darkvision, Lucky, Relentless Endurance, etc.) are shown but not simulated. Subraces (Hill Dwarf, High Elf, ...) aren't modeled, and speed isn't stored on the character yet.
 - [ ] **Class features** ([docs/class-features.md](docs/class-features.md)):
-  - **Done:** Rage, Sneak Attack, Second Wind, Action Surge, Cunning Action, Bardic Inspiration, Martial Arts, Arcane Recovery, and Extra Attack, with uses saved and restored by rests.
-  - **Next (phase 3):** Fighter Fighting Styles, Ki, Lay on Hands, Divine Smite, and Reckless Attack.
+  - **Done:**
+    - Rage, Reckless Attack, Sneak Attack, Cunning Action, Second Wind, and Action Surge.
+    - Fighting Styles, chosen in the wizard.
+    - Bardic Inspiration, Martial Arts, Ki, Lay on Hands, Divine Smite, Arcane Recovery, and Extra Attack.
+
+    Uses are saved on the character and restored by rests.
+  - **Later:** Paladin and Ranger Fighting Styles at level 2, two-weapon fighting, subclasses, Warlock invocations, Sorcery Points, reactions, and Divine Smite's extra die against undead and fiends.
 - [ ] **Level-up choices**: Ability Score Improvements at levels 4/8/12/16/19, and an option to roll HP instead of taking the average.
 - [x] **Starting HP**: level-1 max HP is the class hit die plus CON, calculated by the wizard.
 - [ ] **Keep level and XP in sync**: editing the level by hand in the editor can leave it out of step with XP.

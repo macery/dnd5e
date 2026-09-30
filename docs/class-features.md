@@ -1,6 +1,28 @@
 # Bonus actions and class features design
 
-Status: **phases 1 (turn economy) and 2 (core features) done;** phase 3 (Fighting Styles, Ki, Lay on Hands, Divine Smite, Reckless Attack) is next.
+Status: **phases 1 (turn economy), 2 (core features), and 3 (choices and the rest) done.** What's left is under phase 4 (later) in [Build phases](#build-phases).
+
+**Phase 3 as built:**
+- **Fighting Styles:**
+  - Migration 17 adds `Characters.FightingStyle`.
+  - `dnd::fighting_styles()` offers Archery, Defense, Dueling, and Great Weapon Fighting. Protection and Two-Weapon Fighting wait for reactions and off-hand attacks.
+  - Fighters choose one on the wizard's class page, and the choice is required. Existing Fighters can pick one in Edit Character.
+  - **What each does:** Defense adds +1 AC in armor (`calculate_armor_class`). Archery adds +2 to hit with ranged weapons, and Dueling +2 damage one-handed (both in `weapon_attack`). Great Weapon Fighting rerolls 1s and 2s once, keeping the new roll (`resolve_attack`'s `reroll_low_damage`).
+- **Ki:** a limited feature from Monk level 2. Points equal the monk level and come back on a short rest.
+  - **Flurry of Blows:** after the Attack action, two unarmed strikes. If the first drops the target, the second goes to another enemy.
+  - **Patient Defense:** Dodge as a bonus action.
+  - **Step of the Wind:** Dash or Disengage as a bonus action, shown only.
+- **Lay on Hands:** an action that heals any character not dead, self included, by a chosen amount from a pool of 5 × paladin level. The pool comes back on a long rest.
+  - `spend_feature` now takes an amount.
+  - The action appears in combat only on a Paladin's turn. The amount defaults to what the target is missing.
+- **Divine Smite:** chosen with the attack (`AttackOptions::divine_smite_slot`). The PHB lets you decide after you hit; here you pick the slot beforehand, and it's spent only on a hit.
+  - 2d8 radiant with a 1st-level slot, +1d8 per level above 1st, max 5d8, and the dice double on a crit.
+  - The combo goes back to "No smite" after every attack.
+- **Reckless Attack:** a checkbox on the first attack of a Barbarian's turn (level 2 and up).
+  - It gives advantage on STR melee weapon attacks that turn.
+  - A `Reckless` effect (`AdvantageOnAttacksAgainst`) on the barbarian lasts until the start of their next turn.
+- **Sheet:** Fighting Style, Reckless Attack, and Divine Smite rows. Ki is shown in points and Lay on Hands in HP.
+
 
 **Phase 2 as built:**
 - **`dnd/class_features`:**
@@ -136,5 +158,5 @@ Settled 2026-09-30:
 1. **Three phases**, in the order under [Build phases](#build-phases): the turn economy and bonus actions first, then the core features, then choices and the rest.
 2. **Sneak Attack without a map:** any other conscious party member counts as "an enemy of the target within 5 feet of it". The log says so when that's what enabled it. Advantage still works alone, and disadvantage still blocks it.
 3. **Rage resistance comes in now,** as a narrow rule: while raging, bludgeoning, piercing, and slashing damage is halved (rounded down). Every seeded monster attack counts as physical until proper damage types exist.
-4. **Fighting Style** is chosen in the creation wizard for Fighters, in phase 3. Until then, no Fighter has a style.
+4. **Fighting Style** is chosen in the creation wizard for Fighters, in phase 3. Until then, no Fighter has a style. (Done: on the wizard's class page, and in Edit Character for existing Fighters.)
 5. **Existing characters** start with every feature use available, and existing Fighters have no Fighting Style until they pick one.

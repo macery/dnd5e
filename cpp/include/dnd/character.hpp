@@ -35,6 +35,9 @@ struct Character {
     // ("SecondWind", "Rage", ...). Maximums come from class and level
     // (dnd/class_features.hpp); rests clear them.
     std::map<std::string, int> feature_uses_spent;
+    // A Fighter's Fighting Style ("Defense", "Archery", ...); empty if none
+    // (see dnd/class_features.hpp).
+    std::string fighting_style;
 
     int experience = 0;
     // Spent on short rests, partly recovered on a long rest; the total

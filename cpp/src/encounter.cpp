@@ -122,6 +122,7 @@ void Encounter::add_character(const Character& character, std::vector<Spell> kno
     combatant.attack_uses_strength = weapon.uses_strength;
     combatant.attack_finesse_or_ranged = weapon.finesse_or_ranged;
     combatant.attack_martial_arts = weapon.martial_arts;
+    combatant.attack_great_weapon_fighting = weapon.great_weapon_fighting;
     combatant.class_name = class_name;
     combatant.level = character.level;
     combatant.sneak_attack_dice = class_name == "Rogue" ? sneak_attack_dice(character.level) : 0;
@@ -135,6 +136,7 @@ void Encounter::add_character(const Character& character, std::vector<Spell> kno
         }
         WeaponAttack strike = dnd::weapon_attack(character, class_name, race_name, empty_handed);
         if (strike.martial_arts) combatant.martial_arts_strike = strike;
+        combatant.unarmed_strike = strike;
     }
     combatant.death_saves.dead = character.dead;
     combatants_.push_back(combatant);
@@ -602,22 +604,29 @@ void Encounter::resolve_monster_turn(Combatant& monster) {
     weapon_attack(monster_index, target, attack);
 }
 
-void Encounter::weapon_attack(int attacker_index, int target_index, const WeaponAttack& attack) {
+void Encounter::weapon_attack(int attacker_index, int target_index, const WeaponAttack& attack, int smite_slot) {
     Combatant& attacker = combatants_[static_cast<size_t>(attacker_index)];
     Combatant& target = combatants_[static_cast<size_t>(target_index)];
     int attack_bonus = attack.attack_bonus;
     attacker.rage_kept_up = true;  // attacking a hostile creature keeps a rage going
 
     RollModifiers mods = attack_roll_modifiers(effects_, attacker_index, target_index, attack.melee, alive_flags());
+    if (turn_.reckless && attacker_index == current_index() && attack.melee && attack.uses_strength) {
+        mods.advantage.push_back("Reckless Attack");
+    }
     std::vector<int> bonus_rolls;
     for (int sides : mods.bonus_dice) bonus_rolls.push_back(dice_.roll(sides, 1).front());
 
     auto result = resolve_attack(dice_, attack_bonus + sum(bonus_rolls), armor_class(target_index),
                                  attack.damage_dice_count, attack.damage_dice_sides, attack.damage_bonus, mods.mode(),
-                                 mods.auto_crit);
+                                 mods.auto_crit, attack.great_weapon_fighting);
     use_effects(mods.used_effects);
 
     std::string extra_note;
+    if (result.rerolled > 0) {
+        extra_note += " (Great Weapon Fighting rerolled " + std::to_string(result.rerolled) + " " +
+                      (result.rerolled == 1 ? "die" : "dice") + ")";
+    }
     if (result.hit) {
         // Divine Favor-style extra damage dice (doubled on a crit, like all attack dice).
         for (const auto& effect : effects_) {
@@ -647,6 +656,20 @@ void Encounter::weapon_attack(int attacker_index, int target_index, const Weapon
                 extra_note += " (+" + std::to_string(sum(extra)) + " Sneak Attack, " +
                               (mods.mode() == RollMode::Advantage ? "advantage" : "an ally is fighting the target") +
                               ")";
+            }
+        }
+        // Divine Smite: a slot for 2d8 radiant, +1d8 per slot level above 1st (max 5d8).
+        if (smite_slot > 0) {
+            Character* paladin = character_mut(attacker.character_id);
+            const ClassInfo* info = paladin ? find_class_info_by_id(classes_, paladin->class_id) : nullptr;
+            if (paladin && info && spend_spell_slot(*paladin, *info, smite_slot)) {
+                changed(paladin->character_id);
+                int count = divine_smite_dice(smite_slot);
+                auto extra = dice_.roll(8, count * (result.critical ? 2 : 1));
+                result.damage_total += sum(extra);
+                extra_note += " (+" + std::to_string(sum(extra)) + " radiant, Divine Smite " +
+                              std::to_string(count * (result.critical ? 2 : 1)) + "d8, level " +
+                              std::to_string(smite_slot) + " slot)";
             }
         }
         // Rage: resistance to bludgeoning, piercing, and slashing -- every weapon attack here.
@@ -1218,6 +1241,26 @@ std::vector<Encounter::BonusActionOption> Encounter::bonus_action_options() cons
                            "bonus action.",
                            BonusTarget::Enemy});
     }
+    if (uses(Feature::Ki) > 0) {
+        std::string ki = " (1 ki, " + std::to_string(uses(Feature::Ki)) + " left)";
+        if (actor.unarmed_strike && turn_.attack_action_taken && !bonus_action_targets(BonusTarget::Enemy).empty()) {
+            options.push_back({BonusAction::FlurryOfBlows, "Flurry of Blows" + ki,
+                               "After the Attack action, two unarmed strikes as a bonus action (the second goes to "
+                               "another enemy if the first drops the target).",
+                               BonusTarget::Enemy});
+        }
+        options.push_back({BonusAction::PatientDefense, "Patient Defense" + ki,
+                           "Take the Dodge action as a bonus action: attacks against you have disadvantage until "
+                           "your next turn, and you have advantage on DEX saves.",
+                           BonusTarget::None});
+        options.push_back({BonusAction::StepOfTheWindDash, "Step of the Wind: Dash" + ki,
+                           "Dash as a bonus action, and your jump distance doubles (shown only: there's no map).",
+                           BonusTarget::None});
+        options.push_back({BonusAction::StepOfTheWindDisengage, "Step of the Wind: Disengage" + ki,
+                           "Disengage as a bonus action, and your jump distance doubles (shown only: there's no map "
+                           "or reactions yet).",
+                           BonusTarget::None});
+    }
     return options;
 }
 
@@ -1311,6 +1354,42 @@ bool Encounter::use_bonus_action(BonusAction kind, int target) {
         case BonusAction::MartialArtsStrike:
             weapon_attack(index, target, *actor.martial_arts_strike);
             break;
+        case BonusAction::FlurryOfBlows: {
+            spend_feature(character, Feature::Ki, actor.class_name);
+            changed(actor.character_id);
+            log(actor.name + " spends 1 ki on Flurry of Blows.");
+            weapon_attack(index, target, *actor.unarmed_strike);
+            int second = target;
+            if (combatants_[static_cast<size_t>(target)].current_hp <= 0) {
+                auto others = bonus_action_targets(BonusTarget::Enemy);
+                second = others.empty() ? -1 : others.front();
+            }
+            if (second >= 0) weapon_attack(index, second, *actor.unarmed_strike);
+            break;
+        }
+        case BonusAction::PatientDefense: {
+            spend_feature(character, Feature::Ki, actor.class_name);
+            changed(actor.character_id);
+            ActiveEffect dodging;
+            dodging.kind = EffectKind::Dodging;
+            dodging.target = index;
+            dodging.source = index;
+            dodging.duration.kind = DurationKind::UntilStartOfTurn;
+            dodging.duration.participant = index;
+            add_effect(dodging);
+            log(actor.name + " spends 1 ki on Patient Defense and takes the Dodge action as a bonus action.");
+            break;
+        }
+        case BonusAction::StepOfTheWindDash:
+            spend_feature(character, Feature::Ki, actor.class_name);
+            changed(actor.character_id);
+            log(actor.name + " spends 1 ki on Step of the Wind and takes the Dash action as a bonus action.");
+            break;
+        case BonusAction::StepOfTheWindDisengage:
+            spend_feature(character, Feature::Ki, actor.class_name);
+            changed(actor.character_id);
+            log(actor.name + " spends 1 ki on Step of the Wind and takes the Disengage action as a bonus action.");
+            break;
     }
     check_for_victory_or_defeat();
     return true;
@@ -1334,10 +1413,68 @@ bool Encounter::action_surge() {
     return true;
 }
 
+bool Encounter::can_attack_recklessly() const {
+    if (!character_can_act() || turn_.attack_action_taken || turn_.reckless) return false;
+    const Combatant& actor = *current();
+    return actor.class_name == "Barbarian" && actor.level >= 2 && actor.melee_attack && actor.attack_uses_strength;
+}
+
+std::vector<int> Encounter::divine_smite_slots() const {
+    std::vector<int> levels;
+    const Combatant* actor = current_character();
+    if (!actor || actor->class_name != "Paladin" || actor->level < 2 || !actor->melee_attack) return levels;
+    const Character* paladin = character(actor->character_id);
+    const ClassInfo* info = paladin ? find_class_info_by_id(classes_, paladin->class_id) : nullptr;
+    if (!info) return levels;
+    for (int level = 1; level <= kMaxSpellLevel; ++level) {
+        if (slots_remaining(*paladin, *info, level) > 0) levels.push_back(level);
+    }
+    return levels;
+}
+
+int Encounter::lay_on_hands_pool() const {
+    const Combatant* actor = current_character();
+    const Character* paladin = actor ? character(actor->character_id) : nullptr;
+    return paladin ? feature_uses_left(Feature::LayOnHands, *paladin, actor->class_name) : 0;
+}
+
+std::vector<int> Encounter::lay_on_hands_targets() const {
+    std::vector<int> targets;
+    if (lay_on_hands_pool() <= 0) return targets;
+    for (int i = 0; i < static_cast<int>(combatants_.size()); ++i) {
+        const auto& candidate = combatants_[static_cast<size_t>(i)];
+        if (candidate.is_character && !candidate.death_saves.dead) targets.push_back(i);
+    }
+    return targets;
+}
+
+bool Encounter::lay_on_hands(int target, int amount) {
+    if (!character_can_act()) return false;
+    auto targets = lay_on_hands_targets();
+    if (std::find(targets.begin(), targets.end(), target) == targets.end()) return false;
+    if (amount <= 0 || amount > lay_on_hands_pool()) return false;
+    if (!can_take_action()) return false;
+
+    int index = current_index();
+    Combatant& actor = combatants_[static_cast<size_t>(index)];
+    spend_feature(*character_mut(actor.character_id), Feature::LayOnHands, actor.class_name, amount);
+    changed(actor.character_id);
+    int healed = 0;
+    auto followups = apply_healing(target, amount, healed);
+    const Combatant& patient = combatants_[static_cast<size_t>(target)];
+    log(actor.name + " uses Lay on Hands on " + (target == index ? "themself" : patient.name) + ": " +
+        std::to_string(amount) + " from the pool, " + std::to_string(healed) + " HP restored (now " +
+        hp_text(patient) + "; " + std::to_string(lay_on_hands_pool()) + " left in the pool).");
+    for (const auto& line : followups) log(line);
+    use_action();
+    check_for_victory_or_defeat();
+    return true;
+}
+
 // --- Actions -----------------------------------------------------------------
 
 bool Encounter::attack(int target_index, int attack_bonus, int damage_dice_count, int damage_dice_sides,
-                       int damage_bonus) {
+                       int damage_bonus, AttackOptions options) {
     if (!character_can_act()) return false;
     if (!awaiting_action()) {
         log(current()->name + " has no action left this turn.");
@@ -1346,8 +1483,30 @@ bool Encounter::attack(int target_index, int attack_bonus, int damage_dice_count
     auto targets = attack_targets();
     if (std::find(targets.begin(), targets.end(), target_index) == targets.end()) return false;
 
+    if (options.divine_smite_slot > 0) {
+        auto slots = divine_smite_slots();
+        if (std::find(slots.begin(), slots.end(), options.divine_smite_slot) == slots.end()) {
+            log(current()->name + " can't use Divine Smite with a level " +
+                std::to_string(options.divine_smite_slot) + " slot.");
+            return false;
+        }
+    }
+
     int actor = current_index();
     const Combatant& attacker = combatants_[static_cast<size_t>(actor)];
+    if (options.reckless && can_attack_recklessly()) {
+        turn_.reckless = true;
+        ActiveEffect exposed;
+        exposed.kind = EffectKind::AdvantageOnAttacksAgainst;
+        exposed.target = actor;
+        exposed.source = actor;
+        exposed.duration.kind = DurationKind::UntilStartOfTurn;
+        exposed.duration.participant = actor;
+        exposed.label = "Reckless";
+        add_effect(exposed);
+        log(attacker.name + " attacks recklessly (advantage on STR melee attacks this turn; attacks against them "
+                            "have advantage until their next turn).");
+    }
     if (turn_.attacks_left > 0) {
         --turn_.attacks_left;  // the next attack of an Attack action already taken
     } else {
@@ -1366,7 +1525,8 @@ bool Encounter::attack(int target_index, int attack_bonus, int damage_dice_count
     attack.uses_strength = attacker.attack_uses_strength;
     attack.finesse_or_ranged = attacker.attack_finesse_or_ranged;
     attack.martial_arts = attacker.attack_martial_arts;
-    weapon_attack(actor, target_index, attack);
+    attack.great_weapon_fighting = attacker.attack_great_weapon_fighting;
+    weapon_attack(actor, target_index, attack, options.divine_smite_slot);
     if (turn_.attacks_left > 0) {
         log("    (Extra Attack: " + std::to_string(turn_.attacks_left) + " more attack" +
             (turn_.attacks_left == 1 ? "" : "s") + " in this Attack action.)");

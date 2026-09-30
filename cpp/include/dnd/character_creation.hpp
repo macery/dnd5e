@@ -129,6 +129,10 @@ struct CreationChoices {
     std::vector<Ability> flexible_bonus_abilities;
 
     std::vector<Skill> chosen_skills;  // class picks + free picks together
+
+    // Fighters: a Fighting Style key (dnd::fighting_styles()). Ignored for
+    // other classes.
+    std::string fighting_style;
 };
 
 // Each returns an error message for the player, or nullopt if that part of
@@ -137,6 +141,8 @@ std::optional<std::string> validate_ability_scores(const CreationChoices& choice
 std::optional<std::string> validate_flexible_bonuses(const CreationChoices& choices);
 std::optional<std::string> validate_skills(const CreationChoices& choices);
 std::optional<std::string> validate_details(const CreationChoices& choices);
+// Fighters must choose a Fighting Style.
+std::optional<std::string> validate_fighting_style(const CreationChoices& choices);
 // First error from all of the above.
 std::optional<std::string> validate_choices(const CreationChoices& choices);
 

@@ -12,6 +12,7 @@
 #include "dnd/repository.hpp"
 #include "dnd/spell.hpp"
 
+class QCheckBox;
 class QComboBox;
 class QFormLayout;
 class QLabel;
@@ -59,6 +60,10 @@ private:
     // the Action Surge button.
     void refreshBonusControls();
     void refreshBonusTargets();
+    // Reckless Attack, Divine Smite, and Lay on Hands for the current
+    // character (hidden when they don't have them).
+    void refreshFeatureControls();
+    void refreshLayOnHandsAmount();
     // After anything the current character does: lists and counts change.
     void afterCharacterActed();
     void updateAttackFieldsForCurrentTurn();
@@ -112,6 +117,11 @@ private:
     QComboBox* bonusTargetCombo_ = nullptr;
     QPushButton* bonusButton_ = nullptr;
     QPushButton* actionSurgeButton_ = nullptr;
+    QCheckBox* recklessBox_ = nullptr;
+    QComboBox* smiteCombo_ = nullptr;        // "No smite", then each slot level
+    QComboBox* layOnHandsTargetCombo_ = nullptr;
+    QSpinBox* layOnHandsSpin_ = nullptr;     // hit points to spend from the pool
+    QLabel* layOnHandsInfoLabel_ = nullptr;
     // BonusTarget of each bonusCombo_ entry, by index.
     std::vector<dnd::Encounter::BonusTarget> bonusTargets_;
     QFormLayout* attackFormLayout_ = nullptr;

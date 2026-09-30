@@ -2,6 +2,7 @@
 
 #include <QAbstractItemView>
 #include <QBrush>
+#include <QCheckBox>
 #include <QColor>
 #include <QComboBox>
 #include <QFormLayout>
@@ -19,6 +20,7 @@
 #include <algorithm>
 
 #include "dnd/character_creation.hpp"
+#include "dnd/class_features.hpp"
 #include "dnd/rules.hpp"
 #include "dnd/spellcasting.hpp"
 
@@ -40,7 +42,9 @@ QString abilityTag(dnd::Ability ability) {
     return QString(dnd::ability_name(ability)).left(3).toUpper();
 }
 
-enum Action { AttackAction, DashAction, DodgeAction, DrinkPotionAction, CastSpellAction, StabilizeAction };
+// LayOnHandsAction is last: it's only in the combo on a Paladin's turn.
+enum Action { AttackAction, DashAction, DodgeAction, DrinkPotionAction, CastSpellAction, StabilizeAction,
+              LayOnHandsAction };
 }  // namespace
 
 CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::vector<dnd::Character> characters,
@@ -143,6 +147,19 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
     damageDiceSidesSpin_->setRange(1, 100);
     damageBonusSpin_ = new QSpinBox(attackGroup);
     damageBonusSpin_->setRange(-10, 20);
+    recklessBox_ = new QCheckBox("Attack recklessly", attackGroup);
+    recklessBox_->setToolTip(
+        "Barbarian Reckless Attack, chosen with your first attack of the turn: advantage on STR melee weapon "
+        "attacks this turn, but attacks against you have advantage until your next turn.");
+    smiteCombo_ = new QComboBox(attackGroup);
+    smiteCombo_->setToolTip(
+        "Paladin Divine Smite: if this attack hits, spend a spell slot for extra radiant damage -- 2d8 with a "
+        "1st-level slot, +1d8 per level above 1st (max 5d8). A miss spends nothing.");
+    layOnHandsTargetCombo_ = new QComboBox(attackGroup);
+    layOnHandsSpin_ = new QSpinBox(attackGroup);
+    layOnHandsSpin_->setToolTip("Hit points to spend from your Lay on Hands pool.");
+    layOnHandsInfoLabel_ = new QLabel(attackGroup);
+    layOnHandsInfoLabel_->setWordWrap(true);
     bonusActionLabel_ = new QLabel(attackGroup);  // the turn's status: action, attacks, bonus action
     bonusActionLabel_->setWordWrap(true);
     bonusActionLabel_->setToolTip(
@@ -185,6 +202,11 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
     attackForm->addRow("Damage Dice Count", damageDiceCountSpin_);
     attackForm->addRow("Damage Dice Sides", damageDiceSidesSpin_);
     attackForm->addRow("Damage Bonus", damageBonusSpin_);
+    attackForm->addRow("Reckless", recklessBox_);
+    attackForm->addRow("Divine Smite", smiteCombo_);
+    attackForm->addRow("Touch", layOnHandsTargetCombo_);
+    attackForm->addRow("Hit points", layOnHandsSpin_);
+    attackForm->addRow(layOnHandsInfoLabel_);
     attackForm->addRow(actionRow);
     attackForm->addRow("Bonus action", bonusRow);
     attackForm->addRow(bonusActionLabel_);
@@ -214,6 +236,8 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
     connect(bonusCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             [this](int) { refreshBonusTargets(); });
     connect(spellCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int) { onSpellChanged(); });
+    connect(layOnHandsTargetCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            [this](int) { refreshLayOnHandsAmount(); });
     connect(spellSlotCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             [this](int) { refreshSpellInfo(); });
 
@@ -275,10 +299,22 @@ void CombatEncounterDialog::onTurnStarted() {
     if (current && encounter_.awaiting_action()) {
         currentTurnLabel_->setText("Current Turn: " + q(current->name));
         actionCombo_->setCurrentIndex(AttackAction);
+        // Lay on Hands is only offered on a Paladin's turn.
+        bool paladin = current->class_name == "Paladin";
+        if (paladin && actionCombo_->count() == LayOnHandsAction) {
+            actionCombo_->addItem("Lay on Hands");
+            actionCombo_->setItemData(LayOnHandsAction,
+                "Touch a creature and restore hit points from your Lay on Hands pool (5 × paladin level, back on a "
+                "long rest).",
+                Qt::ToolTipRole);
+        } else if (!paladin && actionCombo_->count() > LayOnHandsAction) {
+            actionCombo_->removeItem(LayOnHandsAction);
+        }
         refreshTargetCombo();
         refreshPotionCombo();
         refreshStabilizeCombo();
         refreshSpellControls();
+        refreshFeatureControls();
         updateAttackFieldsForCurrentTurn();
         updateActionControlsVisibility();
     } else if (encounter_.status() != dnd::EncounterStatus::InProgress) {
@@ -361,6 +397,13 @@ void CombatEncounterDialog::onTakeActionClicked() {
         case DrinkPotionAction:
             acted = encounter_.drink_potion(potionCombo_->currentData().toInt());
             break;
+        case LayOnHandsAction:
+            if (layOnHandsTargetCombo_->count() == 0) {
+                log("Your Lay on Hands pool is empty until a long rest.");
+                return;
+            }
+            acted = encounter_.lay_on_hands(layOnHandsTargetCombo_->currentData().toInt(), layOnHandsSpin_->value());
+            break;
         case StabilizeAction:
             if (stabilizeCombo_->count() == 0) {
                 log("No one is dying -- choose another action.");
@@ -382,10 +425,15 @@ void CombatEncounterDialog::onTakeActionClicked() {
         }
         default:
             if (targetCombo_->count() == 0) return;
+        {
+            dnd::AttackOptions options;
+            options.reckless = recklessBox_->isVisible() && recklessBox_->isChecked();
+            options.divine_smite_slot = smiteCombo_->isVisible() ? smiteCombo_->currentData().toInt() : 0;
             acted = encounter_.attack(targetCombo_->currentData().toInt(), attackBonusSpin_->value(),
                                       damageDiceCountSpin_->value(), damageDiceSidesSpin_->value(),
-                                      damageBonusSpin_->value());
+                                      damageBonusSpin_->value(), options);
             break;
+        }
     }
 
     processEvents();
@@ -395,6 +443,7 @@ void CombatEncounterDialog::onTakeActionClicked() {
 }
 
 void CombatEncounterDialog::afterCharacterActed() {
+    refreshFeatureControls();
     refreshTargetCombo();
     refreshPotionCombo();
     refreshStabilizeCombo();
@@ -451,6 +500,43 @@ void CombatEncounterDialog::refreshBonusTargets() {
     }
 }
 
+void CombatEncounterDialog::refreshFeatureControls() {
+    recklessBox_->setChecked(false);
+
+    // Back to "No smite" after every attack, so slots are never spent by accident.
+    smiteCombo_->clear();
+    smiteCombo_->addItem("No smite", 0);
+    for (int level : encounter_.divine_smite_slots()) {
+        smiteCombo_->addItem(QString("%1-level slot: +%2d8 radiant on a hit")
+                                 .arg(ordinal(level))
+                                 .arg(dnd::divine_smite_dice(level)),
+                             level);
+    }
+
+    layOnHandsTargetCombo_->blockSignals(true);
+    layOnHandsTargetCombo_->clear();
+    for (int index : encounter_.lay_on_hands_targets()) {
+        const auto& target = encounter_.combatants()[static_cast<size_t>(index)];
+        layOnHandsTargetCombo_->addItem(
+            QString("%1 (%2/%3 HP)").arg(q(target.name)).arg(target.current_hp).arg(target.max_hp), index);
+    }
+    layOnHandsTargetCombo_->blockSignals(false);
+    refreshLayOnHandsAmount();
+}
+
+void CombatEncounterDialog::refreshLayOnHandsAmount() {
+    int pool = encounter_.lay_on_hands_pool();
+    layOnHandsSpin_->setRange(pool > 0 ? 1 : 0, pool);
+    int index = layOnHandsTargetCombo_->currentData().toInt();
+    if (pool > 0 && layOnHandsTargetCombo_->count() > 0 && index >= 0 &&
+        index < static_cast<int>(encounter_.combatants().size())) {
+        const auto& target = encounter_.combatants()[static_cast<size_t>(index)];
+        layOnHandsSpin_->setValue(std::clamp(target.max_hp - target.current_hp, 1, pool));  // enough to fill up
+    }
+    layOnHandsInfoLabel_->setText(pool > 0 ? QString("%1 HP left in your pool.").arg(pool)
+                                           : QString("Your pool is empty until a long rest."));
+}
+
 // --- Views -------------------------------------------------------------------
 
 void CombatEncounterDialog::updateActionControlsVisibility() {
@@ -461,6 +547,19 @@ void CombatEncounterDialog::updateActionControlsVisibility() {
         field->setVisible(is_attack);
         if (auto* row_label = attackFormLayout_->labelForField(field)) row_label->setVisible(is_attack);
     }
+    bool show_reckless = is_attack && encounter_.can_attack_recklessly();
+    bool show_smite = is_attack && smiteCombo_->count() > 1;
+    for (auto [field, visible] : {std::pair<QWidget*, bool>{recklessBox_, show_reckless}, {smiteCombo_, show_smite}}) {
+        field->setVisible(visible);
+        if (auto* row_label = attackFormLayout_->labelForField(field)) row_label->setVisible(visible);
+    }
+    bool is_lay_on_hands = actionCombo_->currentIndex() == LayOnHandsAction;
+    for (auto* field : {static_cast<QWidget*>(layOnHandsTargetCombo_), static_cast<QWidget*>(layOnHandsSpin_),
+                        static_cast<QWidget*>(layOnHandsInfoLabel_)}) {
+        field->setVisible(is_lay_on_hands);
+        if (auto* row_label = attackFormLayout_->labelForField(field)) row_label->setVisible(is_lay_on_hands);
+    }
+
     bool is_potion = actionCombo_->currentIndex() == DrinkPotionAction;
     potionCombo_->setVisible(is_potion);
     if (auto* row_label = attackFormLayout_->labelForField(potionCombo_)) row_label->setVisible(is_potion);
@@ -491,6 +590,7 @@ void CombatEncounterDialog::updateActionControlsVisibility() {
                                            : "Cast Spell");
             break;
         case StabilizeAction: takeActionButton_->setText("Stabilize"); break;
+        case LayOnHandsAction: takeActionButton_->setText("Lay on Hands"); break;
         default: {
             const dnd::Combatant* current = encounter_.current();
             takeActionButton_->setText(current && !current->attack_name.empty()

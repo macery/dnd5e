@@ -22,7 +22,7 @@ constexpr const char* kCharacterColumns =
     "CharacterId, CharacterName, Class, Race, Alignment, PlayerID, Level, "
     "Strength, Dexterity, Constitution, Intelligence, Wisdom, Charisma, "
     "CurrentHP, MaxHP, SkillProficiencies, SaveProficiencies, "
-    "Experience, HitDiceUsed, Background, SpellSlotsUsed, Dead, FeatureUses";
+    "Experience, HitDiceUsed, Background, SpellSlotsUsed, Dead, FeatureUses, FightingStyle";
 // (Characters.ArmorClass and WeaponID still exist but are no longer used:
 // AC and weapons come from equipped inventory items since migration 15.)
 
@@ -105,6 +105,7 @@ Character read_character_row(sqlite3_stmt* stmt) {
     character.spell_slots_used = parse_spell_slots(column_text(stmt, 20));
     character.dead = sqlite3_column_int(stmt, 21) != 0;
     character.feature_uses_spent = parse_feature_uses(column_text(stmt, 22));
+    character.fighting_style = column_text(stmt, 23);
     return character;
 }
 
@@ -486,8 +487,8 @@ int Repository::add_character(const Character& character) {
         "INSERT INTO Characters (CharacterName, Class, Race, Alignment, PlayerID, Level, "
         "Strength, Dexterity, Constitution, Intelligence, Wisdom, Charisma, "
         "CurrentHP, MaxHP, SkillProficiencies, SaveProficiencies, "
-        "Experience, HitDiceUsed, Background, SpellSlotsUsed, Dead, FeatureUses) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);");
+        "Experience, HitDiceUsed, Background, SpellSlotsUsed, Dead, FeatureUses, FightingStyle) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);");
     bind_text(stmt, 1, character.character_name);
     sqlite3_bind_int(stmt.get(), 2, character.class_id);
     sqlite3_bind_int(stmt.get(), 3, character.race);
@@ -510,6 +511,7 @@ int Repository::add_character(const Character& character) {
     bind_text(stmt, 20, format_spell_slots(character.spell_slots_used));
     sqlite3_bind_int(stmt.get(), 21, character.dead ? 1 : 0);
     bind_text(stmt, 22, format_feature_uses(character.feature_uses_spent));
+    bind_text(stmt, 23, character.fighting_style);
     detail::run_and_expect_done(stmt, "insert character");
     return static_cast<int>(sqlite3_last_insert_rowid(db_));
 }
@@ -546,8 +548,8 @@ void Repository::update_character(const Character& character) {
         "UPDATE Characters SET CharacterName = ?, Class = ?, Race = ?, Alignment = ?, Level = ?, "
         "Strength = ?, Dexterity = ?, Constitution = ?, Intelligence = ?, Wisdom = ?, Charisma = ?, "
         "CurrentHP = ?, MaxHP = ?, SkillProficiencies = ?, SaveProficiencies = ?, "
-        "Experience = ?, HitDiceUsed = ?, Background = ?, SpellSlotsUsed = ?, Dead = ?, FeatureUses = ? "
-        "WHERE CharacterId = ?;");
+        "Experience = ?, HitDiceUsed = ?, Background = ?, SpellSlotsUsed = ?, Dead = ?, FeatureUses = ?, "
+        "FightingStyle = ? WHERE CharacterId = ?;");
     bind_text(stmt, 1, character.character_name);
     sqlite3_bind_int(stmt.get(), 2, character.class_id);
     sqlite3_bind_int(stmt.get(), 3, character.race);
@@ -569,7 +571,8 @@ void Repository::update_character(const Character& character) {
     bind_text(stmt, 19, format_spell_slots(character.spell_slots_used));
     sqlite3_bind_int(stmt.get(), 20, character.dead ? 1 : 0);
     bind_text(stmt, 21, format_feature_uses(character.feature_uses_spent));
-    sqlite3_bind_int(stmt.get(), 22, character.character_id);
+    bind_text(stmt, 22, character.fighting_style);
+    sqlite3_bind_int(stmt.get(), 23, character.character_id);
     detail::run_and_expect_done(stmt, "update character");
 }
 

@@ -77,6 +77,9 @@ TEST_CASE("which classes have which limited-use features", "[class_features]") {
     REQUIRE_FALSE(dnd::has_feature(Feature::Rage, "Fighter", 20));
     REQUIRE(dnd::has_feature(Feature::BardicInspiration, "Bard", 1));
     REQUIRE(dnd::has_feature(Feature::ArcaneRecovery, "Wizard", 1));
+    REQUIRE_FALSE(dnd::has_feature(Feature::Ki, "Monk", 1));
+    REQUIRE(dnd::has_feature(Feature::Ki, "Monk", 2));
+    REQUIRE(dnd::has_feature(Feature::LayOnHands, "Paladin", 1));
     for (const auto& info : dnd::limited_features()) REQUIRE(std::string(info.description).size() > 20);
 }
 
@@ -138,6 +141,46 @@ TEST_CASE("feature formulas follow the PHB class tables", "[class_features]") {
     REQUIRE(dnd::second_wind_bonus(3) == 3);
     REQUIRE(dnd::arcane_recovery_budget(1) == 1);
     REQUIRE(dnd::arcane_recovery_budget(5) == 3);
+    REQUIRE(dnd::divine_smite_dice(1) == 2);
+    REQUIRE(dnd::divine_smite_dice(3) == 4);
+    REQUIRE(dnd::divine_smite_dice(4) == 5);
+    REQUIRE(dnd::divine_smite_dice(9) == 5);  // max 5d8
+}
+
+TEST_CASE("Ki points and the Lay on Hands pool", "[class_features]") {
+    using dnd::Feature;
+    dnd::Character monk;
+    monk.level = 3;
+    REQUIRE(dnd::feature_max_uses(Feature::Ki, monk, "Monk") == 3);
+    REQUIRE(dnd::spend_feature(monk, Feature::Ki, "Monk"));
+    REQUIRE(dnd::spend_feature(monk, Feature::Ki, "Monk"));
+    REQUIRE(dnd::feature_uses_left(Feature::Ki, monk, "Monk") == 1);
+    dnd::restore_short_rest_features(monk, "Monk");  // ki comes back on a short rest
+    REQUIRE(dnd::feature_uses_left(Feature::Ki, monk, "Monk") == 3);
+
+    dnd::Character paladin;
+    paladin.level = 2;
+    REQUIRE(dnd::feature_max_uses(Feature::LayOnHands, paladin, "Paladin") == 10);
+    REQUIRE(dnd::spend_feature(paladin, Feature::LayOnHands, "Paladin", 7));
+    REQUIRE_FALSE(dnd::spend_feature(paladin, Feature::LayOnHands, "Paladin", 4));  // only 3 left
+    REQUIRE_FALSE(dnd::spend_feature(paladin, Feature::LayOnHands, "Paladin", 0));
+    REQUIRE(dnd::feature_uses_left(Feature::LayOnHands, paladin, "Paladin") == 3);
+    dnd::restore_short_rest_features(paladin, "Paladin");  // the pool needs a long rest
+    REQUIRE(dnd::feature_uses_left(Feature::LayOnHands, paladin, "Paladin") == 3);
+    dnd::restore_all_features(paladin);
+    REQUIRE(dnd::feature_uses_left(Feature::LayOnHands, paladin, "Paladin") == 10);
+}
+
+TEST_CASE("Fighting Styles belong to Fighters", "[class_features]") {
+    REQUIRE(dnd::fighting_styles().size() == 4);
+    dnd::Character c;
+    c.fighting_style = "GreatWeaponFighting";
+    REQUIRE(dnd::fighting_style(c, "Fighter") == dnd::FightingStyle::GreatWeaponFighting);
+    REQUIRE(dnd::fighting_style(c, "Paladin") == dnd::FightingStyle::None);  // Paladins get theirs at level 2, later
+    c.fighting_style = "Nonsense";
+    REQUIRE(dnd::fighting_style(c, "Fighter") == dnd::FightingStyle::None);
+    REQUIRE(std::string(dnd::fighting_style_info(dnd::FightingStyle::Defense)->name) == "Defense");
+    REQUIRE(dnd::fighting_style_info(dnd::FightingStyle::None) == nullptr);
 }
 
 TEST_CASE("Arcane Recovery recovers slots up to the budget, highest first", "[class_features]") {

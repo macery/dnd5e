@@ -4,6 +4,8 @@
 #include <cctype>
 #include <stdexcept>
 
+#include "dnd/class_features.hpp"
+
 namespace dnd {
 
 namespace {
@@ -270,8 +272,17 @@ std::optional<std::string> validate_details(const CreationChoices& choices) {
     return std::nullopt;
 }
 
+std::optional<std::string> validate_fighting_style(const CreationChoices& choices) {
+    if (choices.class_name != "Fighter") return std::nullopt;
+    for (const auto& style : fighting_styles()) {
+        if (choices.fighting_style == style.key) return std::nullopt;
+    }
+    return "Choose a Fighting Style.";
+}
+
 std::optional<std::string> validate_choices(const CreationChoices& choices) {
     if (!find_class_info(choices.class_name)) return "Choose a class.";
+    if (auto error = validate_fighting_style(choices)) return error;
     if (!find_race_info(choices.race_name)) return "Choose a race.";
     if (!find_background_info(choices.background_name)) return "Choose a background.";
     if (auto error = validate_ability_scores(choices)) return error;
@@ -305,6 +316,7 @@ Character build_character(const CreationChoices& choices) {
     character.alignment = choices.alignment_id;
     character.background = background.name;
     character.level = 1;
+    if (choices.class_name == "Fighter") character.fighting_style = choices.fighting_style;
 
     character.strength = scores[index_of(A::Strength)];
     character.dexterity = scores[index_of(A::Dexterity)];

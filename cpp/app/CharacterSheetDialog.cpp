@@ -222,9 +222,28 @@ CharacterSheetDialog::CharacterSheetDialog(const dnd::Character& character,
         int max = dnd::feature_max_uses(info.feature, character, className);
         int left = dnd::feature_uses_left(info.feature, character, className);
         bool shortRest = dnd::feature_recovery(info.feature, character.level) == dnd::Recovery::ShortRest;
+        QString unit = info.feature == dnd::Feature::LayOnHands ? " HP" : info.feature == dnd::Feature::Ki ? " ki" : "";
         QString uses = max >= 99 ? QString("unlimited")
-                                 : QString("%1 / %2 (%3 rest)").arg(left).arg(max).arg(shortRest ? "short" : "long");
+                                 : QString("%1 / %2%3 (%4 rest)").arg(left).arg(max).arg(unit, shortRest ? "short" : "long");
         addExplainedRow(featuresForm, info.name, new QLabel(uses, featuresGroup), info.description);
+    }
+    if (className == "Fighter") {
+        const dnd::FightingStyleInfo* style = dnd::fighting_style_info(dnd::fighting_style(character, className));
+        addExplainedRow(featuresForm, "Fighting Style",
+            new QLabel(style ? QString::fromUtf8(style->name) : QString("none -- choose one in Edit Character"),
+                       featuresGroup),
+            style ? QString::fromUtf8(style->description) : QString("Fighters adopt a Fighting Style at level 1."));
+    }
+    if (className == "Barbarian" && character.level >= 2) {
+        addExplainedRow(featuresForm, "Reckless Attack", new QLabel("advantage on STR melee attacks", featuresGroup),
+            "On your first attack of a turn you can attack recklessly: advantage on STR melee weapon attacks this "
+            "turn, but attacks against you have advantage until your next turn.");
+    }
+    if (className == "Paladin" && character.level >= 2) {
+        addExplainedRow(featuresForm, "Divine Smite", new QLabel("+2d8 radiant per slot, +1d8 per level above 1st",
+                                                                 featuresGroup),
+            "When you hit with a melee weapon attack, spend a spell slot for extra radiant damage: 2d8 with a "
+            "1st-level slot, +1d8 for each level above 1st, to a maximum of 5d8.");
     }
     if (className == "Barbarian") {
         addExplainedRow(featuresForm, "Rage Damage",

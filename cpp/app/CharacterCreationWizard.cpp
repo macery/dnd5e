@@ -23,6 +23,7 @@
 #include <array>
 #include <stdexcept>
 
+#include "dnd/class_features.hpp"
 #include "dnd/equipment.hpp"
 #include "dnd/rules.hpp"
 #include "dnd/spellcasting.hpp"
@@ -230,13 +231,39 @@ public:
         for (const auto& info : dnd::class_infos()) {
             if (idFor(context_.classes, info.name) != 0) list_->addItem(q(info.name));
         }
+
+        // Fighters choose a Fighting Style at level 1.
+        styleGroup_ = new QGroupBox("Fighting Style", this);
+        styleCombo_ = new QComboBox(styleGroup_);
+        for (const auto& style : dnd::fighting_styles()) {
+            styleCombo_->addItem(q(style.name), QString(style.key));
+            styleCombo_->setItemData(styleCombo_->count() - 1, q(style.description), Qt::ToolTipRole);
+        }
+        styleDescription_ = new QLabel(styleGroup_);
+        styleDescription_->setWordWrap(true);
+        auto* styleLayout = new QVBoxLayout(styleGroup_);
+        styleLayout->addWidget(styleCombo_);
+        styleLayout->addWidget(styleDescription_);
+        layout_->insertWidget(1, styleGroup_);
+        styleGroup_->hide();
+        connect(styleCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int index) {
+            const auto& styles = dnd::fighting_styles();
+            styleDescription_->setText(index >= 0 && index < static_cast<int>(styles.size())
+                                           ? q(styles[static_cast<size_t>(index)].description)
+                                           : QString());
+        });
+        styleCombo_->setCurrentIndex(-1);
+        styleCombo_->setCurrentIndex(0);
     }
 
     bool validatePage() override {
         std::string name = selectedName();
         context_.choices.class_name = name;
         context_.choices.class_id = idFor(context_.classes, name);
-        return accepted(name.empty() ? std::optional<std::string>("Choose a class.") : std::nullopt);
+        context_.choices.fighting_style = name == "Fighter" ? styleCombo_->currentData().toString().toStdString()
+                                                            : std::string();
+        if (name.empty()) return accepted("Choose a class.");
+        return accepted(dnd::validate_fighting_style(context_.choices));
     }
 
 protected:
@@ -254,6 +281,13 @@ protected:
             .arg(info->skill_choice_count)
             .arg(skillList(info->skill_options), q(info->suggested_weapon));
     }
+
+    void onSelectionChanged() override { styleGroup_->setVisible(selectedName() == "Fighter"); }
+
+private:
+    QGroupBox* styleGroup_ = nullptr;
+    QComboBox* styleCombo_ = nullptr;
+    QLabel* styleDescription_ = nullptr;
 };
 
 // ---------------------------------------------------------------- Race
@@ -977,7 +1011,7 @@ private:
                        "<b>Proficiency</b> %10 · <b>Passive Perception</b> %11</p>"
                        "<table cellspacing='4'>%12</table>"
                        "<p><b>Skills:</b> %13</p>"
-                       "<p><b>Weapon:</b> %14<br><b>Gear:</b> %15</p>%16")
+                       "<p><b>Weapon:</b> %14<br><b>Gear:</b> %15</p>%16%17")
             .arg(q(character.character_name), q(choices.race_name), q(choices.class_name),
                  q(choices.background_name), nameFor(context_.alignments, character.alignment))
             .arg(character.max_hp)
@@ -987,7 +1021,14 @@ private:
             .arg(formatModifier(dnd::proficiency_bonus(character.level)))
             .arg(dnd::passive_perception(character))
             .arg(abilities, skills.join(", "), weaponText, gear.isEmpty() ? QString("none") : gear.join(", "),
-                 spellsText(character));
+                 spellsText(character), fightingStyleText(character));
+    }
+
+    QString fightingStyleText(const dnd::Character& character) const {
+        const dnd::FightingStyleInfo* style =
+            dnd::fighting_style_info(dnd::fighting_style(character, context_.choices.class_name));
+        if (!style) return "";
+        return QString("<p><b>Fighting Style:</b> %1 — %2</p>").arg(q(style->name), q(style->description));
     }
 
     QString spellsText(const dnd::Character& character) const {

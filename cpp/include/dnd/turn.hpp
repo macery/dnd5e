@@ -24,6 +24,7 @@ struct TurnState {
     bool attack_action_martial = false;   // ...with an unarmed strike or monk weapon (Martial Arts)
     bool sneak_attack_used = false;       // once per turn
     bool action_surge_used = false;       // once per turn
+    bool reckless = false;                // Reckless Attack: advantage on STR melee attacks this turn
 };
 
 // Why `spell` can't be cast right now, or nullopt if it can. The spell's own

@@ -37,6 +37,13 @@ const std::vector<FeatureInfo>& limited_features() {
         {Feature::ArcaneRecovery, "ArcaneRecovery", "Arcane Recovery", "Wizard", 1,
          "Once per day, on a short rest: recover spell slots with combined levels up to half your wizard level "
          "(rounded up), none of 6th level or higher."},
+        {Feature::Ki, "Ki", "Ki", "Monk", 2,
+         "Ki points equal to your monk level, back on a short rest. Flurry of Blows (after the Attack action, "
+         "two unarmed strikes), Patient Defense (Dodge), or Step of the Wind (Dash or Disengage): 1 ki each, "
+         "as a bonus action."},
+        {Feature::LayOnHands, "LayOnHands", "Lay on Hands", "Paladin", 1,
+         "Action: touch a creature and restore hit points from a pool of 5 x your paladin level, back on a "
+         "long rest."},
     };
     return features;
 }
@@ -68,6 +75,8 @@ int feature_max_uses(Feature feature, const Character& character, const std::str
             return 2;
         case Feature::BardicInspiration: return std::max(1, ability_modifier(character.charisma));
         case Feature::ArcaneRecovery: return 1;
+        case Feature::Ki: return level;
+        case Feature::LayOnHands: return 5 * level;
     }
     return 0;
 }
@@ -81,17 +90,19 @@ int feature_uses_left(Feature feature, const Character& character, const std::st
 Recovery feature_recovery(Feature feature, int level) {
     switch (feature) {
         case Feature::SecondWind:
-        case Feature::ActionSurge: return Recovery::ShortRest;
+        case Feature::ActionSurge:
+        case Feature::Ki: return Recovery::ShortRest;
         case Feature::BardicInspiration: return level >= 5 ? Recovery::ShortRest : Recovery::LongRest;
         case Feature::Rage:
-        case Feature::ArcaneRecovery: return Recovery::LongRest;
+        case Feature::ArcaneRecovery:
+        case Feature::LayOnHands: return Recovery::LongRest;
     }
     return Recovery::LongRest;
 }
 
-bool spend_feature(Character& character, Feature feature, const std::string& class_name) {
-    if (feature_uses_left(feature, character, class_name) <= 0) return false;
-    ++character.feature_uses_spent[feature_info(feature).key];
+bool spend_feature(Character& character, Feature feature, const std::string& class_name, int amount) {
+    if (amount <= 0 || feature_uses_left(feature, character, class_name) < amount) return false;
+    character.feature_uses_spent[feature_info(feature).key] += amount;
     return true;
 }
 
@@ -142,6 +153,10 @@ int arcane_recovery_budget(int level) {
     return (level + 1) / 2;
 }
 
+int divine_smite_dice(int slot_level) {
+    return std::min(5, slot_level + 1);
+}
+
 std::array<int, 9> use_arcane_recovery(Character& character, const std::string& class_name) {
     std::array<int, 9> recovered{};
     if (feature_uses_left(Feature::ArcaneRecovery, character, class_name) <= 0) return recovered;
@@ -159,6 +174,35 @@ std::array<int, 9> use_arcane_recovery(Character& character, const std::string& 
     }
     if (any) spend_feature(character, Feature::ArcaneRecovery, class_name);
     return recovered;
+}
+
+// --- Fighting Style ------------------------------------------------------------------
+
+const std::vector<FightingStyleInfo>& fighting_styles() {
+    static const std::vector<FightingStyleInfo> styles = {
+        {FightingStyle::Archery, "Archery", "Archery", "+2 to attack rolls with ranged weapons."},
+        {FightingStyle::Defense, "Defense", "Defense", "+1 AC while wearing armor."},
+        {FightingStyle::Dueling, "Dueling", "Dueling",
+         "+2 damage with a melee weapon wielded in one hand and no other weapon."},
+        {FightingStyle::GreatWeaponFighting, "GreatWeaponFighting", "Great Weapon Fighting",
+         "Reroll 1s and 2s on the damage dice of a melee weapon wielded with two hands (keep the new roll)."},
+    };
+    return styles;
+}
+
+FightingStyle fighting_style(const Character& character, const std::string& class_name) {
+    if (class_name != "Fighter") return FightingStyle::None;
+    for (const auto& info : fighting_styles()) {
+        if (character.fighting_style == info.key) return info.style;
+    }
+    return FightingStyle::None;
+}
+
+const FightingStyleInfo* fighting_style_info(FightingStyle style) {
+    for (const auto& info : fighting_styles()) {
+        if (info.style == style) return &info;
+    }
+    return nullptr;
 }
 
 }  // namespace dnd

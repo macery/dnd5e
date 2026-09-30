@@ -11,6 +11,8 @@
 #include <QTabWidget>
 #include <QVBoxLayout>
 
+#include "dnd/class_features.hpp"
+
 namespace {
 void populateLookupCombo(QComboBox* combo, const std::vector<dnd::LookupEntry>& entries) {
     for (const auto& entry : entries) {
@@ -63,14 +65,26 @@ QWidget* CharacterEditorDialog::buildBasicsTab(const std::vector<dnd::LookupEntr
     currentHpSpin_->setRange(0, 999);
     maxHpSpin_ = new QSpinBox(page);
     maxHpSpin_->setRange(0, 999);
+    fightingStyleCombo_ = new QComboBox(page);
+    fightingStyleCombo_->addItem("(none)", QString());
+    for (const auto& style : dnd::fighting_styles()) {
+        fightingStyleCombo_->addItem(QString::fromUtf8(style.name), QString(style.key));
+        fightingStyleCombo_->setItemData(fightingStyleCombo_->count() - 1, QString::fromUtf8(style.description),
+                                         Qt::ToolTipRole);
+    }
+    fightingStyleCombo_->setToolTip("Fighters choose a Fighting Style at level 1.");
+    connect(classCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            [this](int) { refreshFightingStyle(); });
 
     form->addRow("Name", nameEdit_);
     form->addRow("Class", classCombo_);
     form->addRow("Race", raceCombo_);
     form->addRow("Alignment", alignmentCombo_);
+    form->addRow("Fighting Style", fightingStyleCombo_);
     form->addRow("Level", levelSpin_);
     form->addRow("Current HP", currentHpSpin_);
     form->addRow("Max HP", maxHpSpin_);
+    refreshFightingStyle();
     auto* equipmentNote = new QLabel("Armor Class and the wielded weapon are calculated from equipped items: "
                                      "use Inventory to equip armor, a shield, and a weapon.",
                                      page);
@@ -128,6 +142,10 @@ QWidget* CharacterEditorDialog::buildProficienciesTab() {
     return page;
 }
 
+void CharacterEditorDialog::refreshFightingStyle() {
+    fightingStyleCombo_->setEnabled(classCombo_->currentText() == "Fighter");
+}
+
 void CharacterEditorDialog::populateFrom(const dnd::Character& existing) {
     nameEdit_->setText(QString::fromStdString(existing.character_name));
     classCombo_->setCurrentIndex(classCombo_->findData(existing.class_id));
@@ -136,6 +154,8 @@ void CharacterEditorDialog::populateFrom(const dnd::Character& existing) {
     levelSpin_->setValue(existing.level);
     currentHpSpin_->setValue(existing.current_hp);
     maxHpSpin_->setValue(existing.max_hp);
+    int style = fightingStyleCombo_->findData(QString::fromStdString(existing.fighting_style));
+    fightingStyleCombo_->setCurrentIndex(style >= 0 ? style : 0);
 
     abilityScoreSpins_[static_cast<int>(dnd::Ability::Strength)]->setValue(existing.strength);
     abilityScoreSpins_[static_cast<int>(dnd::Ability::Dexterity)]->setValue(existing.dexterity);
@@ -161,6 +181,9 @@ dnd::Character CharacterEditorDialog::character() const {
     character.level = levelSpin_->value();
     character.current_hp = currentHpSpin_->value();
     character.max_hp = maxHpSpin_->value();
+    if (fightingStyleCombo_->isEnabled()) {
+        character.fighting_style = fightingStyleCombo_->currentData().toString().toStdString();
+    }
 
     character.strength = abilityScoreSpins_[static_cast<int>(dnd::Ability::Strength)]->value();
     character.dexterity = abilityScoreSpins_[static_cast<int>(dnd::Ability::Dexterity)]->value();

@@ -62,7 +62,8 @@ struct ArmorClassBreakdown {
 //  - no armor: 10 + DEX, or Unarmored Defense if higher -- Barbarian + CON
 //    (a shield is allowed), Monk + WIS (only without a shield);
 //  - light armor: base + DEX; medium: base + DEX (max 2); heavy: base;
-//  - a shield: +2.
+//  - a shield: +2;
+//  - the Defense Fighting Style: +1 while wearing armor.
 // Effect bonuses (Shield of Faith) are added on top in combat.
 ArmorClassBreakdown calculate_armor_class(const Character& character, const std::string& class_name,
                                           const std::vector<InventoryEntry>& inventory);
@@ -83,6 +84,7 @@ struct WeaponAttack {
     bool finesse_or_ranged = false;  // eligible for Sneak Attack
     bool unarmed = false;
     bool martial_arts = false;       // a Monk's unarmed strike or monk weapon (Martial Arts applies)
+    bool great_weapon_fighting = false;  // reroll 1s and 2s on the damage dice (Fighting Style)
 };
 
 // The attack with the wielded weapon, or an unarmed strike (1 + STR
@@ -92,7 +94,9 @@ struct WeaponAttack {
 // without armor or a shield gets Martial Arts (PHB ch. 3) with unarmed
 // strikes and monk weapons (shortswords, and simple melee weapons that
 // aren't two-handed or heavy): the better of STR and DEX, and the Martial
-// Arts die if it's bigger than the weapon's.
+// Arts die if it's bigger than the weapon's. A Fighter's Fighting Style
+// applies too: Archery (+2 to hit, ranged), Dueling (+2 damage, a melee
+// weapon in one hand), Great Weapon Fighting (a melee weapon in two hands).
 WeaponAttack weapon_attack(const Character& character, const std::string& class_name, const std::string& race_name,
                            const std::vector<InventoryEntry>& inventory);
 
