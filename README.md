@@ -187,6 +187,7 @@ Any pending schema migrations run on launch, so older save files are upgraded in
 - [x] **Basic items**: seed common adventuring gear (rations, rope, torches, bedroll, waterskin, thieves' tools) and consumables (Potion of Healing: 2d4+2).
 - [x] **Inventory UI**: an Inventory dialog (opened from the main window) to add, drop, and use items.
 - [x] **Use items in combat**: drinking a potion as an action (or a bonus action, depending on the rules variant).
+- [x] **Equipment design**: see [docs/equipment-system.md](docs/equipment-system.md). It covers the next two items and *Weapon proficiencies*, with its decisions settled: calculated AC, warnings plus combat penalties for armor you aren't proficient with, fixed starting kits per class, weapon proficiency included, and existing weapons converted to inventory items.
 - [ ] **Equipping & weapons in the inventory**: add an equipped flag to inventory entries, and make the equipped weapon one of the character's inventory items instead of the single `WeaponID` column.
 - [ ] **Armor & shields**: seed armor (light/medium/heavy) and calculate AC from the equipped armor, DEX (capped for medium armor), and a shield, instead of entering AC by hand.
 - [ ] **Currency**: track CP/SP/EP/GP/PP and have adventures award gold alongside XP.
