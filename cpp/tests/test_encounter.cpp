@@ -1081,3 +1081,98 @@ TEST_CASE("armor without proficiency: disadvantage and no spellcasting", "[encou
             std::vector<std::string>{"Zanna can't cast spells while wearing armor they aren't proficient with."});
     REQUIRE(encounter.awaiting_action());  // the action isn't used up
 }
+
+// --- Turn economy: actions, bonus actions, Extra Attack ------------------------
+
+TEST_CASE("Extra Attack: two attacks per Attack action from level 5", "[encounter][turn]") {
+    Fixture f;
+    // Aria first (20), Goblin #1 and #2 slow. Both attacks: d20 2 (miss), then misses keep rolling 2.
+    ScriptedRandomSource rolls({20, 1, 1, 2});
+    dnd::Dice dice(rolls);
+    auto encounter = f.encounter(dice);
+    auto aria = f.fighter();
+    aria.level = 5;
+    encounter.add_character(aria, {}, f.fighter_gear());
+    encounter.add_monsters(f.monster("Goblin"), 2);
+    encounter.roll_initiative();
+    encounter.take_events();
+    REQUIRE(encounter.combatants()[0].attacks_per_action == 2);
+
+    SECTION("both attacks, the second at a different target") {
+        REQUIRE(encounter.attack(1, 5, 1, 8, 3));
+        REQUIRE(contains(logs(encounter.take_events()), "    (Extra Attack: 1 more attack in this Attack action.)"));
+        REQUIRE(encounter.turn().actions_left == 0);
+        REQUIRE(encounter.turn().attacks_left == 1);
+        REQUIRE(encounter.awaiting_action());
+        REQUIRE(encounter.attack(2, 5, 1, 8, 3));
+        REQUIRE_FALSE(encounter.awaiting_action());
+        encounter.take_events();
+        REQUIRE_FALSE(encounter.attack(1, 5, 1, 8, 3));
+        REQUIRE(logs(encounter.take_events()) == std::vector<std::string>{"Aria has no action left this turn."});
+    }
+
+    SECTION("another action gives up the remaining attack") {
+        REQUIRE(encounter.attack(1, 5, 1, 8, 3));
+        encounter.take_events();
+        REQUIRE_FALSE(encounter.dash());  // the action is already spent on the Attack action
+        REQUIRE(logs(encounter.take_events()) ==
+                std::vector<std::string>{"Aria has no action left this turn (only the rest of the Attack action)."});
+        REQUIRE(encounter.turn().attacks_left == 1);
+    }
+}
+
+TEST_CASE("bonus-action spells and the one-levelled-spell rule", "[encounter][turn]") {
+    Fixture f;
+    auto healing_word = f.spell("Healing Word");
+    auto sacred_flame = f.spell("Sacred Flame");
+    auto guiding_bolt = f.spell("Guiding Bolt");
+    auto feather_fall = f.spell("Feather Fall");
+
+    auto cleric = f.wizard(3);
+    cleric.character_name = "Tam";
+    cleric.class_id = f.class_id("Cleric");
+    cleric.wisdom = 16;
+    auto aria = f.fighter(1);
+    aria.current_hp = 5;
+
+    // Aria 1+1, Tam 20+2, Goblin 1+2: Tam first. Every later roll is 1.
+    ScriptedRandomSource rolls({1, 20, 1, 1});
+    dnd::Dice dice(rolls);
+    auto encounter = f.encounter(dice);
+    encounter.add_character(aria, {}, f.fighter_gear());
+    encounter.add_character(cleric, {healing_word, sacred_flame, guiding_bolt, feather_fall}, {});
+    encounter.add_monsters(f.monster("Goblin"), 1);
+    encounter.roll_initiative();
+    encounter.take_events();
+    REQUIRE(encounter.current()->name == "Tam");
+    REQUIRE(encounter.bonus_action_available());
+
+    auto names = [&]() {
+        std::vector<std::string> result;
+        for (const auto& spell : encounter.castable_spells()) result.push_back(spell.name);
+        return result;
+    };
+    REQUIRE(names() == std::vector<std::string>{"Healing Word", "Sacred Flame", "Guiding Bolt"});  // no Feather Fall
+
+    SECTION("Healing Word, then only an action cantrip") {
+        REQUIRE(encounter.cast_spell(healing_word.spell_id, 1, {0}));
+        REQUIRE_FALSE(encounter.bonus_action_available());
+        REQUIRE(encounter.awaiting_action());  // the action is still there
+        REQUIRE(names() == std::vector<std::string>{"Sacred Flame"});
+        encounter.take_events();
+        REQUIRE_FALSE(encounter.cast_spell(guiding_bolt.spell_id, 1, {2}));
+        REQUIRE(logs(encounter.take_events()) ==
+                std::vector<std::string>{"After casting a bonus-action spell, only a cantrip can be cast this turn."});
+        REQUIRE(encounter.cast_spell(sacred_flame.spell_id, 0, {2}));
+        REQUIRE_FALSE(encounter.awaiting_action());
+    }
+
+    SECTION("Guiding Bolt first rules out Healing Word") {
+        REQUIRE(encounter.cast_spell(guiding_bolt.spell_id, 1, {2}));
+        REQUIRE(encounter.bonus_action_available());
+        REQUIRE(names().empty());
+        encounter.take_events();
+        REQUIRE_FALSE(encounter.cast_spell(healing_word.spell_id, 1, {0}));
+        REQUIRE(contains(logs(encounter.take_events()), "A bonus-action spell can only be paired with a cantrip"));
+    }
+}

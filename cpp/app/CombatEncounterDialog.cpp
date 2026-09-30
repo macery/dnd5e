@@ -143,7 +143,12 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
     damageDiceSidesSpin_->setRange(1, 100);
     damageBonusSpin_ = new QSpinBox(attackGroup);
     damageBonusSpin_->setRange(-10, 20);
-    bonusActionLabel_ = new QLabel("Bonus Action: none available", attackGroup);
+    bonusActionLabel_ = new QLabel(attackGroup);  // the turn's status: action, attacks, bonus action
+    bonusActionLabel_->setWordWrap(true);
+    bonusActionLabel_->setToolTip(
+        "Each turn you get one action and one bonus action. Bonus-action spells (like Healing Word) use the "
+        "bonus action; after casting one, the only other spell you can cast that turn is a cantrip. With Extra "
+        "Attack, one Attack action is several attacks.");
     takeActionButton_ = new QPushButton("Roll Attack", attackGroup);
     takeActionButton_->setEnabled(false);
 
@@ -263,7 +268,24 @@ void CombatEncounterDialog::refreshState() {
         statusLabel_->setText("Status: " + q(encounter_.result_message()));
     }
     refreshParticipantTable();
-    takeActionButton_->setEnabled(encounter_.awaiting_action());
+    takeActionButton_->setEnabled(encounter_.awaiting_action() || encounter_.bonus_action_available());
+
+    // "Action: available · Bonus action: used", plus attacks left in an Attack action.
+    if (!encounter_.awaiting_action() && !encounter_.bonus_action_available()) {
+        bonusActionLabel_->setText(encounter_.current() ? "Nothing left this turn: click Next Turn." : "");
+        return;
+    }
+    const auto& turn = encounter_.turn();
+    QStringList parts;
+    if (turn.attacks_left > 0) {
+        parts << QString("Attacks left: %1 (Extra Attack)").arg(turn.attacks_left);
+    } else {
+        parts << (turn.actions_left > 1   ? QString("Actions: %1").arg(turn.actions_left)
+                  : turn.actions_left == 1 ? QString("Action: available")
+                                           : QString("Action: used"));
+    }
+    parts << (turn.bonus_action_used ? "Bonus action: used" : "Bonus action: available");
+    bonusActionLabel_->setText(parts.join(" · "));
 }
 
 // --- Buttons -----------------------------------------------------------------
@@ -343,9 +365,11 @@ void CombatEncounterDialog::onTakeActionClicked() {
 
     processEvents();
     if (acted) {
+        refreshTargetCombo();
         refreshPotionCombo();
         refreshStabilizeCombo();
         refreshSpellControls();
+        updateActionControlsVisibility();
     }
     if (encounter_.status() != dnd::EncounterStatus::InProgress) onTurnStarted();
     refreshState();  // one action per turn: Next Turn re-enables the button for whoever acts next
@@ -385,7 +409,11 @@ void CombatEncounterDialog::updateActionControlsVisibility() {
         case DashAction: takeActionButton_->setText("Take Dash Action"); break;
         case DodgeAction: takeActionButton_->setText("Take Dodge Action"); break;
         case DrinkPotionAction: takeActionButton_->setText("Drink Potion"); break;
-        case CastSpellAction: takeActionButton_->setText("Cast Spell"); break;
+        case CastSpellAction:
+            takeActionButton_->setText(spell && spell->casting_time == dnd::CastingTime::BonusAction
+                                           ? "Cast Spell (bonus action)"
+                                           : "Cast Spell");
+            break;
         case StabilizeAction: takeActionButton_->setText("Stabilize"); break;
         default: {
             const dnd::Combatant* current = encounter_.current();
@@ -477,8 +505,9 @@ void CombatEncounterDialog::refreshSpellControls() {
     spellCombo_->blockSignals(true);
     spellCombo_->clear();
     for (const auto& spell : castableSpells_) {
-        spellCombo_->addItem(QString("%1 (%2)").arg(q(spell.name), spell.level == 0 ? "cantrip" : ordinal(spell.level)),
-                             spell.spell_id);
+        QString level = spell.level == 0 ? "cantrip" : ordinal(spell.level);
+        if (spell.casting_time == dnd::CastingTime::BonusAction) level += ", bonus action";
+        spellCombo_->addItem(QString("%1 (%2)").arg(q(spell.name), level), spell.spell_id);
         spellCombo_->setItemData(spellCombo_->count() - 1, q(spell.description), Qt::ToolTipRole);
     }
     spellCombo_->blockSignals(false);

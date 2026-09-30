@@ -12,6 +12,7 @@
 #include "dnd/lookup_entry.hpp"
 #include "dnd/monster.hpp"
 #include "dnd/spell.hpp"
+#include "dnd/turn.hpp"
 
 namespace dnd {
 
@@ -32,6 +33,7 @@ struct Combatant {
     int damage_bonus = 0;
     bool melee_attack = true;  // the weapon/attack above; ranged changes how Prone applies
     std::string attack_name;   // "Longsword", "Unarmed Strike", or the monster's attack
+    int attacks_per_action = 1;  // Extra Attack (characters from level 5)
     // Characters only: wearing armor they aren't proficient with, which also
     // rules out spellcasting (PHB ch. 5).
     bool armor_not_proficient = false;
@@ -111,8 +113,13 @@ public:
     const std::vector<Combatant>& combatants() const { return combatants_; }
     const Combatant* current() const;  // nullptr before initiative or when the fight is over
     int current_index() const;         // index into combatants(), or -1
-    // True while it's a living character's turn and they haven't acted yet.
+    // True while it's a living character's turn and they still have an action
+    // (or attacks left in an Attack action already started).
     bool awaiting_action() const;
+    // True while it's a living character's turn and their bonus action is unused.
+    bool bonus_action_available() const;
+    // What the current character has left this turn.
+    const TurnState& turn() const { return turn_; }
     bool started() const { return !turn_order_.empty(); }
     EncounterStatus status() const { return status_; }
     // "Victory! All enemies defeated. <victory text>" / "Defeat! All characters
@@ -147,7 +154,9 @@ public:
     std::vector<int> attack_targets() const;
     // The current character's healing items with quantities.
     std::vector<InventoryEntry> healing_items() const;
-    // The current character's known spells they have a slot for (cantrips always).
+    // The current character's known spells they could cast right now: a slot
+    // is free (cantrips always), and the action or bonus action it needs is
+    // available under the bonus-action spell rule (dnd/turn.hpp).
     std::vector<Spell> castable_spells() const;
     // Slot levels the current character could cast `spell` with (empty for cantrips).
     std::vector<int> spell_slot_options(const Spell& spell) const;
@@ -160,13 +169,15 @@ public:
     // True if the current character carries a Healer's Kit (stabilizing is automatic).
     bool has_healers_kit() const;
 
-    // --- Actions (the current character's one action for the turn) -----------
-    // Each returns false -- leaving the action unused, with a log line saying
-    // why where useful -- if it isn't a character's turn, they already acted,
-    // or the choice isn't valid.
+    // --- Actions ------------------------------------------------------------
+    // Each returns false -- using nothing up, with a log line saying why where
+    // useful -- if it isn't a character's turn, what it needs (action or bonus
+    // action) is already spent, or the choice isn't valid.
     //
     // A weapon attack with explicit numbers (the UI lets you override them;
-    // defaults are the combatant's attack_bonus / damage_* fields).
+    // defaults are the combatant's attack_bonus / damage_* fields). The first
+    // attack takes the action; with Extra Attack, the rest of that Attack
+    // action's attacks follow without one.
     bool attack(int target, int attack_bonus, int damage_dice_count, int damage_dice_sides, int damage_bonus);
     bool dash();
     bool dodge();
@@ -175,7 +186,8 @@ public:
     // Healer's Kit (not used up; kit uses aren't tracked yet).
     bool stabilize(int target);
     // `slot_level` is 0 for cantrips; `targets` are combatant indices (ignored
-    // for Utility spells).
+    // for Utility spells). The spell's casting time decides whether it takes
+    // the action or the bonus action.
     bool cast_spell(int spell_id, int slot_level, const std::vector<int>& targets);
 
     std::vector<EncounterEvent> take_events();
@@ -222,7 +234,14 @@ private:
 
     Character* character_mut(int character_id);
     const Combatant* current_character() const;
-    bool can_act() const;
+    // It's a conscious, able character's turn (whatever they have left).
+    bool character_can_act() const;
+    // ...and they have an action left. If it's their turn but the action is
+    // spent, logs why (so a click on an action button isn't silently ignored).
+    bool can_take_action();
+    // Spends the action on something other than an attack (giving up any
+    // Extra Attack attacks left over).
+    void use_action();
     void advance_to_actionable_turn();
     void resolve_monster_turn(Combatant& monster);
     void check_for_victory_or_defeat();
@@ -244,7 +263,7 @@ private:
     std::vector<Combatant> combatants_;
     std::vector<int> turn_order_;  // combatant indices, sorted by initiative
     int current_turn_ = -1;        // index into turn_order_; -1 = no active turn
-    bool action_taken_ = false;
+    TurnState turn_;
     EncounterStatus status_ = EncounterStatus::InProgress;
     std::string result_message_;
     std::string victory_text_;

@@ -19,6 +19,7 @@ endif()
 add_library(dndcore
     src/adventure.cpp
     src/character_creation.cpp
+    src/class_features.cpp
     src/combat.cpp
     src/dice.cpp
     src/effects.cpp
@@ -30,6 +31,7 @@ add_library(dndcore
     src/repository.cpp
     src/rules.cpp
     src/spellcasting.cpp
+    src/turn.cpp
 )
 target_include_directories(dndcore PUBLIC include)
 target_link_libraries(dndcore PUBLIC ${sqlite3_target})

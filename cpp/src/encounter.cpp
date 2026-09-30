@@ -4,6 +4,7 @@
 #include <cctype>
 
 #include "dnd/character_creation.hpp"
+#include "dnd/class_features.hpp"
 #include "dnd/combat.hpp"
 #include "dnd/equipment.hpp"
 #include "dnd/inventory.hpp"
@@ -117,6 +118,7 @@ void Encounter::add_character(const Character& character, std::vector<Spell> kno
     combatant.damage_bonus = weapon.damage_bonus;
     combatant.melee_attack = weapon.melee;
     combatant.armor_not_proficient = wearing_armor_without_proficiency(class_name, inventory);
+    combatant.attacks_per_action = attacks_per_attack_action(class_name, character.level);
     combatant.death_saves.dead = character.dead;
     combatants_.push_back(combatant);
     inventories_[character.character_id] = std::move(inventory);
@@ -342,7 +344,7 @@ void Encounter::next_turn() {
 }
 
 void Encounter::advance_to_actionable_turn() {
-    action_taken_ = false;
+    turn_ = TurnState{};
     if (turn_order_.empty()) return;
 
     // Bounded to one full lap, so the UI gets control back even if nobody on
@@ -938,14 +940,31 @@ int Encounter::current_index() const {
 }
 
 bool Encounter::awaiting_action() const {
-    return can_act();
+    return character_can_act() && (turn_.actions_left > 0 || turn_.attacks_left > 0);
 }
 
-bool Encounter::can_act() const {
+bool Encounter::bonus_action_available() const {
+    return character_can_act() && !turn_.bonus_action_used;
+}
+
+bool Encounter::character_can_act() const {
     int index = current_index();
     if (index < 0) return false;
     const Combatant& actor = combatants_[static_cast<size_t>(index)];
-    return actor.is_character && actor.current_hp > 0 && !action_taken_ && !is_incapacitated(effects_, index);
+    return actor.is_character && actor.current_hp > 0 && !is_incapacitated(effects_, index);
+}
+
+bool Encounter::can_take_action() {
+    if (!character_can_act()) return false;
+    if (turn_.actions_left > 0) return true;
+    log(current()->name + " has no action left this turn" +
+        (turn_.attacks_left > 0 ? " (only the rest of the Attack action)." : "."));
+    return false;
+}
+
+void Encounter::use_action() {
+    turn_.actions_left -= 1;
+    turn_.attacks_left = 0;
 }
 
 const Combatant* Encounter::current_character() const {
@@ -1003,6 +1022,7 @@ std::vector<Spell> Encounter::castable_spells() const {
     if (!caster || !info) return spells;
 
     for (const auto& spell : known_spells_.at(caster->character_id)) {
+        if (spell_casting_blocked(turn_, spell)) continue;
         bool castable = spell.level == 0;
         for (int level = std::max(1, spell.level); !castable && level <= kMaxSpellLevel; ++level) {
             castable = slots_remaining(*caster, *info, level) > 0;
@@ -1079,28 +1099,42 @@ bool Encounter::has_healers_kit() const {
 
 bool Encounter::attack(int target_index, int attack_bonus, int damage_dice_count, int damage_dice_sides,
                        int damage_bonus) {
-    if (!can_act()) return false;
+    if (!character_can_act()) return false;
+    if (!awaiting_action()) {
+        log(current()->name + " has no action left this turn.");
+        return false;
+    }
     auto targets = attack_targets();
     if (std::find(targets.begin(), targets.end(), target_index) == targets.end()) return false;
 
     int actor = current_index();
+    const Combatant& attacker = combatants_[static_cast<size_t>(actor)];
+    if (turn_.attacks_left > 0) {
+        --turn_.attacks_left;  // the next attack of an Attack action already taken
+    } else {
+        turn_.actions_left -= 1;  // taking the Attack action
+        turn_.attacks_left = attacker.attacks_per_action - 1;
+    }
     weapon_attack(actor, target_index, attack_bonus, damage_dice_count, damage_dice_sides, damage_bonus,
-                  combatants_[static_cast<size_t>(actor)].melee_attack);
-    action_taken_ = true;
+                  attacker.melee_attack);
+    if (turn_.attacks_left > 0) {
+        log("    (Extra Attack: " + std::to_string(turn_.attacks_left) + " more attack" +
+            (turn_.attacks_left == 1 ? "" : "s") + " in this Attack action.)");
+    }
     check_for_victory_or_defeat();
     return true;
 }
 
 bool Encounter::dash() {
-    if (!can_act()) return false;
+    if (!can_take_action()) return false;
     log(current()->name + " takes the Dash action.");
-    action_taken_ = true;
+    use_action();
     check_for_victory_or_defeat();
     return true;
 }
 
 bool Encounter::dodge() {
-    if (!can_act()) return false;
+    if (!can_take_action()) return false;
     int index = current_index();
     ActiveEffect dodging;
     dodging.kind = EffectKind::Dodging;
@@ -1111,13 +1145,13 @@ bool Encounter::dodge() {
     add_effect(dodging);
     log(combatants_[static_cast<size_t>(index)].name +
         " takes the Dodge action (attacks against them have disadvantage until their next turn).");
-    action_taken_ = true;
+    use_action();
     check_for_victory_or_defeat();
     return true;
 }
 
 bool Encounter::drink_potion(int item_id) {
-    if (!can_act()) return false;
+    if (!can_take_action()) return false;
     int index = current_index();
     Combatant& actor = combatants_[static_cast<size_t>(index)];
 
@@ -1146,13 +1180,13 @@ bool Encounter::drink_potion(int item_id) {
     log(actor.name + " drinks a " + item.name + " and regains " + std::to_string(healed) + " HP (now " +
         hp_text(actor) + ").");
     for (const auto& line : followups) log(line);
-    action_taken_ = true;
+    use_action();
     check_for_victory_or_defeat();
     return true;
 }
 
 bool Encounter::stabilize(int target_index) {
-    if (!can_act()) return false;
+    if (!can_take_action()) return false;
     auto targets = stabilize_targets();
     if (std::find(targets.begin(), targets.end(), target_index) == targets.end()) return false;
 
@@ -1176,19 +1210,28 @@ bool Encounter::stabilize(int target_index) {
         target.death_saves = DeathSaveState{};
         target.death_saves.stable = true;
     }
-    action_taken_ = true;
+    use_action();
     check_for_victory_or_defeat();
     return true;
 }
 
 bool Encounter::cast_spell(int spell_id, int slot_level, const std::vector<int>& target_indices) {
-    if (!can_act()) return false;
+    if (!character_can_act()) return false;
     int actor_index = current_index();
     const Combatant& actor = combatants_[static_cast<size_t>(actor_index)];
 
     if (actor.armor_not_proficient) {
         log(actor.name + " can't cast spells while wearing armor they aren't proficient with.");
         return false;
+    }
+    // Turn economy first, so the log can say why (e.g. the bonus-action spell rule).
+    const auto& known = known_spells_[actor.character_id];
+    auto known_spell = std::find_if(known.begin(), known.end(), [&](const Spell& s) { return s.spell_id == spell_id; });
+    if (known_spell != known.end()) {
+        if (auto blocked = spell_casting_blocked(turn_, *known_spell)) {
+            log(*blocked);
+            return false;
+        }
     }
     auto castable = castable_spells();
     auto chosen = std::find_if(castable.begin(), castable.end(), [&](const Spell& s) { return s.spell_id == spell_id; });
@@ -1223,6 +1266,7 @@ bool Encounter::cast_spell(int spell_id, int slot_level, const std::vector<int>&
         }
     }
     changed(actor.character_id);  // the spent slot
+    record_spell_cast(turn_, spell);  // the action or bonus action
 
     // Each target's roll modifiers, from every effect in play.
     std::vector<int> indices = no_targets ? std::vector<int>{} : target_indices;
@@ -1261,12 +1305,10 @@ bool Encounter::cast_spell(int spell_id, int slot_level, const std::vector<int>&
     if (!self_labels.empty()) log("    " + actor.name + ": " + join(self_labels, ", ") + ".");
     if (spell.resolution == SpellResolution::Utility) {
         log("    " + spell.description);
-        action_taken_ = true;
         check_for_victory_or_defeat();
         return true;
     }
     if (no_targets) {
-        action_taken_ = true;
         check_for_victory_or_defeat();
         return true;
     }
@@ -1336,7 +1378,6 @@ bool Encounter::cast_spell(int spell_id, int slot_level, const std::vector<int>&
         for (const auto& line : followups) log(line);
     }
 
-    action_taken_ = true;
     check_for_victory_or_defeat();
     return true;
 }

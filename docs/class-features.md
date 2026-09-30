@@ -1,6 +1,19 @@
 # Bonus actions and class features design
 
-Status: **approved, ready for phase 1.** Nothing here is implemented yet. The open questions were settled on 2026-09-30; see [Decisions](#decisions).
+Status: **phase 1 (turn economy and bonus actions) done;** phase 2 (core features) is next. The open questions were settled on 2026-09-30; see [Decisions](#decisions).
+
+**Phase 1 as built:**
+- **`dnd/turn`:** `TurnState` (actions left, attacks left in an Attack action, bonus action used) and the PHB ch. 10 spell rule (`spell_casting_blocked` / `record_spell_cast`).
+- **`dnd/class_features`:** starts with `attacks_per_attack_action`, for Extra Attack.
+- **`Encounter`:**
+  - Tracks the turn state. The first attack spends the action; with Extra Attack, the rest of the Attack action follows, and any other action gives it up.
+  - A spell's own casting time picks the action or the bonus action. `castable_spells()` only lists what the rule allows right now, and reaction spells aren't offered.
+  - Refused actions say why in the log.
+- **Combat dialog:**
+  - A live turn status line, e.g. "Attacks left: 1 (Extra Attack) · Bonus action: available", or "Nothing left this turn".
+  - Bonus-action spells tagged "(bonus action)" in the Cast a Spell list.
+  - The button stays live while anything's left.
+- **One change from the design:** bonus-action spells stay in the Cast a Spell list, tagged, rather than getting a row of their own. They need the same slot and target controls. Phase 2's non-spell bonus actions (Second Wind, Rage, Cunning Action) get the separate Bonus Action row.
 
 This covers the TODO items **Bonus actions** and **Class features**, and touches **Level-up choices**. Rules follow the **2014 PHB**:
 - ch. 3 for class features;
