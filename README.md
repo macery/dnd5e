@@ -190,7 +190,7 @@ Any pending schema migrations run on launch, so older save files are upgraded in
 
 ### Magic system
 
-Next up. It builds on the per-class rules data from the character creation wizard, which will gain a "Choose spells" step once spells exist.
+Phases 1 (core and data) and 2 (UI) are done; see [docs/magic-system.md](docs/magic-system.md). Phase 3 (concentration, spell side effects, reactions) is being designed together with conditions and death saves in [docs/effects-system.md](docs/effects-system.md).
 
 - [x] **Design the approach**: see [docs/magic-system.md](docs/magic-system.md). It covers what's data and what's code, the `Spells` schema, class spellcasting rules, the starter spell list, three build phases, and the settled decisions (2014 PHB rules, "choose up to N targets" for area spells, spells cast as actions, no monster casters yet).
 - [x] **Spellcasting stats**: each class's spellcasting ability, caster type, cantrip and spell counts, spell save DC, and spell attack bonus (`dnd/spellcasting.hpp`), shown on the sheet and in the Spellbook.
@@ -198,7 +198,7 @@ Next up. It builds on the per-class rules data from the character creation wizar
 - [x] **Known/prepared spells**: the wizard's "Choose Spells" step, the Spellbook dialog (learn, forget, cast out of combat), and a Spellcasting section on the character sheet. Prepared casters keep the spells they picked; re-preparing after a long rest is phase 3.
 - [x] **Starter spell list**: 18 spells with automated effects (migration 11), plus 24 *Utility* spells with no automated effect yet (migration 12), so every caster can fill its PHB level-1 picks. *Shield* moves to phase 3 with reactions.
 - [x] **Cast a Spell in combat**: pick a spell, a slot level, and targets. Monsters make saving throws with their ability modifiers, and everything is logged. Dodge doesn't affect spell attacks or DEX saves yet.
-- [ ] **Concentration**: at most one concentration spell at a time; taking damage forces a CON save to keep it.
+- [ ] **Concentration**: at most one concentration spell at a time; taking damage forces a CON save to keep it. Designed in [docs/effects-system.md](docs/effects-system.md).
 - [x] **Scaling**: cantrips get extra dice (or extra beams, for Eldritch Blast) at levels 5, 11, and 17, and casting with a higher-level slot adds dice or darts.
 - [ ] **Magic items**: +1 weapons and armor, wands, scrolls, and so on, built on top of the inventory system.
 
@@ -214,7 +214,7 @@ Next up. It builds on the per-class rules data from the character creation wizar
   7. **Equipment:** a starting weapon, plus a starting gear pack that goes straight into the inventory.
   8. **Review:** a preview of the finished character sheet (HP from hit die + CON, AC, all bonuses) before saving.
 
-  The per-class rules data it added (saving throws, skill choices, hit die) lives in `dnd/character_creation.hpp`. Still to do: a spellcasting ability per class for the magic system, and using this data in the existing editor to check proficiencies.
+  The per-class rules data it added (saving throws, skill choices, hit die, and since the magic system, spellcasting) lives in `dnd/character_creation.hpp`. Still to do: using this data in the existing editor to check proficiencies.
 - [x] **Ability score generation**: 4d6 drop the lowest, point buy, and the standard array, in the wizard.
 - [ ] **Race traits**: ability score increases and racial skills are applied. Speed and traits (darkvision, Lucky, Relentless Endurance, etc.) are shown but not simulated. Subraces (Hill Dwarf, High Elf, ...) aren't modeled, and speed isn't stored on the character yet.
 - [ ] **Class features**: a few defining ones, e.g. Fighter's Second Wind and Action Surge, Rogue's Sneak Attack, Barbarian's Rage.
@@ -226,6 +226,7 @@ Next up. It builds on the per-class rules data from the character creation wizar
 
 ### Combat
 
+- [ ] **Effects system**: designed in [docs/effects-system.md](docs/effects-system.md) (draft). It covers the next two items, concentration, and spell side effects, and starts by moving combat logic out of the Qt dialog into a testable `dnd::Encounter`.
 - [ ] **Conditions**: prone, poisoned, frightened, restrained, stunned, etc., wired into advantage and disadvantage.
 - [ ] **Death saving throws**: characters at 0 HP roll death saves, get stabilized, or die, instead of simply being "Down".
 - [ ] **More actions**: Disengage, Help, Hide, Ready, and Use an Object (for potions).
