@@ -104,6 +104,16 @@ CasterStats caster_stats(const Character& character, const ClassInfo& class_info
 struct SpellTarget {
     int armor_class = 10;
     int save_bonus = 0;  // for the spell's save ability
+
+    // Attack spells: the attack roll against this target (see dnd/effects.hpp).
+    RollMode attack_mode = RollMode::Normal;
+    bool critical_on_hit = false;
+    std::vector<int> attack_bonus_dice;  // sides of dice added to the attack roll (Bless)
+
+    // Save spells: this target's saving throw.
+    RollMode save_mode = RollMode::Normal;
+    bool save_auto_fail = false;
+    std::vector<int> save_bonus_dice;  // sides of dice added to the save (Bless)
 };
 
 // One projectile's (or, for a Save spell, one target's) outcome.
@@ -114,6 +124,8 @@ struct SpellEffectRoll {
     bool critical = false;  // Attack: natural 20 (dice doubled)
     int save_roll = 0;      // Save: the d20 (natural)
     bool saved = false;     // Save: met the DC
+    bool auto_failed = false;      // Save: failed automatically (e.g. stunned vs a DEX save)
+    std::vector<int> bonus_rolls;  // extra dice added to the attack or save (Bless)
     int amount = 0;         // damage dealt, or HP restored for Heal
 };
 

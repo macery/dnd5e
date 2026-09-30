@@ -328,6 +328,10 @@ void MainWindow::onShortRestClicked() {
 
     dnd::Character character = *selected;
     QString name = QString::fromStdString(character.character_name);
+    if (character.dead) {
+        QMessageBox::information(this, "Short Rest", QString("%1 is dead. Resting can't bring them back.").arg(name));
+        return;
+    }
 
     // A Warlock's pact slots come back on any short rest, hit dice or not.
     bool slotsRestored = false;
@@ -367,6 +371,11 @@ void MainWindow::onLongRestClicked() {
     if (!selected) return;
 
     dnd::Character character = *selected;
+    if (character.dead) {
+        QMessageBox::information(this, "Long Rest",
+            QString("%1 is dead. Resting can't bring them back.").arg(QString::fromStdString(character.character_name)));
+        return;
+    }
     dnd::take_long_rest(character);
     repository_.update_character(character);
     reloadCharactersForCurrentPlayer();

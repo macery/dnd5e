@@ -325,8 +325,16 @@ SpellCastResult cast_spell(const Dice& dice, const Spell& spell, const CasterSta
         for (size_t i = 0; i < targets.size(); ++i) {
             SpellEffectRoll effect;
             effect.target = static_cast<int>(i);
-            effect.save_roll = dice.roll_d20(RollMode::Normal).result;
-            effect.saved = effect.save_roll + targets[i].save_bonus >= caster.spell_save_dc;
+            const SpellTarget& target = targets[i];
+            effect.save_roll = dice.roll_d20(target.save_mode).result;
+            int bonus_total = 0;
+            for (int sides : target.save_bonus_dice) {
+                effect.bonus_rolls.push_back(dice.roll(sides, 1).front());
+                bonus_total += effect.bonus_rolls.back();
+            }
+            effect.auto_failed = target.save_auto_fail;
+            effect.saved = !effect.auto_failed &&
+                           effect.save_roll + target.save_bonus + bonus_total >= caster.spell_save_dc;
             effect.amount = effect.saved ? (spell.save_halves ? full / 2 : 0) : full;
             result.effects.push_back(effect);
         }
@@ -339,8 +347,14 @@ SpellCastResult cast_spell(const Dice& dice, const Spell& spell, const CasterSta
         const SpellTarget& target = targets[static_cast<size_t>(effect.target)];
 
         if (spell.resolution == SpellResolution::Attack) {
-            AttackResult attack = resolve_attack(dice, caster.spell_attack_bonus, target.armor_class, dice_count,
-                                                 spell.dice_sides, bonus);
+            int bonus_total = 0;
+            for (int sides : target.attack_bonus_dice) {
+                effect.bonus_rolls.push_back(dice.roll(sides, 1).front());
+                bonus_total += effect.bonus_rolls.back();
+            }
+            AttackResult attack = resolve_attack(dice, caster.spell_attack_bonus + bonus_total, target.armor_class,
+                                                 dice_count, spell.dice_sides, bonus, target.attack_mode,
+                                                 target.critical_on_hit);
             effect.attack_roll = attack.attack_roll;
             effect.hit = attack.hit;
             effect.critical = attack.critical;

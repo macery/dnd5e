@@ -1,6 +1,23 @@
 # Effects system design: conditions, death saves, concentration
 
-Status: **step zero done** (`dnd::Encounter` in `include/dnd/encounter.hpp`, with tests in `tests/test_encounter.cpp`); phase 2 (core effects) is next. All open questions are settled; see [Decisions](#decisions).
+Status: **step zero and phase 2 (core effects) done**; phase 3 (data: spell and monster effects, Stabilize) is next. All open questions are settled; see [Decisions](#decisions).
+
+**Phase 2 as built:**
+- **`dnd/effects`:** conditions (with tooltip descriptions), `ActiveEffect`, the attack and save modifier functions, death-save rules, and the concentration DC.
+- **`Encounter`:**
+  - Tracks effects and applies them to every weapon attack, spell attack, and save.
+  - Sends all damage and healing through one path each.
+  - Rolls death saves at the start of a dying character's turn, and skips incapacitated creatures' turns.
+  - Stands prone creatures up, and expires durations.
+  - Checks concentration when a concentrating creature takes damage.
+  - Breaks a charm when the charmer's side does harm.
+  - Makes monsters ignore the dying.
+  - Stabilizes the dying on defeat, and on victory as well (the party tends its fallen).
+  - Gives the dead no XP.
+- **Dodge** is now an effect.
+- **The combat dialog's Status column** shows effects, "Dying (✓ ✗)", "Stable", and "Dead".
+- **Characters** gained a `Dead` flag (migration 13). Rests, potions, and the Spellbook refuse the dead, and only revival will change it.
+- **Not yet:** nothing in the game *applies* conditions or spell effects yet. That's phase 3's data; for now, tests add effects directly.
 
 This covers the *Conditions* and *Death saving throws* TODOs, and phase 3 of the [magic system](magic-system.md): concentration, spell side effects, and a proper Dodge. All three need the same thing: **something attached to a creature that changes the rules until it ends**. Rules follow the **2014 PHB**: Appendix A (Conditions), chapter 9 (Dropping to 0 Hit Points), and chapter 10 (Concentration).
 

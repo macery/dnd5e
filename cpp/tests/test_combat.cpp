@@ -94,3 +94,19 @@ TEST_CASE("resolve_attack respects the roll mode (e.g. attacking a Dodging targe
 
     REQUIRE(result.attack_roll == 5);
 }
+
+TEST_CASE("resolve_attack: critical_on_hit makes any hit critical", "[combat]") {
+    SequenceRandomSource sequence({10, 3, 3});  // d20 10 (+5 = 15 vs AC 12: hit), then two damage dice of 3
+    dnd::Dice dice(sequence);
+    auto result = dnd::resolve_attack(dice, 5, 12, 1, 8, 2, dnd::RollMode::Normal, true);
+    REQUIRE(result.hit);
+    REQUIRE(result.critical);
+    REQUIRE(result.damage_dice.size() == 2);
+    REQUIRE(result.damage_total == 8);  // 3 + 3 + 2
+
+    SequenceRandomSource miss({2});
+    dnd::Dice miss_dice(miss);
+    auto missed = dnd::resolve_attack(miss_dice, 5, 12, 1, 8, 2, dnd::RollMode::Normal, true);
+    REQUIRE_FALSE(missed.hit);
+    REQUIRE_FALSE(missed.critical);
+}

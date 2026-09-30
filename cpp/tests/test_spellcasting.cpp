@@ -435,3 +435,43 @@ TEST_CASE("ordinal", "[spellcasting]") {
     REQUIRE(dnd::ordinal(11) == "11th");
     REQUIRE(dnd::ordinal(21) == "21st");
 }
+
+TEST_CASE("cast_spell applies per-target roll modifiers", "[spellcasting]") {
+    dnd::Repository repo(":memory:");
+    auto spells = repo.get_spells();
+    auto caster = stats(1, 5, 13, 3);
+
+    SECTION("attack: bonus dice and forced crits") {
+        // Bless d4 = 2, attack d20 6 (+5 +2 = 13 vs AC 13: hit), forced crit: 2d10 = 4 + 4
+        SequenceRandomSource rolls({2, 6, 4, 4});
+        dnd::Dice dice(rolls);
+        dnd::SpellTarget target;
+        target.armor_class = 13;
+        target.attack_bonus_dice = {4};
+        target.critical_on_hit = true;
+        auto result = dnd::cast_spell(dice, spell_named(spells, "Fire Bolt"), caster, 0, {target});
+        REQUIRE(result.effects[0].bonus_rolls == std::vector<int>{2});
+        REQUIRE(result.effects[0].hit);
+        REQUIRE(result.effects[0].critical);
+        REQUIRE(result.effects[0].amount == 8);
+    }
+
+    SECTION("save: advantage, bonus dice, and auto-fail") {
+        // Burning Hands 3d6 = 1 + 1 + 1; target 0 saves with advantage (5, 18 -> 18);
+        // target 1 still rolls (20) but auto-fails.
+        SequenceRandomSource rolls({1, 1, 1, 5, 18, 20});
+        dnd::Dice dice(rolls);
+        dnd::SpellTarget dodger;
+        dodger.save_mode = dnd::RollMode::Advantage;
+        dnd::SpellTarget stunned;
+        stunned.save_auto_fail = true;
+        auto burning = spell_named(spells, "Burning Hands");
+        auto result = dnd::cast_spell(dice, burning, caster, 1, {dodger, stunned});
+        REQUIRE(result.effects[0].save_roll == 18);
+        REQUIRE(result.effects[0].saved);
+        REQUIRE(result.effects[1].auto_failed);
+        REQUIRE_FALSE(result.effects[1].saved);
+        REQUIRE(result.effects[1].amount == 3);
+        REQUIRE(result.effects[0].amount == 1);  // half of 3, rounded down
+    }
+}

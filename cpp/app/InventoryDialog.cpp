@@ -133,6 +133,10 @@ void InventoryDialog::onUseClicked() {
     if (!entry || !dnd::is_healing_item(entry->item)) return;
 
     dnd::Item item = entry->item;  // reload() below invalidates `entry`
+    if (character_.dead) {
+        messageLabel_->setText(QString("%1 is dead; a potion can't help.").arg(QString::fromStdString(character_.character_name)));
+        return;
+    }
     if (character_.current_hp >= character_.max_hp) {
         messageLabel_->setText(QString("%1 is already at full HP.").arg(QString::fromStdString(character_.character_name)));
         return;

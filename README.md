@@ -199,7 +199,7 @@ Phases 1 (core and data) and 2 (UI) are done; see [docs/magic-system.md](docs/ma
 - [x] **Known/prepared spells**: the wizard's "Choose Spells" step, the Spellbook dialog (learn, forget, cast out of combat), and a Spellcasting section on the character sheet. Prepared casters keep the spells they picked; re-preparing after a long rest is phase 3.
 - [x] **Starter spell list**: 18 spells with automated effects (migration 11), plus 24 *Utility* spells with no automated effect yet (migration 12), so every caster can fill its PHB level-1 picks. *Shield* moves to phase 3 with reactions.
 - [x] **Cast a Spell in combat**: pick a spell, a slot level, and targets. Monsters make saving throws with their ability modifiers, and everything is logged. Dodge doesn't affect spell attacks or DEX saves yet.
-- [ ] **Concentration**: at most one concentration spell at a time; taking damage forces a CON save to keep it. Designed in [docs/effects-system.md](docs/effects-system.md).
+- [ ] **Concentration**: the engine is done. One spell at a time; damage forces a CON save against DC max(10, half the damage); dropping to 0 or dying ends it. Still to do: spells that actually start concentration (effects phase 3).
 - [x] **Scaling**: cantrips get extra dice (or extra beams, for Eldritch Blast) at levels 5, 11, and 17, and casting with a higher-level slot adds dice or darts.
 - [ ] **Magic items**: +1 weapons and armor, wands, scrolls, and so on, built on top of the inventory system.
 
@@ -227,9 +227,11 @@ Phases 1 (core and data) and 2 (UI) are done; see [docs/magic-system.md](docs/ma
 
 ### Combat
 
-- [ ] **Effects system**: designed in [docs/effects-system.md](docs/effects-system.md). It covers the next two items, concentration, and spell side effects. Step zero is done: combat logic now lives in a tested `dnd::Encounter` instead of the Qt dialog.
-- [ ] **Conditions**: prone, poisoned, frightened, restrained, stunned, etc., wired into advantage and disadvantage.
-- [ ] **Death saving throws**: characters at 0 HP roll death saves, get stabilized, or die, instead of simply being "Down".
+- [ ] **Effects system**: designed in [docs/effects-system.md](docs/effects-system.md). It covers the next two items, concentration, and spell side effects.
+  - **Done:** step zero (combat logic in a tested `dnd::Encounter`) and phase 2 (the core effects engine).
+  - **Next:** phase 3, the data that makes spells and monsters apply effects.
+- [ ] **Conditions**: all 14 PHB conditions are wired into advantage, disadvantage, auto-fails, auto-crits, and skipped turns (`dnd/effects`). Still to do: something that applies them in play (phase 3: spells and the Wolf's knock-prone) and their tooltips in the UI (phase 4).
+- [x] **Death saving throws**: characters at 0 HP fall unconscious and roll death saves each turn. A natural 1 counts as two failures, and a natural 20 brings them back with 1 HP. Massive damage kills outright. Healing revives them, and the fight's end stabilizes them. Monsters ignore the dying. Still to do: the Stabilize action (phase 3) and death save pips in the UI (phase 4).
 - [ ] **Revival**: bring dead characters back the 2014 PHB way: *Revivify*, *Raise Dead*, *Reincarnate*, *Resurrection*, *True Resurrection*, or a temple's spellcasting service. It needs the spells, their material components, currency, and time tracking; see the effects design doc's Decisions.
 - [ ] **More actions**: Disengage, Help, Hide, Ready, and Use an Object (for potions).
 - [ ] **Monsters with several attacks**: Multiattack and more than one attack per stat block.

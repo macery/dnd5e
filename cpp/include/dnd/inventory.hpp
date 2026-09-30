@@ -16,6 +16,10 @@ ItemCategory item_category_from_name(const std::string& name);
 // True for a consumable that restores HP (e.g. a Potion of Healing).
 bool is_healing_item(const Item& item);
 
+// Rolls the item's healing (its dice + bonus, never negative) without
+// applying it. Throws std::invalid_argument if the item doesn't heal.
+int roll_healing(const Dice& dice, const Item& item);
+
 // Rolls the item's healing and applies it, capped at max HP. Returns the HP
 // actually regained. Only changes the character -- removing the used item
 // from the inventory is the caller's job (see Repository). Throws

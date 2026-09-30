@@ -5,7 +5,7 @@
 namespace dnd {
 
 AttackResult resolve_attack(const Dice& dice, int attack_bonus, int target_ac, int damage_dice_count,
-                             int damage_dice_sides, int damage_bonus, RollMode mode) {
+                             int damage_dice_sides, int damage_bonus, RollMode mode, bool critical_on_hit) {
     AttackResult result;
     result.attack_roll = dice.roll_d20(mode).result;
 
@@ -16,6 +16,7 @@ AttackResult resolve_attack(const Dice& dice, int attack_bonus, int target_ac, i
         result.critical = true;
     } else {
         result.hit = (result.attack_roll + attack_bonus) >= target_ac;
+        result.critical = result.hit && critical_on_hit;
     }
 
     if (result.hit) {

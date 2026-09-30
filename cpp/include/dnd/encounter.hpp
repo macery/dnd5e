@@ -7,6 +7,7 @@
 
 #include "dnd/character.hpp"
 #include "dnd/dice.hpp"
+#include "dnd/effects.hpp"
 #include "dnd/item.hpp"
 #include "dnd/lookup_entry.hpp"
 #include "dnd/monster.hpp"
@@ -30,12 +31,16 @@ struct Combatant {
     int damage_dice_count = 1;
     int damage_dice_sides = 4;
     int damage_bonus = 0;
-    // Set by the Dodge action; attacks against this combatant have
-    // disadvantage until the start of its own next turn.
-    bool is_dodging = false;
+    bool melee_attack = true;  // the weapon/attack above; ranged changes how Prone applies
     int xp = 0;  // monsters only: awarded to the party on victory
-    // Monsters only: STR..CHA, for saving throws against spells.
+    // Monsters only: STR..CHA, for saving throws. (Characters use their sheet.)
     std::array<int, 6> ability_scores{10, 10, 10, 10, 10, 10};
+
+    // Characters at 0 HP: dying (rolling death saves), stable, or dead.
+    // Monsters simply die at 0 HP.
+    DeathSaveState death_saves;
+    // The concentration spell this combatant is maintaining; empty if none.
+    std::string concentration;
 };
 
 // Something the encounter did that the caller may need to show or persist.
@@ -105,6 +110,24 @@ public:
     const std::string& result_message() const { return result_message_; }
 
     const Character* character(int character_id) const;
+
+    // Every effect currently in play (conditions, Dodge, spell effects).
+    const std::vector<ActiveEffect>& effects() const { return effects_; }
+    // Adds an effect (its id is assigned here) and returns the id. For spells
+    // and monster abilities, and for tests.
+    int add_effect(ActiveEffect effect);
+    void remove_effect(int effect_id);
+    // `source` starts concentrating on `label`, ending any earlier
+    // concentration. Effects added with concentration = true and this source
+    // end when the concentration does.
+    void start_concentration(int source, std::string label);
+    void end_concentration(int source, const std::string& reason);
+
+    // Base AC plus effect bonuses (Shield of Faith).
+    int armor_class(int index) const;
+    // A short status for the UI: "Up", "Up (Dodging, Prone)", "Dying (✓1 ✗2)",
+    // "Stable", "Dead", or "Down" for a defeated monster.
+    std::string status_text(int index) const;
     // Everyone on the other side from the current combatant who's still up.
     std::vector<int> attack_targets() const;
     // The current character's healing items with quantities.
@@ -134,6 +157,41 @@ public:
     std::vector<EncounterEvent> take_events();
 
 private:
+    // The single paths every hit and every heal go through. apply_damage
+    // handles dropping to 0 (dying, massive damage, monster death), damage
+    // while dying, concentration checks, and charm-breaking; both return the
+    // extra log lines to print after the line describing the hit or heal.
+    std::vector<std::string> apply_damage(int target, int amount, bool critical, int source);
+    std::vector<std::string> apply_healing(int target, int amount, int& healed);
+
+    // Resolves a weapon attack with every effect applied, and logs it.
+    void weapon_attack(int attacker, int target, int attack_bonus, int damage_dice_count, int damage_dice_sides,
+                       int damage_bonus, bool melee);
+    // d20 + the target's save bonus + effects, vs `dc`. Logs nothing.
+    bool roll_save(int target, Ability ability, int dc, std::string& detail);
+    int save_bonus(int index, Ability ability) const;
+    std::vector<bool> alive_flags() const;
+    bool is_conscious(int index) const;
+    // Charmed by `target`: can't attack it.
+    bool charmed_by(int attacker, int target) const;
+    void use_effects(const std::vector<int>& effect_ids);
+
+    // Effect bookkeeping at turn boundaries (durations, standing up, saves to end).
+    void start_turn(int index);
+    void end_turn(int index);
+    // Rolls a dying character's death save at the start of their turn.
+    // Returns true if they're back up and can act this turn.
+    bool resolve_death_save(int index);
+    // Marks a character dead (clearing its effects and concentration) and
+    // returns the log lines to print.
+    std::vector<std::string> mark_dead(int index, const std::string& how);
+    // Ends `index`'s concentration and the effects that depended on it.
+    // Returns the log line, or "" if it wasn't concentrating.
+    std::string drop_concentration(int index, const std::string& reason);
+    void fall_unconscious(int index);
+    // Stabilizes everyone still dying (end of the fight).
+    void stabilize_dying();
+
     Character* character_mut(int character_id);
     const Combatant* current_character() const;
     bool can_act() const;
@@ -164,6 +222,8 @@ private:
     std::string victory_text_;
     std::vector<LootGrant> loot_;
     std::vector<EncounterEvent> events_;
+    std::vector<ActiveEffect> effects_;
+    int next_effect_id_ = 1;
 };
 
 }  // namespace dnd

@@ -234,6 +234,10 @@ void SpellbookDialog::onCastClicked() {
     if (!selected) return;
     dnd::Spell spell = *selected;  // reload() below invalidates `selected`
     int slotLevel = spell.level == 0 ? 0 : slotCombo_->currentData().toInt();
+    if (character_.dead) {
+        messageLabel_->setText(QString("%1 is dead and can't cast spells.").arg(q(character_.character_name)));
+        return;
+    }
 
     if (spell.resolution == dnd::SpellResolution::Heal && character_.current_hp >= character_.max_hp) {
         messageLabel_->setText(QString("%1 is already at full HP.").arg(q(character_.character_name)));

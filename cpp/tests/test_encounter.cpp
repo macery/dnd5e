@@ -208,11 +208,12 @@ TEST_CASE("dodge gives monsters disadvantage until the dodger's next turn", "[en
     encounter.take_events();
 
     REQUIRE(encounter.dodge());
-    REQUIRE(encounter.combatants()[0].is_dodging);
+    REQUIRE(dnd::has_effect(encounter.effects(), 0, dnd::EffectKind::Dodging));
+    REQUIRE(encounter.status_text(0) == "Up (Dodging)");
     encounter.next_turn();
     auto lines = logs(encounter.take_events());
-    REQUIRE(contains(lines, "Goblin attacks Aria: d20(2) +4 -> miss."));
-    REQUIRE_FALSE(encounter.combatants()[0].is_dodging);  // cleared at the start of Aria's turn
+    REQUIRE(contains(lines, "Goblin attacks Aria: d20(2) +4 with disadvantage (target dodging) -> miss."));
+    REQUIRE_FALSE(dnd::has_effect(encounter.effects(), 0, dnd::EffectKind::Dodging));  // cleared at the start of Aria's turn
 }
 
 TEST_CASE("attacking to victory awards XP and loot", "[encounter]") {
@@ -279,8 +280,10 @@ TEST_CASE("defeat when every character is down", "[encounter]") {
     auto lines = logs(events);
     REQUIRE(contains(lines, "Orc attacks Aria: d20(20) +5 -> CRITICAL HIT for 27. Aria is now 0/12 HP."));
     REQUIRE(lines.back() == "--- Defeat! All characters have fallen. ---");
+    REQUIRE(contains(lines, "*** Aria is killed outright by massive damage. ***"));  // 15 left over >= 12 max HP
     REQUIRE(encounter.status() == dnd::EncounterStatus::Defeat);
     REQUIRE(encounter.character(1)->current_hp == 0);
+    REQUIRE(encounter.character(1)->dead);
     REQUIRE(has_event(events, EncounterEvent::Kind::CharacterChanged, 1));
 }
 
@@ -425,6 +428,18 @@ TEST_CASE("casting spells: slots, targets, damage, and healing", "[encounter]") 
     }
 }
 
+TEST_CASE("joining at 0 HP means unconscious but stable", "[encounter]") {
+    Fixture f;
+    ScriptedRandomSource rolls({10});
+    dnd::Dice dice(rolls);
+    auto encounter = f.encounter(dice);
+    auto aria = f.fighter();
+    aria.current_hp = 0;
+    encounter.add_character(aria, {}, {});
+    REQUIRE(encounter.status_text(0) == "Stable");
+    REQUIRE(dnd::has_condition(encounter.effects(), 0, dnd::Condition::Unconscious));
+}
+
 TEST_CASE("healing spells target the party, including anyone down", "[encounter]") {
     Fixture f;
     auto cure = f.spell("Cure Wounds");
@@ -451,6 +466,243 @@ TEST_CASE("healing spells target the party, including anyone down", "[encounter]
     REQUIRE(encounter.cast_spell(cure.spell_id, 1, {0}));
     auto events = encounter.take_events();
     REQUIRE(logs(events).at(1) == "    Aria: regains 8 HP. Now 8/12 HP.");
+    REQUIRE(logs(events).at(2) == "    Aria regains consciousness.");
+    REQUIRE(encounter.status_text(0) == "Up");
     REQUIRE(encounter.character(1)->current_hp == 8);
     REQUIRE(has_event(events, EncounterEvent::Kind::CharacterChanged, 1));
+}
+
+// --- Effects system phase 2 --------------------------------------------------
+
+namespace {
+// Aria (12 HP, AC 16) and Zanna (8 HP, AC 12) against an Orc (+5, 1d12+3).
+// Initiative: Aria 1+1, Zanna 2+2, Orc 20+1 -> Orc, Zanna, Aria. The Orc picks
+// Aria (1 of 2) and hits for 1d12=5 +3 = 8, dropping her from 3 HP to 0.
+std::vector<int> orc_drops_aria() { return {1, 2, 20, 1, 15, 5}; }
+}  // namespace
+
+TEST_CASE("dropping to 0 HP: dying, and monsters ignore the dying", "[encounter][effects]") {
+    Fixture f;
+    auto script = orc_drops_aria();
+    script.insert(script.end(), {9, 1, 2, 1, 1, 2});  // Aria's saves: 9, then a natural 1; Orc misses Zanna
+    ScriptedRandomSource rolls(script);
+    dnd::Dice dice(rolls);
+    auto encounter = f.encounter(dice);
+    auto aria = f.fighter();
+    aria.current_hp = 3;
+    encounter.add_character(aria, {}, {});
+    encounter.add_character(f.wizard(), {}, {});
+    encounter.add_monsters(f.monster("Orc"), 1);
+
+    encounter.roll_initiative();
+    auto lines = logs(encounter.take_events());
+    REQUIRE(contains(lines, "Orc attacks Aria: d20(15) +5 -> hit for 8. Aria is now 0/12 HP."));
+    REQUIRE(contains(lines, "    Aria falls unconscious and is dying."));
+    REQUIRE(encounter.status_text(0) == "Dying (✓0 ✗0)");
+    REQUIRE(dnd::has_condition(encounter.effects(), 0, dnd::Condition::Unconscious));
+    REQUIRE(encounter.current()->name == "Zanna");
+
+    REQUIRE(encounter.dash());
+    encounter.next_turn();  // Aria rolls a death save, then the Orc goes for Zanna, not the dying Aria
+    lines = logs(encounter.take_events());
+    REQUIRE(contains(lines, "Aria makes a death saving throw: d20(9) -> failure (0 successes, 1 failures)."));
+    REQUIRE(contains(lines, "Orc attacks Zanna"));
+    REQUIRE(encounter.status_text(0) == "Dying (✓0 ✗1)");
+
+    REQUIRE(encounter.dash());
+    encounter.next_turn();  // natural 1: two more failures, dead
+    auto events = encounter.take_events();
+    lines = logs(events);
+    REQUIRE(contains(lines, "Aria makes a death saving throw: d20(1) -> natural 1. Aria has failed three death saves."));
+    REQUIRE(contains(lines, "*** Aria dies. ***"));
+    REQUIRE(encounter.character(1)->dead);
+    REQUIRE(encounter.status_text(0) == "Dead");
+    REQUIRE(has_event(events, EncounterEvent::Kind::CharacterChanged, 1));
+    REQUIRE(encounter.status() == dnd::EncounterStatus::InProgress);  // Zanna's still up
+}
+
+TEST_CASE("a natural 20 death save wakes a character up for their turn", "[encounter][effects]") {
+    Fixture f;
+    auto script = orc_drops_aria();
+    script.push_back(20);
+    ScriptedRandomSource rolls(script);
+    dnd::Dice dice(rolls);
+    auto encounter = f.encounter(dice);
+    auto aria = f.fighter();
+    aria.current_hp = 3;
+    encounter.add_character(aria, {}, {});
+    encounter.add_character(f.wizard(), {}, {});
+    encounter.add_monsters(f.monster("Orc"), 1);
+    encounter.roll_initiative();
+    encounter.dash();  // Zanna
+    encounter.take_events();
+
+    encounter.next_turn();
+    auto lines = logs(encounter.take_events());
+    REQUIRE(contains(lines, "Aria makes a death saving throw: d20(20) -> natural 20! Aria regains 1 HP and wakes up."));
+    REQUIRE(encounter.current_index() == 0);
+    REQUIRE(encounter.awaiting_action());
+    REQUIRE(encounter.combatants()[0].current_hp == 1);
+    REQUIRE_FALSE(dnd::has_condition(encounter.effects(), 0, dnd::Condition::Unconscious));
+}
+
+TEST_CASE("defeat stabilizes anyone still dying", "[encounter][effects]") {
+    Fixture f;
+    ScriptedRandomSource rolls({1, 20, 1, 15, 5});  // Aria 2, Orc 21; Orc hits Aria (3 HP) for 8
+    dnd::Dice dice(rolls);
+    auto encounter = f.encounter(dice);
+    auto aria = f.fighter();
+    aria.current_hp = 3;
+    encounter.add_character(aria, {}, {});
+    encounter.add_monsters(f.monster("Orc"), 1);
+    encounter.roll_initiative();
+
+    auto lines = logs(encounter.take_events());
+    REQUIRE(contains(lines, "--- Defeat! All characters have fallen. ---"));
+    REQUIRE(lines.back() == "Aria is stabilized.");
+    REQUIRE(encounter.status_text(0) == "Stable");
+    REQUIRE_FALSE(encounter.character(1)->dead);
+    REQUIRE(encounter.effects().empty());  // combat effects end with the fight
+}
+
+TEST_CASE("dead characters don't act, can't be healed, and earn no XP", "[encounter][effects]") {
+    Fixture f;
+    auto fire_bolt = f.spell("Fire Bolt");
+    auto cure = f.spell("Cure Wounds");
+    ScriptedRandomSource rolls({5, 20, 1, 18, 10});  // Zanna first; Fire Bolt d20 18, 1d10 = 10
+    dnd::Dice dice(rolls);
+    auto encounter = f.encounter(dice);
+    auto aria = f.fighter();
+    aria.dead = true;
+    encounter.add_character(aria, {}, {});
+    encounter.add_character(f.wizard(), {fire_bolt, cure}, {});
+    encounter.add_monsters(f.monster("Goblin"), 1);
+    encounter.roll_initiative();
+    encounter.take_events();
+
+    REQUIRE(encounter.status_text(0) == "Dead");
+    REQUIRE(encounter.current()->name == "Zanna");
+    REQUIRE(encounter.spell_target_candidates(cure) == std::vector<int>{1});  // not the dead Aria
+
+    REQUIRE(encounter.cast_spell(fire_bolt.spell_id, 0, {2}));
+    auto lines = logs(encounter.take_events());
+    REQUIRE(contains(lines, "The party earns 50 XP (50 each)."));
+    REQUIRE(encounter.character(1)->experience == 0);
+    REQUIRE(encounter.character(2)->experience == 50);
+}
+
+TEST_CASE("prone, bonus dice, and effect durations", "[encounter][effects]") {
+    Fixture f;
+    // Init Aria 20, Goblin 1. Aria: Bless d4 = 3, advantage d20s 5 and 12, d8 = 1.
+    // Goblin: stands up, picks Aria, d20 2 (miss).
+    ScriptedRandomSource rolls({20, 1, 3, 5, 12, 1, 1, 2});
+    dnd::Dice dice(rolls);
+    auto encounter = f.encounter(dice);
+    encounter.add_character(f.fighter(), {}, {});
+    encounter.add_monsters(f.monster("Goblin"), 1);
+    encounter.roll_initiative();
+    encounter.take_events();
+
+    dnd::ActiveEffect prone;
+    prone.kind = dnd::EffectKind::Condition;
+    prone.condition = dnd::Condition::Prone;
+    prone.target = 1;
+    encounter.add_effect(prone);
+
+    dnd::ActiveEffect bless;
+    bless.kind = dnd::EffectKind::AttackBonusDice;
+    bless.amount = 4;
+    bless.target = 0;
+    bless.source = 0;
+    bless.duration.kind = dnd::DurationKind::Rounds;
+    bless.duration.rounds = 1;
+    bless.label = "Blessed";
+    encounter.add_effect(bless);
+    REQUIRE(encounter.status_text(1) == "Up (Prone)");
+
+    REQUIRE(encounter.attack(1, 5, 1, 8, 3));
+    auto lines = logs(encounter.take_events());
+    REQUIRE(lines.at(0) ==
+            "Aria attacks Goblin: d20(12) +5 +1d4(3) with advantage (target prone) -> hit for 4. Goblin is now 3/7 HP.");
+
+    encounter.next_turn();
+    lines = logs(encounter.take_events());
+    REQUIRE(contains(lines, "Goblin stands up."));
+    REQUIRE(contains(lines, "Blessed on Aria ends."));  // 1 round, counted on Aria's turn
+    REQUIRE(encounter.current_index() == 0);
+    REQUIRE(encounter.effects().empty());
+
+    SECTION("an incapacitated creature's turn is skipped") {
+        dnd::ActiveEffect stunned;
+        stunned.kind = dnd::EffectKind::Condition;
+        stunned.condition = dnd::Condition::Stunned;
+        stunned.target = 1;
+        encounter.add_effect(stunned);
+        encounter.dash();
+        encounter.next_turn();
+        REQUIRE(logs(encounter.take_events()) ==
+                std::vector<std::string>{"Aria takes the Dash action.", "Goblin is stunned and can't act."});
+        REQUIRE(encounter.current_index() == 0);
+    }
+
+    SECTION("armor class bonuses") {
+        dnd::ActiveEffect shield;
+        shield.kind = dnd::EffectKind::ArmorClassBonus;
+        shield.amount = 2;
+        shield.target = 0;
+        encounter.add_effect(shield);
+        REQUIRE(encounter.armor_class(0) == 18);
+    }
+}
+
+TEST_CASE("taking damage tests concentration", "[encounter][effects]") {
+    Fixture f;
+    // Zanna 1+2, Orc 20+1. Orc: pick, d20 15 hits AC 12, 1d12 = 1 (+3 = 4). CON save d20 3 vs DC 10: fails.
+    ScriptedRandomSource rolls({1, 20, 1, 15, 1, 3});
+    dnd::Dice dice(rolls);
+    auto encounter = f.encounter(dice);
+    encounter.add_character(f.wizard(), {}, {});
+    encounter.add_monsters(f.monster("Orc"), 1);
+
+    encounter.start_concentration(0, "Bless");
+    dnd::ActiveEffect bless;
+    bless.kind = dnd::EffectKind::AttackBonusDice;
+    bless.amount = 4;
+    bless.target = 0;
+    bless.source = 0;
+    bless.concentration = true;
+    bless.label = "Blessed";
+    encounter.add_effect(bless);
+    REQUIRE(encounter.status_text(0) == "Up (Blessed, Concentrating: Bless)");
+
+    encounter.roll_initiative();
+    auto lines = logs(encounter.take_events());
+    REQUIRE(contains(lines, "    Zanna makes a DC 10 concentration save: CON save d20(3) +0 -> fails."));
+    REQUIRE(contains(lines, "    Zanna stops concentrating on Bless (failed the save)."));
+    REQUIRE(encounter.effects().empty());
+    REQUIRE(encounter.status_text(0) == "Up");
+}
+
+TEST_CASE("a charmed monster won't attack its charmer; harming it breaks the charm", "[encounter][effects]") {
+    Fixture f;
+    ScriptedRandomSource rolls({1, 20, 15, 1});  // Goblin first; Aria then hits for 1d8 = 1 (+3 = 4)
+    dnd::Dice dice(rolls);
+    auto encounter = f.encounter(dice);
+    encounter.add_character(f.fighter(), {}, {});
+    encounter.add_monsters(f.monster("Goblin"), 1);
+
+    dnd::ActiveEffect charmed;
+    charmed.kind = dnd::EffectKind::Condition;
+    charmed.condition = dnd::Condition::Charmed;
+    charmed.target = 1;
+    charmed.source = 0;
+    encounter.add_effect(charmed);
+
+    encounter.roll_initiative();
+    REQUIRE(contains(logs(encounter.take_events()), "Goblin is charmed and won't attack."));
+
+    REQUIRE(encounter.attack(1, 5, 1, 8, 3));
+    auto lines = logs(encounter.take_events());
+    REQUIRE(contains(lines, "    Goblin is no longer charmed."));
+    REQUIRE(encounter.effects().empty());
 }

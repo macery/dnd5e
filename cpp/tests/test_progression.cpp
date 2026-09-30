@@ -131,3 +131,18 @@ TEST_CASE("short rest spends hit dice; long rest recovers them", "[progression]"
         REQUIRE(character.hit_dice_used == 0);
     }
 }
+
+TEST_CASE("rests never revive the dead", "[progression]") {
+    FixedRandomSource fixed(4);
+    dnd::Dice dice(fixed);
+    dnd::Character character;
+    character.level = 2;
+    character.max_hp = 20;
+    character.current_hp = 0;
+    character.dead = true;
+
+    dnd::take_long_rest(character);
+    REQUIRE(character.current_hp == 0);
+    REQUIRE(dnd::spend_hit_die(character, dice, 8) == -1);
+    REQUIRE(character.current_hp == 0);
+}

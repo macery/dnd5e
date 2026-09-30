@@ -51,7 +51,8 @@ int hit_dice_remaining(const Character& character);
 
 // Short rest: spends one hit die, regaining hit_die roll + CON modifier HP
 // (never negative, never above max). Returns the HP actually regained, or
-// -1 without changing anything if no hit dice remain.
+// -1 without changing anything if no hit dice remain or the character is
+// dead. Rests never revive the dead (see Character::dead).
 int spend_hit_die(Character& character, const Dice& dice, int hit_die);
 
 // Long rest: restores HP to max, recovers spent hit dice (up to half the

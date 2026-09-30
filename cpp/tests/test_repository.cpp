@@ -234,6 +234,7 @@ TEST_CASE("adding a character without setting the new fields uses sane defaults"
     REQUIRE(loaded.save_proficiencies == 0);
     REQUIRE(loaded.experience == 0);
     REQUIRE(loaded.hit_dice_used == 0);
+    REQUIRE_FALSE(loaded.dead);
 }
 
 TEST_CASE("update_player renames an existing player", "[repository]") {
@@ -271,6 +272,7 @@ TEST_CASE("update_character changes fields in place", "[repository]") {
     updated.strength = 16;
     updated.experience = 2700;
     updated.hit_dice_used = 1;
+    updated.dead = true;
     repo.update_character(updated);
 
     auto reloaded = repo.get_characters();
@@ -280,6 +282,7 @@ TEST_CASE("update_character changes fields in place", "[repository]") {
     REQUIRE(reloaded[0].strength == 16);
     REQUIRE(reloaded[0].experience == 2700);
     REQUIRE(reloaded[0].hit_dice_used == 1);
+    REQUIRE(reloaded[0].dead);
 }
 
 TEST_CASE("delete_character removes only that character", "[repository]") {

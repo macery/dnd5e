@@ -23,12 +23,15 @@ bool is_healing_item(const Item& item) {
     return item.category == ItemCategory::Consumable && item.heal_dice_count > 0;
 }
 
-int use_healing_item(Character& character, const Dice& dice, const Item& item) {
+int roll_healing(const Dice& dice, const Item& item) {
     if (!is_healing_item(item)) throw std::invalid_argument(item.name + " doesn't restore hit points");
+    return std::max(0, Dice::sum(dice.roll(item.heal_dice_sides, item.heal_dice_count)) + item.heal_bonus);
+}
 
-    int healing = Dice::sum(dice.roll(item.heal_dice_sides, item.heal_dice_count)) + item.heal_bonus;
+int use_healing_item(Character& character, const Dice& dice, const Item& item) {
+    int healing = roll_healing(dice, item);
     int before = character.current_hp;
-    character.current_hp = std::min(character.max_hp, character.current_hp + std::max(0, healing));
+    character.current_hp = std::min(character.max_hp, character.current_hp + healing);
     return character.current_hp - before;
 }
 

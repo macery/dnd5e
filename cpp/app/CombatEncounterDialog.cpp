@@ -70,8 +70,8 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
         "Armor Class -- how hard this participant is to hit. An attack roll must meet or beat this to hit.");
     participantTable_->horizontalHeaderItem(3)->setToolTip("Current hit points out of maximum.");
     participantTable_->horizontalHeaderItem(4)->setToolTip(
-        "\"Dodging\" means attacks against this participant have disadvantage until the start of their "
-        "next turn.");
+        "Conditions and effects in play. \"Dying\" characters roll a death save each turn (three successes: "
+        "stable; three failures: dead); healing brings them back.");
 
     auto* monsterRow = new QHBoxLayout();
     monsterTypeCombo_ = new QComboBox(this);
@@ -377,9 +377,7 @@ void CombatEncounterDialog::refreshParticipantTable() {
         participantTable_->setItem(row, 2, new QTableWidgetItem(QString::number(combatant.armor_class)));
         participantTable_->setItem(
             row, 3, new QTableWidgetItem(QString("%1/%2").arg(combatant.current_hp).arg(combatant.max_hp)));
-        QString status = combatant.current_hp > 0 ? "Up" : "Down";
-        if (combatant.current_hp > 0 && combatant.is_dodging) status += " (Dodging)";
-        participantTable_->setItem(row, 4, new QTableWidgetItem(status));
+        participantTable_->setItem(row, 4, new QTableWidgetItem(q(encounter_.status_text(static_cast<int>(order[static_cast<size_t>(row)])))));
     }
 }
 

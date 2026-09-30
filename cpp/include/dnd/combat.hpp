@@ -9,7 +9,7 @@ namespace dnd {
 struct AttackResult {
     int attack_roll = 0;
     bool hit = false;
-    bool critical = false;  // natural 20
+    bool critical = false;  // natural 20, or any hit with critical_on_hit
     std::vector<int> damage_dice;
     int damage_total = 0;  // 0 on a miss
 };
@@ -20,7 +20,10 @@ struct AttackResult {
 // (no Character/Monster dependency) so it works for either side of a fight
 // and is directly testable. `mode` lets a caller apply advantage/disadvantage
 // (e.g. attacking a Dodging target) without changing anything else.
+// `critical_on_hit` makes any hit critical (a melee hit on a paralyzed or
+// unconscious target, PHB Appendix A).
 AttackResult resolve_attack(const Dice& dice, int attack_bonus, int target_ac, int damage_dice_count,
-                             int damage_dice_sides, int damage_bonus, RollMode mode = RollMode::Normal);
+                             int damage_dice_sides, int damage_bonus, RollMode mode = RollMode::Normal,
+                             bool critical_on_hit = false);
 
 }  // namespace dnd

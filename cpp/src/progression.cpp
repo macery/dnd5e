@@ -91,7 +91,7 @@ int hit_dice_remaining(const Character& character) {
 }
 
 int spend_hit_die(Character& character, const Dice& dice, int hit_die) {
-    if (hit_dice_remaining(character) == 0) return -1;
+    if (character.dead || hit_dice_remaining(character) == 0) return -1;
 
     ++character.hit_dice_used;
     int roll = dice.roll(hit_die, 1).front();
@@ -102,6 +102,7 @@ int spend_hit_die(Character& character, const Dice& dice, int hit_die) {
 }
 
 void take_long_rest(Character& character) {
+    if (character.dead) return;  // only revival magic brings the dead back
     character.current_hp = character.max_hp;
     int recovered = std::max(1, character.level / 2);
     character.hit_dice_used = std::max(0, character.hit_dice_used - recovered);
@@ -109,6 +110,7 @@ void take_long_rest(Character& character) {
 }
 
 void take_short_rest(Character& character, const ClassInfo& class_info) {
+    if (character.dead) return;
     if (class_info.spellcasting.caster_type == CasterType::Pact) character.spell_slots_used.fill(0);
 }
 

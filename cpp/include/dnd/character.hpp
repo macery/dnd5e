@@ -27,6 +27,9 @@ struct Character {
     int armor_class = 10;
     int weapon_id = 0;
     std::string background;  // a dnd::BackgroundInfo name; empty if none
+    // Failed three death saves (or took massive damage). Stays dead until
+    // revived by a spell -- see docs/effects-system.md, Decisions.
+    bool dead = false;
 
     int experience = 0;
     // Spent on short rests, partly recovered on a long rest; the total
