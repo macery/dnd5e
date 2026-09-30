@@ -213,7 +213,7 @@ Phases 1 (core and data) and 2 (UI) are done; see [docs/magic-system.md](docs/ma
 - [x] **Concentration**: one spell at a time (casting another ends the first); damage forces a CON save against DC max(10, half the damage); dropping to 0 or dying ends it, along with the spell's effects. *Bless*, *Shield of Faith*, *Divine Favor*, and *Faerie Fire* use it.
 - [x] **Scaling**: cantrips get extra dice (or extra beams, for Eldritch Blast) at levels 5, 11, and 17, and casting with a higher-level slot adds dice or darts.
 - [ ] **Reactions**: *Shield*, *Hellish Rebuke*, *Feather Fall*, and opportunity attacks. They need a way to interrupt another creature's turn.
-- [ ] **Bonus actions**: *Healing Word*, *Shield of Faith*, *Divine Favor*, and *Sanctuary* are bonus actions in the PHB but are cast as actions here. The combat turn needs a real bonus-action slot (the turn guidance already shows "Bonus Action: none available").
+- [ ] **Bonus actions**: *Healing Word*, *Shield of Faith*, *Divine Favor*, and *Sanctuary* are bonus actions in the PHB but are cast as actions here. The combat turn needs a real bonus-action slot (the turn guidance already shows "Bonus Action: none available"). Designed with class features in [docs/class-features.md](docs/class-features.md).
 - [ ] **Re-preparing spells**: Clerics, Druids, and Wizards choose new prepared spells after a long rest, and Wizards get a real spellbook (6 spells at level 1, plus 2 per level) to prepare from. Today, the spells picked at creation or learned later are the prepared list.
 - [ ] **Effects that outlast combat**: *Mage Armor* (8 hours; AC 13 + DEX while unarmored, which also needs [armor & shields](#inventory--items)) and exhaustion levels. They need effects saved on the character; today every effect ends with the fight.
 - [ ] **More utility spells with real effects**: 18 utility spells (*Light*, *Detect Magic*, *Command*, *Sanctuary*, ...) still have no automated effect.
@@ -234,7 +234,7 @@ Phases 1 (core and data) and 2 (UI) are done; see [docs/magic-system.md](docs/ma
   The per-class rules data it added (saving throws, skill choices, hit die, and since the magic system, spellcasting) lives in `dnd/character_creation.hpp`. Still to do: using this data in the existing editor to check proficiencies.
 - [x] **Ability score generation**: 4d6 drop the lowest, point buy, and the standard array, in the wizard.
 - [ ] **Race traits**: ability score increases and racial skills are applied. Speed and traits (darkvision, Lucky, Relentless Endurance, etc.) are shown but not simulated. Subraces (Hill Dwarf, High Elf, ...) aren't modeled, and speed isn't stored on the character yet.
-- [ ] **Class features**: a few defining ones, e.g. Fighter's Second Wind and Action Surge, Rogue's Sneak Attack, Barbarian's Rage.
+- [ ] **Class features**: drafted in [docs/class-features.md](docs/class-features.md), together with bonus actions. It covers Rage, Sneak Attack, Second Wind, Action Surge, Bardic Inspiration, Martial Arts and Ki, Lay on Hands, Divine Smite, Arcane Recovery, Extra Attack, and Fighter Fighting Styles. Decisions are settled; it's built in three phases.
 - [ ] **Level-up choices**: Ability Score Improvements at levels 4/8/12/16/19, and an option to roll HP instead of taking the average.
 - [x] **Starting HP**: level-1 max HP is the class hit die plus CON, calculated by the wizard.
 - [ ] **Keep level and XP in sync**: editing the level by hand in the editor can leave it out of step with XP.
