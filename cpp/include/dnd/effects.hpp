@@ -49,6 +49,8 @@ enum class EffectKind {
     DisadvantageOnNextAttack,     // its next attack has disadvantage (Vicious Mockery)
     CantRegainHitPoints,          // Chill Touch
     SpeedReduction,               // amount feet; shown only (Ray of Frost)
+    ArmorNotProficient,           // wearing armor it isn't trained with: disadvantage on STR/DEX
+                                  // attacks, checks, and saves, and no spellcasting (PHB ch. 5)
 };
 
 // Stable text names for storing effect kinds (SpellEffects.Kind): the

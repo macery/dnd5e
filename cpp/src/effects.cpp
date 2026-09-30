@@ -60,7 +60,7 @@ Condition condition_from_name(const std::string& name) {
 }
 
 namespace {
-constexpr std::array<std::pair<EffectKind, const char*>, 11> kEffectKindNames = {{
+constexpr std::array<std::pair<EffectKind, const char*>, 12> kEffectKindNames = {{
     {EffectKind::Condition, "Condition"},
     {EffectKind::Dodging, "Dodging"},
     {EffectKind::AttackBonusDice, "AttackBonusDice"},
@@ -72,6 +72,7 @@ constexpr std::array<std::pair<EffectKind, const char*>, 11> kEffectKindNames = 
     {EffectKind::DisadvantageOnNextAttack, "DisadvantageOnNextAttack"},
     {EffectKind::CantRegainHitPoints, "CantRegainHitPoints"},
     {EffectKind::SpeedReduction, "SpeedReduction"},
+    {EffectKind::ArmorNotProficient, "ArmorNotProficient"},
 }};
 }  // namespace
 
@@ -108,6 +109,9 @@ std::string effect_description(const ActiveEffect& effect) {
         case EffectKind::DisadvantageOnNextAttack: return "Its next attack roll has disadvantage.";
         case EffectKind::CantRegainHitPoints: return "It can't regain hit points.";
         case EffectKind::SpeedReduction: return "Its speed drops by " + amount + " feet (speed isn't tracked yet).";
+        case EffectKind::ArmorNotProficient:
+            return "Wearing armor it isn't proficient with: disadvantage on attacks, ability checks, and saves that use "
+                   "STR or DEX, and it can't cast spells.";
     }
     return "";
 }
@@ -173,6 +177,8 @@ RollModifiers attack_roll_modifiers(const std::vector<ActiveEffect>& effects, in
             add_used(m, effect);
         } else if (effect.kind == EffectKind::AttackBonusDice) {
             m.bonus_dice.push_back(effect.amount);
+        } else if (effect.kind == EffectKind::ArmorNotProficient) {
+            m.disadvantage.push_back("armor not proficient");  // weapon attacks always use STR or DEX
         }
     }
 
@@ -216,6 +222,9 @@ RollModifiers saving_throw_modifiers(const std::vector<ActiveEffect>& effects, i
         for (auto helpless : {Condition::Paralyzed, Condition::Petrified, Condition::Stunned, Condition::Unconscious}) {
             if (has_direct_condition(effects, target, helpless)) m.auto_fail = true;
         }
+    }
+    if (physical && has_effect(effects, target, EffectKind::ArmorNotProficient)) {
+        m.disadvantage.push_back("armor not proficient");
     }
     if (ability == Ability::Dexterity) {
         if (has_condition(effects, target, Condition::Restrained)) m.disadvantage.push_back("restrained");

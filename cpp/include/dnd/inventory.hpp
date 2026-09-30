@@ -13,6 +13,11 @@ const char* item_category_name(ItemCategory category);
 // Inverse of item_category_name. Throws std::invalid_argument for unknown text.
 ItemCategory item_category_from_name(const std::string& name);
 
+const char* weapon_category_name(WeaponCategory category);
+WeaponCategory weapon_category_from_name(const std::string& name);
+const char* armor_type_name(ArmorType type);
+ArmorType armor_type_from_name(const std::string& name);
+
 // True for a consumable that restores HP (e.g. a Potion of Healing).
 bool is_healing_item(const Item& item);
 

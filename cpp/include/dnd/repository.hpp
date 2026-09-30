@@ -47,6 +47,9 @@ public:
     // none are left. Returns how many were actually removed (0 if the
     // character had none).
     int remove_from_inventory(int character_id, int item_id, int quantity = 1);
+    // Marks an inventory entry worn/wielded or not. Which combinations are
+    // allowed (one armor, one shield, ...) is dnd::equip's job (dnd/equipment.hpp).
+    void set_equipped(int character_id, int item_id, bool equipped);
 
     // Every seeded spell, ordered by level then name, with class_names
     // filled from ClassSpells.

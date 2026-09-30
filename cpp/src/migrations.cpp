@@ -18,7 +18,7 @@ using detail::Statement;
 // for future schema changes -- never edit an existing one, since a
 // migration's sql is exactly what already ran on every database that has it
 // recorded in SchemaMigrations.
-constexpr std::array<Migration, 14> kMigrations = {{
+constexpr std::array<Migration, 15> kMigrations = {{
     {1, "initial schema: Players, Classes, Characters", R"sql(
         CREATE TABLE IF NOT EXISTS Players (
             PlayerID INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -461,6 +461,149 @@ constexpr std::array<Migration, 14> kMigrations = {{
         ALTER TABLE Monsters ADD COLUMN OnHitCondition TEXT NOT NULL DEFAULT '';
         UPDATE Monsters SET OnHitSaveAbility = 'Strength', OnHitSaveDC = 11, OnHitCondition = 'Prone' WHERE Name = 'Wolf';
     )sql"},
+    {15, "add weapons, armor, and shields as items (WeaponStats, ArmorStats), and equipped inventory", R"sql(
+        CREATE TABLE IF NOT EXISTS WeaponStats (
+            ItemID INTEGER PRIMARY KEY REFERENCES Items(ItemID),
+            WeaponCategory TEXT NOT NULL,
+            DamageDiceCount INTEGER NOT NULL,
+            DamageDiceSides INTEGER NOT NULL,
+            DamageType TEXT NOT NULL,
+            VersatileDiceSides INTEGER NOT NULL DEFAULT 0,
+            Finesse INTEGER NOT NULL DEFAULT 0,
+            Light INTEGER NOT NULL DEFAULT 0,
+            Heavy INTEGER NOT NULL DEFAULT 0,
+            TwoHanded INTEGER NOT NULL DEFAULT 0,
+            Ranged INTEGER NOT NULL DEFAULT 0,
+            Thrown INTEGER NOT NULL DEFAULT 0,
+            Reach INTEGER NOT NULL DEFAULT 0,
+            Loading INTEGER NOT NULL DEFAULT 0,
+            Ammunition INTEGER NOT NULL DEFAULT 0
+        );
+
+        CREATE TABLE IF NOT EXISTS ArmorStats (
+            ItemID INTEGER PRIMARY KEY REFERENCES Items(ItemID),
+            ArmorType TEXT NOT NULL,
+            BaseAC INTEGER NOT NULL,
+            MaxDexBonus INTEGER NOT NULL DEFAULT -1,
+            StrengthRequirement INTEGER NOT NULL DEFAULT 0,
+            StealthDisadvantage INTEGER NOT NULL DEFAULT 0
+        );
+
+        ALTER TABLE CharacterInventory ADD COLUMN Equipped INTEGER NOT NULL DEFAULT 0;
+
+        INSERT INTO Items (Name, Category, Description, WeightLb, CostCp) VALUES ('Dagger', 'Weapon', 'Simple melee weapon: 1d4 piercing. Finesse, light, thrown.', 1, 200);
+        INSERT INTO WeaponStats (ItemID, WeaponCategory, DamageDiceCount, DamageDiceSides, DamageType, VersatileDiceSides,
+                                 Finesse, Light, Heavy, TwoHanded, Ranged, Thrown, Reach, Loading, Ammunition)
+            SELECT ItemID, 'Simple', 1, 4, 'piercing', 0, 1, 1, 0, 0, 0, 1, 0, 0, 0 FROM Items WHERE Name = 'Dagger';
+        INSERT INTO Items (Name, Category, Description, WeightLb, CostCp) VALUES ('Handaxe', 'Weapon', 'Simple melee weapon: 1d6 slashing. Light, thrown.', 2, 500);
+        INSERT INTO WeaponStats (ItemID, WeaponCategory, DamageDiceCount, DamageDiceSides, DamageType, VersatileDiceSides,
+                                 Finesse, Light, Heavy, TwoHanded, Ranged, Thrown, Reach, Loading, Ammunition)
+            SELECT ItemID, 'Simple', 1, 6, 'slashing', 0, 0, 1, 0, 0, 0, 1, 0, 0, 0 FROM Items WHERE Name = 'Handaxe';
+        INSERT INTO Items (Name, Category, Description, WeightLb, CostCp) VALUES ('Javelin', 'Weapon', 'Simple melee weapon: 1d6 piercing. Thrown.', 2, 50);
+        INSERT INTO WeaponStats (ItemID, WeaponCategory, DamageDiceCount, DamageDiceSides, DamageType, VersatileDiceSides,
+                                 Finesse, Light, Heavy, TwoHanded, Ranged, Thrown, Reach, Loading, Ammunition)
+            SELECT ItemID, 'Simple', 1, 6, 'piercing', 0, 0, 0, 0, 0, 0, 1, 0, 0, 0 FROM Items WHERE Name = 'Javelin';
+        INSERT INTO Items (Name, Category, Description, WeightLb, CostCp) VALUES ('Mace', 'Weapon', 'Simple melee weapon: 1d6 bludgeoning.', 4, 500);
+        INSERT INTO WeaponStats (ItemID, WeaponCategory, DamageDiceCount, DamageDiceSides, DamageType, VersatileDiceSides,
+                                 Finesse, Light, Heavy, TwoHanded, Ranged, Thrown, Reach, Loading, Ammunition)
+            SELECT ItemID, 'Simple', 1, 6, 'bludgeoning', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 FROM Items WHERE Name = 'Mace';
+        INSERT INTO Items (Name, Category, Description, WeightLb, CostCp) VALUES ('Quarterstaff', 'Weapon', 'Simple melee weapon: 1d6 bludgeoning. Versatile (1d8).', 4, 20);
+        INSERT INTO WeaponStats (ItemID, WeaponCategory, DamageDiceCount, DamageDiceSides, DamageType, VersatileDiceSides,
+                                 Finesse, Light, Heavy, TwoHanded, Ranged, Thrown, Reach, Loading, Ammunition)
+            SELECT ItemID, 'Simple', 1, 6, 'bludgeoning', 8, 0, 0, 0, 0, 0, 0, 0, 0, 0 FROM Items WHERE Name = 'Quarterstaff';
+        INSERT INTO Items (Name, Category, Description, WeightLb, CostCp) VALUES ('Light Crossbow', 'Weapon', 'Simple ranged weapon: 1d8 piercing. Ammunition, loading, two-handed.', 5, 2500);
+        INSERT INTO WeaponStats (ItemID, WeaponCategory, DamageDiceCount, DamageDiceSides, DamageType, VersatileDiceSides,
+                                 Finesse, Light, Heavy, TwoHanded, Ranged, Thrown, Reach, Loading, Ammunition)
+            SELECT ItemID, 'Simple', 1, 8, 'piercing', 0, 0, 0, 0, 1, 1, 0, 0, 1, 1 FROM Items WHERE Name = 'Light Crossbow';
+        INSERT INTO Items (Name, Category, Description, WeightLb, CostCp) VALUES ('Shortbow', 'Weapon', 'Simple ranged weapon: 1d6 piercing. Ammunition, two-handed.', 2, 2500);
+        INSERT INTO WeaponStats (ItemID, WeaponCategory, DamageDiceCount, DamageDiceSides, DamageType, VersatileDiceSides,
+                                 Finesse, Light, Heavy, TwoHanded, Ranged, Thrown, Reach, Loading, Ammunition)
+            SELECT ItemID, 'Simple', 1, 6, 'piercing', 0, 0, 0, 0, 1, 1, 0, 0, 0, 1 FROM Items WHERE Name = 'Shortbow';
+        INSERT INTO Items (Name, Category, Description, WeightLb, CostCp) VALUES ('Battleaxe', 'Weapon', 'Martial melee weapon: 1d8 slashing. Versatile (1d10).', 4, 1000);
+        INSERT INTO WeaponStats (ItemID, WeaponCategory, DamageDiceCount, DamageDiceSides, DamageType, VersatileDiceSides,
+                                 Finesse, Light, Heavy, TwoHanded, Ranged, Thrown, Reach, Loading, Ammunition)
+            SELECT ItemID, 'Martial', 1, 8, 'slashing', 10, 0, 0, 0, 0, 0, 0, 0, 0, 0 FROM Items WHERE Name = 'Battleaxe';
+        INSERT INTO Items (Name, Category, Description, WeightLb, CostCp) VALUES ('Greataxe', 'Weapon', 'Martial melee weapon: 1d12 slashing. Heavy, two-handed.', 7, 3000);
+        INSERT INTO WeaponStats (ItemID, WeaponCategory, DamageDiceCount, DamageDiceSides, DamageType, VersatileDiceSides,
+                                 Finesse, Light, Heavy, TwoHanded, Ranged, Thrown, Reach, Loading, Ammunition)
+            SELECT ItemID, 'Martial', 1, 12, 'slashing', 0, 0, 0, 1, 1, 0, 0, 0, 0, 0 FROM Items WHERE Name = 'Greataxe';
+        INSERT INTO Items (Name, Category, Description, WeightLb, CostCp) VALUES ('Greatsword', 'Weapon', 'Martial melee weapon: 2d6 slashing. Heavy, two-handed.', 6, 5000);
+        INSERT INTO WeaponStats (ItemID, WeaponCategory, DamageDiceCount, DamageDiceSides, DamageType, VersatileDiceSides,
+                                 Finesse, Light, Heavy, TwoHanded, Ranged, Thrown, Reach, Loading, Ammunition)
+            SELECT ItemID, 'Martial', 2, 6, 'slashing', 0, 0, 0, 1, 1, 0, 0, 0, 0, 0 FROM Items WHERE Name = 'Greatsword';
+        INSERT INTO Items (Name, Category, Description, WeightLb, CostCp) VALUES ('Longsword', 'Weapon', 'Martial melee weapon: 1d8 slashing. Versatile (1d10).', 3, 1500);
+        INSERT INTO WeaponStats (ItemID, WeaponCategory, DamageDiceCount, DamageDiceSides, DamageType, VersatileDiceSides,
+                                 Finesse, Light, Heavy, TwoHanded, Ranged, Thrown, Reach, Loading, Ammunition)
+            SELECT ItemID, 'Martial', 1, 8, 'slashing', 10, 0, 0, 0, 0, 0, 0, 0, 0, 0 FROM Items WHERE Name = 'Longsword';
+        INSERT INTO Items (Name, Category, Description, WeightLb, CostCp) VALUES ('Rapier', 'Weapon', 'Martial melee weapon: 1d8 piercing. Finesse.', 2, 2500);
+        INSERT INTO WeaponStats (ItemID, WeaponCategory, DamageDiceCount, DamageDiceSides, DamageType, VersatileDiceSides,
+                                 Finesse, Light, Heavy, TwoHanded, Ranged, Thrown, Reach, Loading, Ammunition)
+            SELECT ItemID, 'Martial', 1, 8, 'piercing', 0, 1, 0, 0, 0, 0, 0, 0, 0, 0 FROM Items WHERE Name = 'Rapier';
+        INSERT INTO Items (Name, Category, Description, WeightLb, CostCp) VALUES ('Scimitar', 'Weapon', 'Martial melee weapon: 1d6 slashing. Finesse, light.', 3, 2500);
+        INSERT INTO WeaponStats (ItemID, WeaponCategory, DamageDiceCount, DamageDiceSides, DamageType, VersatileDiceSides,
+                                 Finesse, Light, Heavy, TwoHanded, Ranged, Thrown, Reach, Loading, Ammunition)
+            SELECT ItemID, 'Martial', 1, 6, 'slashing', 0, 1, 1, 0, 0, 0, 0, 0, 0, 0 FROM Items WHERE Name = 'Scimitar';
+        INSERT INTO Items (Name, Category, Description, WeightLb, CostCp) VALUES ('Shortsword', 'Weapon', 'Martial melee weapon: 1d6 piercing. Finesse, light.', 2, 1000);
+        INSERT INTO WeaponStats (ItemID, WeaponCategory, DamageDiceCount, DamageDiceSides, DamageType, VersatileDiceSides,
+                                 Finesse, Light, Heavy, TwoHanded, Ranged, Thrown, Reach, Loading, Ammunition)
+            SELECT ItemID, 'Martial', 1, 6, 'piercing', 0, 1, 1, 0, 0, 0, 0, 0, 0, 0 FROM Items WHERE Name = 'Shortsword';
+        INSERT INTO Items (Name, Category, Description, WeightLb, CostCp) VALUES ('Warhammer', 'Weapon', 'Martial melee weapon: 1d8 bludgeoning. Versatile (1d10).', 2, 1500);
+        INSERT INTO WeaponStats (ItemID, WeaponCategory, DamageDiceCount, DamageDiceSides, DamageType, VersatileDiceSides,
+                                 Finesse, Light, Heavy, TwoHanded, Ranged, Thrown, Reach, Loading, Ammunition)
+            SELECT ItemID, 'Martial', 1, 8, 'bludgeoning', 10, 0, 0, 0, 0, 0, 0, 0, 0, 0 FROM Items WHERE Name = 'Warhammer';
+        INSERT INTO Items (Name, Category, Description, WeightLb, CostCp) VALUES ('Longbow', 'Weapon', 'Martial ranged weapon: 1d8 piercing. Ammunition, heavy, two-handed.', 2, 5000);
+        INSERT INTO WeaponStats (ItemID, WeaponCategory, DamageDiceCount, DamageDiceSides, DamageType, VersatileDiceSides,
+                                 Finesse, Light, Heavy, TwoHanded, Ranged, Thrown, Reach, Loading, Ammunition)
+            SELECT ItemID, 'Martial', 1, 8, 'piercing', 0, 0, 0, 1, 1, 1, 0, 0, 0, 1 FROM Items WHERE Name = 'Longbow';
+        INSERT INTO Items (Name, Category, Description, WeightLb, CostCp) VALUES ('Padded Armor', 'Armor', 'Light armor: AC 11 + DEX. Disadvantage on Stealth checks.', 8, 500);
+        INSERT INTO ArmorStats (ItemID, ArmorType, BaseAC, MaxDexBonus, StrengthRequirement, StealthDisadvantage)
+            SELECT ItemID, 'Light', 11, -1, 0, 1 FROM Items WHERE Name = 'Padded Armor';
+        INSERT INTO Items (Name, Category, Description, WeightLb, CostCp) VALUES ('Leather Armor', 'Armor', 'Light armor: AC 11 + DEX.', 10, 1000);
+        INSERT INTO ArmorStats (ItemID, ArmorType, BaseAC, MaxDexBonus, StrengthRequirement, StealthDisadvantage)
+            SELECT ItemID, 'Light', 11, -1, 0, 0 FROM Items WHERE Name = 'Leather Armor';
+        INSERT INTO Items (Name, Category, Description, WeightLb, CostCp) VALUES ('Studded Leather Armor', 'Armor', 'Light armor: AC 12 + DEX.', 13, 4500);
+        INSERT INTO ArmorStats (ItemID, ArmorType, BaseAC, MaxDexBonus, StrengthRequirement, StealthDisadvantage)
+            SELECT ItemID, 'Light', 12, -1, 0, 0 FROM Items WHERE Name = 'Studded Leather Armor';
+        INSERT INTO Items (Name, Category, Description, WeightLb, CostCp) VALUES ('Hide Armor', 'Armor', 'Medium armor: AC 12 + DEX (max 2).', 12, 1000);
+        INSERT INTO ArmorStats (ItemID, ArmorType, BaseAC, MaxDexBonus, StrengthRequirement, StealthDisadvantage)
+            SELECT ItemID, 'Medium', 12, 2, 0, 0 FROM Items WHERE Name = 'Hide Armor';
+        INSERT INTO Items (Name, Category, Description, WeightLb, CostCp) VALUES ('Chain Shirt', 'Armor', 'Medium armor: AC 13 + DEX (max 2).', 20, 5000);
+        INSERT INTO ArmorStats (ItemID, ArmorType, BaseAC, MaxDexBonus, StrengthRequirement, StealthDisadvantage)
+            SELECT ItemID, 'Medium', 13, 2, 0, 0 FROM Items WHERE Name = 'Chain Shirt';
+        INSERT INTO Items (Name, Category, Description, WeightLb, CostCp) VALUES ('Scale Mail', 'Armor', 'Medium armor: AC 14 + DEX (max 2). Disadvantage on Stealth checks.', 45, 5000);
+        INSERT INTO ArmorStats (ItemID, ArmorType, BaseAC, MaxDexBonus, StrengthRequirement, StealthDisadvantage)
+            SELECT ItemID, 'Medium', 14, 2, 0, 1 FROM Items WHERE Name = 'Scale Mail';
+        INSERT INTO Items (Name, Category, Description, WeightLb, CostCp) VALUES ('Breastplate', 'Armor', 'Medium armor: AC 14 + DEX (max 2).', 20, 40000);
+        INSERT INTO ArmorStats (ItemID, ArmorType, BaseAC, MaxDexBonus, StrengthRequirement, StealthDisadvantage)
+            SELECT ItemID, 'Medium', 14, 2, 0, 0 FROM Items WHERE Name = 'Breastplate';
+        INSERT INTO Items (Name, Category, Description, WeightLb, CostCp) VALUES ('Half Plate', 'Armor', 'Medium armor: AC 15 + DEX (max 2). Disadvantage on Stealth checks.', 40, 75000);
+        INSERT INTO ArmorStats (ItemID, ArmorType, BaseAC, MaxDexBonus, StrengthRequirement, StealthDisadvantage)
+            SELECT ItemID, 'Medium', 15, 2, 0, 1 FROM Items WHERE Name = 'Half Plate';
+        INSERT INTO Items (Name, Category, Description, WeightLb, CostCp) VALUES ('Ring Mail', 'Armor', 'Heavy armor: AC 14. Disadvantage on Stealth checks.', 40, 3000);
+        INSERT INTO ArmorStats (ItemID, ArmorType, BaseAC, MaxDexBonus, StrengthRequirement, StealthDisadvantage)
+            SELECT ItemID, 'Heavy', 14, 0, 0, 1 FROM Items WHERE Name = 'Ring Mail';
+        INSERT INTO Items (Name, Category, Description, WeightLb, CostCp) VALUES ('Chain Mail', 'Armor', 'Heavy armor: AC 16. Needs STR 13 (otherwise speed -10 ft); disadvantage on Stealth checks.', 55, 7500);
+        INSERT INTO ArmorStats (ItemID, ArmorType, BaseAC, MaxDexBonus, StrengthRequirement, StealthDisadvantage)
+            SELECT ItemID, 'Heavy', 16, 0, 13, 1 FROM Items WHERE Name = 'Chain Mail';
+        INSERT INTO Items (Name, Category, Description, WeightLb, CostCp) VALUES ('Splint Armor', 'Armor', 'Heavy armor: AC 17. Needs STR 15 (otherwise speed -10 ft); disadvantage on Stealth checks.', 60, 20000);
+        INSERT INTO ArmorStats (ItemID, ArmorType, BaseAC, MaxDexBonus, StrengthRequirement, StealthDisadvantage)
+            SELECT ItemID, 'Heavy', 17, 0, 15, 1 FROM Items WHERE Name = 'Splint Armor';
+        INSERT INTO Items (Name, Category, Description, WeightLb, CostCp) VALUES ('Plate Armor', 'Armor', 'Heavy armor: AC 18. Needs STR 15 (otherwise speed -10 ft); disadvantage on Stealth checks.', 65, 150000);
+        INSERT INTO ArmorStats (ItemID, ArmorType, BaseAC, MaxDexBonus, StrengthRequirement, StealthDisadvantage)
+            SELECT ItemID, 'Heavy', 18, 0, 15, 1 FROM Items WHERE Name = 'Plate Armor';
+        INSERT INTO Items (Name, Category, Description, WeightLb, CostCp) VALUES ('Shield', 'Shield', 'A shield: +2 AC while carried. Wielding one uses a hand.', 6, 1000);
+        INSERT INTO ArmorStats (ItemID, ArmorType, BaseAC, MaxDexBonus, StrengthRequirement, StealthDisadvantage)
+            SELECT ItemID, 'Shield', 2, -1, 0, 0 FROM Items WHERE Name = 'Shield';
+
+        -- Each character's old WeaponID becomes an equipped inventory item. (The Weapons
+        -- table and Characters.WeaponID stay but are no longer used.)
+        INSERT INTO CharacterInventory (CharacterID, ItemID, Quantity, Equipped)
+            SELECT Characters.CharacterId, Items.ItemID, 1, 1 FROM Characters
+            JOIN Weapons ON Weapons.WeaponID = Characters.WeaponID
+            JOIN Items ON Items.Name = Weapons.Name AND Items.Category = 'Weapon'
+            WHERE 1
+            ON CONFLICT (CharacterID, ItemID) DO UPDATE SET Equipped = 1;
+    )sql"},
 }};
 
 void exec_or_throw(sqlite3* db, const char* sql) {
@@ -502,11 +645,12 @@ int current_schema_version(sqlite3* db) {
     return version;
 }
 
-void run_migrations(sqlite3* db) {
+void run_migrations(sqlite3* db, int up_to_version) {
     int version = current_schema_version(db);
 
     for (const auto& migration : kMigrations) {
         if (migration.version <= version) continue;
+        if (migration.version > up_to_version) break;
 
         exec_or_throw(db, "BEGIN;");
         try {

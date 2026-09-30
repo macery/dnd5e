@@ -48,7 +48,7 @@ TEST_CASE("run_migrations brings a fresh database to the latest schema", "[migra
 
     dnd::run_migrations(db.handle);
 
-    REQUIRE(dnd::current_schema_version(db.handle) == 14);
+    REQUIRE(dnd::current_schema_version(db.handle) == 15);
     REQUIRE(table_exists(db.handle, "Players"));
     REQUIRE(table_exists(db.handle, "Classes"));
     REQUIRE(table_exists(db.handle, "Characters"));
@@ -77,7 +77,7 @@ TEST_CASE("run_migrations is a no-op the second time", "[migrations]") {
     dnd::run_migrations(db.handle);
     dnd::run_migrations(db.handle);
 
-    REQUIRE(row_count(db.handle, "SELECT COUNT(*) FROM SchemaMigrations;") == 14);
+    REQUIRE(row_count(db.handle, "SELECT COUNT(*) FROM SchemaMigrations;") == 15);
     REQUIRE(row_count(db.handle, "SELECT COUNT(*) FROM Classes;") == 12);
     REQUIRE(row_count(db.handle, "SELECT COUNT(*) FROM Races;") == 9);
     REQUIRE(row_count(db.handle, "SELECT COUNT(*) FROM Monsters;") == 6);
@@ -117,7 +117,7 @@ TEST_CASE("migration 6 equips existing characters with Unarmed Strike", "[migrat
 
     dnd::run_migrations(db.handle);
 
-    REQUIRE(dnd::current_schema_version(db.handle) == 14);
+    REQUIRE(dnd::current_schema_version(db.handle) == 15);
 
     sqlite3_stmt* stmt = nullptr;
     REQUIRE(sqlite3_prepare_v2(db.handle,
@@ -172,4 +172,32 @@ TEST_CASE("Repository upgrades a real pre-migration database in place", "[migrat
     }
 
     std::remove(path.c_str());
+}
+
+TEST_CASE("migration 15 turns each character's weapon into an equipped item", "[migrations]") {
+    RawDb db(":memory:");
+    dnd::run_migrations(db.handle, 14);
+    REQUIRE(dnd::current_schema_version(db.handle) == 14);
+
+    char* error = nullptr;
+    int result = sqlite3_exec(db.handle,
+        "INSERT INTO Players (PlayerName) VALUES ('Aria');"
+        "INSERT INTO Characters (CharacterName, Class, Race, Alignment, PlayerID, WeaponID) "
+        "VALUES ('Aria', 1, 1, 1, 1, (SELECT WeaponID FROM Weapons WHERE Name = 'Rapier'));"
+        "INSERT INTO Characters (CharacterName, Class, Race, Alignment, PlayerID, WeaponID) "
+        "VALUES ('Bram', 1, 1, 1, 1, (SELECT WeaponID FROM Weapons WHERE Name = 'Unarmed Strike'));",
+        nullptr, nullptr, &error);
+    REQUIRE(result == SQLITE_OK);
+
+    dnd::run_migrations(db.handle);
+    REQUIRE(dnd::current_schema_version(db.handle) == 15);
+    REQUIRE(row_count(db.handle,
+        "SELECT COUNT(*) FROM CharacterInventory JOIN Items ON Items.ItemID = CharacterInventory.ItemID "
+        "JOIN Characters ON Characters.CharacterId = CharacterInventory.CharacterID "
+        "WHERE CharacterName = 'Aria' AND Items.Name = 'Rapier' AND Equipped = 1 AND Quantity = 1;") == 1);
+    // Unarmed Strike isn't an item: it's what you do with nothing wielded.
+    REQUIRE(row_count(db.handle,
+        "SELECT COUNT(*) FROM CharacterInventory "
+        "JOIN Characters ON Characters.CharacterId = CharacterInventory.CharacterID "
+        "WHERE CharacterName = 'Bram';") == 0);
 }

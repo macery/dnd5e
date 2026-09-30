@@ -1,6 +1,25 @@
 # Equipment design: weapons, armor, and AC
 
-Status: **approved, ready for phase 1.** Nothing here is implemented yet. The open questions were settled on 2026-09-30; see [Decisions](#decisions).
+Status: **phase 1 (core and data) done;** phase 2 (integration and UI) is next. The open questions were settled on 2026-09-30; see [Decisions](#decisions).
+
+**Phase 1 as built:**
+- **Migration 15:**
+  - Adds `WeaponStats`, `ArmorStats`, and `CharacterInventory.Equipped`.
+  - Seeds 16 PHB weapons as items: the 11 existing ones plus Scimitar, Javelin, Battleaxe, Warhammer, and Greatsword.
+  - Seeds the 12 armors and the Shield.
+  - Turns each character's old weapon into an equipped item. An old Unarmed Strike becomes nothing: that's what having no weapon means now.
+- **`Item`:** gains optional `weapon` / `armor` stats; `InventoryEntry` gains `equipped`; the repository gains `set_equipped`.
+- **`dnd/equipment`:**
+  - Class armor and weapon proficiencies, and starting kits. These live in their own table rather than `ClassInfo`, which keeps the class table readable.
+  - The base Dwarf's weapon training.
+  - `calculate_armor_class` with a text breakdown.
+  - `weapon_attack` (proficiency, finesse, ranged, versatile, unarmed).
+  - `equip` / `unequip` with conflicts and warnings.
+  - `walking_speed`, including the heavy-armor penalty.
+  - `wearing_armor_without_proficiency`.
+- **`EffectKind::ArmorNotProficient`:** disadvantage on STR/DEX attacks and saves. Wiring it, and the no-spellcasting rule, into combat is phase 2.
+- **`run_migrations` can stop at a version**, so tests can check a migration against data from before it.
+- **Not wired in yet:** nothing uses any of this until phase 2. The app still reads `Character::weapon_id` and the stored AC.
 
 This covers the TODO items **Equipping & weapons in the inventory**, **Armor & shields**, and **Weapon proficiencies**. It also lays the groundwork for *Mage Armor*, magic items, and encumbrance. Rules follow the **2014 PHB**: chapter 5 (Equipment) for the armor and weapon tables, and chapter 3 for class proficiencies and starting equipment.
 

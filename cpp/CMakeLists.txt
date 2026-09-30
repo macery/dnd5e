@@ -23,6 +23,7 @@ add_library(dndcore
     src/dice.cpp
     src/effects.cpp
     src/encounter.cpp
+    src/equipment.cpp
     src/inventory.cpp
     src/migrations.cpp
     src/progression.cpp

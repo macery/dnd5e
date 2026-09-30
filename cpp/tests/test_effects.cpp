@@ -221,7 +221,7 @@ TEST_CASE("condition and effect kind names round-trip", "[effects]") {
                       EffectKind::SaveBonusDice, EffectKind::ArmorClassBonus, EffectKind::ExtraWeaponDamageDice,
                       EffectKind::AdvantageOnNextAttackAgainst, EffectKind::AdvantageOnAttacksAgainst,
                       EffectKind::DisadvantageOnNextAttack, EffectKind::CantRegainHitPoints,
-                      EffectKind::SpeedReduction}) {
+                      EffectKind::SpeedReduction, EffectKind::ArmorNotProficient}) {
         REQUIRE(dnd::effect_kind_from_name(dnd::effect_kind_name(kind)) == kind);
     }
     REQUIRE_THROWS_AS(dnd::condition_from_name("Sleepy"), std::invalid_argument);
@@ -248,4 +248,15 @@ TEST_CASE("effect descriptions", "[effects]") {
                       EffectKind::SpeedReduction}) {
         REQUIRE_FALSE(dnd::effect_description(effect(1, 0, kind, 4)).empty());
     }
+}
+
+TEST_CASE("armor without proficiency hinders STR and DEX", "[effects]") {
+    std::vector<ActiveEffect> effects = {effect(1, 0, EffectKind::ArmorNotProficient)};
+    auto attack = dnd::attack_roll_modifiers(effects, 0, 1, true, kAllAlive);
+    REQUIRE(attack.mode() == RollMode::Disadvantage);
+    REQUIRE(attack.disadvantage == std::vector<std::string>{"armor not proficient"});
+    REQUIRE(dnd::saving_throw_modifiers(effects, 0, dnd::Ability::Dexterity).mode() == RollMode::Disadvantage);
+    REQUIRE(dnd::saving_throw_modifiers(effects, 0, dnd::Ability::Strength).mode() == RollMode::Disadvantage);
+    REQUIRE(dnd::saving_throw_modifiers(effects, 0, dnd::Ability::Wisdom).mode() == RollMode::Normal);
+    REQUIRE_FALSE(dnd::effect_description(effects[0]).empty());
 }

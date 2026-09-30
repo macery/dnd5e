@@ -49,7 +49,8 @@ int item_id_named(const dnd::Repository& repo, const std::string& name) {
 }  // namespace
 
 TEST_CASE("item categories round-trip through their names", "[inventory]") {
-    for (auto category : {dnd::ItemCategory::Gear, dnd::ItemCategory::Consumable}) {
+    for (auto category : {dnd::ItemCategory::Gear, dnd::ItemCategory::Consumable, dnd::ItemCategory::Weapon,
+                          dnd::ItemCategory::Armor, dnd::ItemCategory::Shield}) {
         REQUIRE(dnd::item_category_from_name(dnd::item_category_name(category)) == category);
     }
     REQUIRE_THROWS_AS(dnd::item_category_from_name("Spaceship"), std::invalid_argument);
@@ -93,7 +94,7 @@ TEST_CASE("total_weight and format_cost", "[inventory]") {
 TEST_CASE("get_items returns the seeded items", "[inventory][repository]") {
     dnd::Repository repo(":memory:");
     auto items = repo.get_items();
-    REQUIRE(items.size() == 8);
+    REQUIRE(items.size() == 37);  // 8 gear + 16 weapons + 13 armor and shield
 
     int potion_id = item_id_named(repo, "Potion of Healing");
     for (const auto& item : items) {
@@ -164,4 +165,71 @@ TEST_CASE("inventories are per character and deleted with the character", "[inve
     // delete_player cascades to characters, and from there to inventory.
     repo.delete_player(repo.get_characters()[0].player_id);
     REQUIRE(repo.get_inventory(bram).empty());
+}
+
+TEST_CASE("weapons and armor load with their PHB stats", "[inventory][repository]") {
+    dnd::Repository repo(":memory:");
+    auto find = [&](const std::string& name) {
+        for (const auto& item : repo.get_items()) {
+            if (item.name == name) return item;
+        }
+        FAIL("no item " << name);
+        return dnd::Item{};
+    };
+
+    auto longsword = find("Longsword");
+    REQUIRE(longsword.category == dnd::ItemCategory::Weapon);
+    REQUIRE(longsword.weapon.has_value());
+    REQUIRE_FALSE(longsword.armor.has_value());
+    REQUIRE(longsword.weapon->category == dnd::WeaponCategory::Martial);
+    REQUIRE(longsword.weapon->damage_dice_sides == 8);
+    REQUIRE(longsword.weapon->versatile_dice_sides == 10);
+    REQUIRE(longsword.weapon->damage_type == "slashing");
+    REQUIRE(longsword.cost_cp == 1500);
+
+    auto crossbow = find("Light Crossbow");
+    REQUIRE(crossbow.weapon->ranged);
+    REQUIRE(crossbow.weapon->two_handed);
+    REQUIRE(crossbow.weapon->loading);
+
+    auto greatsword = find("Greatsword");
+    REQUIRE(greatsword.weapon->damage_dice_count == 2);
+    REQUIRE(greatsword.weapon->heavy);
+
+    auto chain = find("Chain Mail");
+    REQUIRE(chain.category == dnd::ItemCategory::Armor);
+    REQUIRE(chain.armor->type == dnd::ArmorType::Heavy);
+    REQUIRE(chain.armor->base_ac == 16);
+    REQUIRE(chain.armor->strength_requirement == 13);
+    REQUIRE(chain.armor->stealth_disadvantage);
+
+    auto half_plate = find("Half Plate");
+    REQUIRE(half_plate.armor->type == dnd::ArmorType::Medium);
+    REQUIRE(half_plate.armor->max_dex_bonus == 2);
+
+    auto shield = find("Shield");
+    REQUIRE(shield.category == dnd::ItemCategory::Shield);
+    REQUIRE(shield.armor->type == dnd::ArmorType::Shield);
+    REQUIRE(shield.armor->base_ac == 2);
+
+    REQUIRE_FALSE(find("Torch").weapon.has_value());
+    REQUIRE_FALSE(find("Torch").armor.has_value());
+}
+
+TEST_CASE("equipped flags persist", "[inventory][repository]") {
+    dnd::Repository repo(":memory:");
+    int character_id = add_test_character(repo, "Aria");
+    int sword = item_id_named(repo, "Longsword");
+    int mail = item_id_named(repo, "Chain Mail");
+    repo.add_to_inventory(character_id, sword);
+    repo.add_to_inventory(character_id, mail);
+
+    for (const auto& entry : repo.get_inventory(character_id)) REQUIRE_FALSE(entry.equipped);
+    repo.set_equipped(character_id, mail, true);
+    for (const auto& entry : repo.get_inventory(character_id)) {
+        REQUIRE(entry.equipped == (entry.item.item_id == mail));
+        if (entry.item.item_id == mail) REQUIRE(entry.item.armor->base_ac == 16);
+    }
+    repo.set_equipped(character_id, mail, false);
+    for (const auto& entry : repo.get_inventory(character_id)) REQUIRE_FALSE(entry.equipped);
 }

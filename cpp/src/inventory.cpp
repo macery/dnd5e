@@ -9,6 +9,9 @@ const char* item_category_name(ItemCategory category) {
     switch (category) {
         case ItemCategory::Gear: return "Gear";
         case ItemCategory::Consumable: return "Consumable";
+        case ItemCategory::Weapon: return "Weapon";
+        case ItemCategory::Armor: return "Armor";
+        case ItemCategory::Shield: return "Shield";
     }
     throw std::invalid_argument("unknown item category");
 }
@@ -16,7 +19,37 @@ const char* item_category_name(ItemCategory category) {
 ItemCategory item_category_from_name(const std::string& name) {
     if (name == "Gear") return ItemCategory::Gear;
     if (name == "Consumable") return ItemCategory::Consumable;
+    if (name == "Weapon") return ItemCategory::Weapon;
+    if (name == "Armor") return ItemCategory::Armor;
+    if (name == "Shield") return ItemCategory::Shield;
     throw std::invalid_argument("unknown item category: " + name);
+}
+
+const char* weapon_category_name(WeaponCategory category) {
+    return category == WeaponCategory::Simple ? "Simple" : "Martial";
+}
+
+WeaponCategory weapon_category_from_name(const std::string& name) {
+    if (name == "Simple") return WeaponCategory::Simple;
+    if (name == "Martial") return WeaponCategory::Martial;
+    throw std::invalid_argument("unknown weapon category: " + name);
+}
+
+const char* armor_type_name(ArmorType type) {
+    switch (type) {
+        case ArmorType::Light: return "Light";
+        case ArmorType::Medium: return "Medium";
+        case ArmorType::Heavy: return "Heavy";
+        case ArmorType::Shield: return "Shield";
+    }
+    throw std::invalid_argument("unknown armor type");
+}
+
+ArmorType armor_type_from_name(const std::string& name) {
+    for (auto type : {ArmorType::Light, ArmorType::Medium, ArmorType::Heavy, ArmorType::Shield}) {
+        if (name == armor_type_name(type)) return type;
+    }
+    throw std::invalid_argument("unknown armor type: " + name);
 }
 
 bool is_healing_item(const Item& item) {
