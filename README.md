@@ -252,7 +252,7 @@ Phases 1 (core and data) and 2 (UI) are done; see [docs/magic-system.md](docs/ma
 
     Uses are saved on the character and restored by rests.
   - **Later:** Paladin and Ranger Fighting Styles at level 2, two-weapon fighting, subclasses, Warlock invocations, Sorcery Points, reactions, and Divine Smite's extra die against undead and fiends.
-- [ ] **Level-up choices**: Ability Score Improvements at levels 4/8/12/16/19, and an option to roll HP instead of taking the average.
+- [ ] **Level-up choices** ([docs/level-up.md](docs/level-up.md)): Ability Score Improvements at levels 4/8/12/16/19, and an option to roll HP instead of taking the average.
 - [x] **Starting HP**: level-1 max HP is the class hit die plus CON, calculated by the wizard.
 - [ ] **Keep level and XP in sync**: editing the level by hand in the editor can leave it out of step with XP.
 - [x] **Weapon proficiencies**: class (PHB ch. 3) and base-Dwarf weapon training. Proficiency is added only with trained weapons, and the wizard and Inventory warn about untrained ones. The Elf's training waits for subraces.
