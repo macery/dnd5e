@@ -4,6 +4,7 @@
 #include <QComboBox>
 #include <QDialogButtonBox>
 #include <QFormLayout>
+#include <QGridLayout>
 #include <QGroupBox>
 #include <QLabel>
 #include <QLineEdit>
@@ -29,10 +30,11 @@ CharacterEditorDialog::CharacterEditorDialog(const std::vector<dnd::LookupEntry>
     : QDialog(parent) {
     setWindowTitle(existing ? "Edit Character" : "Add Character");
 
+    // Each page scrolls, so the dialog can be made smaller than its tallest tab.
     auto* tabs = new QTabWidget(this);
-    tabs->addTab(buildBasicsTab(classes, races, alignments), "Basics");
-    tabs->addTab(buildAbilityScoresTab(), "Ability Scores");
-    tabs->addTab(buildProficienciesTab(), "Proficiencies");
+    tabs->addTab(scrollable(buildBasicsTab(classes, races, alignments), tabs), "Basics");
+    tabs->addTab(scrollable(buildAbilityScoresTab(), tabs), "Ability Scores");
+    tabs->addTab(scrollable(buildProficienciesTab(), tabs), "Proficiencies");
 
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
     connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
@@ -41,7 +43,8 @@ CharacterEditorDialog::CharacterEditorDialog(const std::vector<dnd::LookupEntry>
     auto* layout = new QVBoxLayout(this);
     layout->addWidget(tabs);
     layout->addWidget(buttons);
-    fitToScreen(this, QSize(460, 440), "CharacterEditor");
+    // A new key: sizes saved before the tabs could scroll were forced too tall.
+    fitToScreen(this, QSize(560, 600), "CharacterEditor.v2");
 
     if (existing) populateFrom(*existing);
 }
@@ -122,18 +125,22 @@ QWidget* CharacterEditorDialog::buildProficienciesTab() {
     auto* page = new QWidget(this);
     auto* layout = new QVBoxLayout(page);
 
+    // Saving throws in three columns (two rows).
     auto* savesGroup = new QGroupBox("Saving Throws", page);
-    auto* savesLayout = new QVBoxLayout(savesGroup);
+    auto* savesLayout = new QGridLayout(savesGroup);
     for (int i = 0; i < dnd::kAbilityCount; ++i) {
         auto ability = static_cast<dnd::Ability>(i);
         auto* box = new QCheckBox(dnd::ability_name(ability), savesGroup);
         saveProficiencyBoxes_[i] = box;
-        savesLayout->addWidget(box);
+        savesLayout->addWidget(box, i / 3, i % 3);
     }
     layout->addWidget(savesGroup);
 
+    // Skills grouped by ability, the groups side by side in three columns.
+    // (Constitution has no skills, so it gets no group.)
     auto* skillsGroup = new QGroupBox("Skills", page);
-    auto* skillsLayout = new QVBoxLayout(skillsGroup);
+    auto* skillsLayout = new QGridLayout(skillsGroup);
+    int placed = 0;
     for (int a = 0; a < dnd::kAbilityCount; ++a) {
         auto ability = static_cast<dnd::Ability>(a);
         auto* abilityGroup = new QGroupBox(dnd::ability_name(ability), skillsGroup);
@@ -145,9 +152,16 @@ QWidget* CharacterEditorDialog::buildProficienciesTab() {
             skillProficiencyBoxes_[s] = box;
             abilityLayout->addWidget(box);
         }
-        skillsLayout->addWidget(abilityGroup);
+        if (abilityLayout->count() == 0) {
+            delete abilityGroup;
+            continue;
+        }
+        abilityLayout->addStretch(1);
+        skillsLayout->addWidget(abilityGroup, placed / 3, placed % 3);
+        ++placed;
     }
     layout->addWidget(skillsGroup);
+    layout->addStretch(1);
 
     return page;
 }
