@@ -39,19 +39,30 @@ struct EncounterRating {
 // `monster_xp` is each monster's XP (one entry per monster).
 EncounterRating rate_encounter(const std::vector<int>& party_levels, const std::vector<int>& monster_xp);
 
-struct ScaledAdventure {
-    AdventureTemplate adventure;  // with monster counts adjusted
+struct ScaledScene {
+    AdventureScene scene;  // with monster counts and coins adjusted
     EncounterRating rating;
-    bool scaled = false;          // counts differ from the template's
+    bool scaled = false;   // counts differ from the template's
 };
 
-// Adjusts an adventure's monster counts toward Medium-Hard for this party:
-// adds monsters (the cheapest group first) while it's below Medium and the
-// next one wouldn't make it Deadly, and removes them (the most expensive
-// group with more than one first) while it's Deadly. Every group keeps at
-// least one monster, so a party can still face a Deadly fight. Coins are
-// multiplied by the party's average level (rounded, at least 1). Unknown
-// monster names count as 0 XP; an empty party leaves it unchanged.
+// Adjusts a scene's monster counts for this party: toward Medium-Hard, or
+// toward Hard for a boss scene. Adds monsters (the cheapest group first)
+// while it's below the target and the next one wouldn't make it Deadly
+// (at most 12 monsters), and removes them (the most expensive group with
+// more than one first) while it's Deadly. Every group keeps at least one
+// monster, so a party can still face a Deadly fight. Coins are multiplied
+// by the party's average level (rounded, at least 1). Unknown monster names
+// count as 0 XP; an empty party leaves it unchanged.
+ScaledScene scale_scene(const AdventureScene& scene, const std::vector<int>& party_levels,
+                        const std::vector<Monster>& monsters);
+
+struct ScaledAdventure {
+    AdventureTemplate adventure;            // every scene scaled
+    std::vector<EncounterRating> ratings;   // per scene
+    Difficulty hardest = Difficulty::Trivial;
+    bool scaled = false;                    // any scene's counts changed
+};
+
 ScaledAdventure scale_adventure(const AdventureTemplate& adventure, const std::vector<int>& party_levels,
                                 const std::vector<Monster>& monsters);
 

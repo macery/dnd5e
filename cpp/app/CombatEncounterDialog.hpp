@@ -24,6 +24,15 @@ class QSplitter;
 class QSpinBox;
 class QTableWidget;
 
+// One fight of an adventure: the scene (already scaled for the party), the
+// window title ("The Goblin Warren — scene 2 of 3: The Wolf Pens"), and the
+// text shown on victory (the adventure's ending, on its last scene).
+struct AdventureFight {
+    QString title;
+    dnd::AdventureScene scene;
+    std::string victory_text;
+};
+
 // The combat screen: a view over a dnd::Encounter, which holds all the rules
 // (turn order, monster turns, actions, victory and defeat). This dialog loads
 // the encounter's inputs from the Repository, turns the player's choices into
@@ -36,7 +45,10 @@ class CombatEncounterDialog : public QDialog {
 public:
     CombatEncounterDialog(dnd::Repository& repository, std::vector<dnd::Character> characters,
                            std::vector<dnd::Monster> monsters, QWidget* parent = nullptr,
-                           const dnd::AdventureTemplate* adventure = nullptr);
+                           const AdventureFight* fight = nullptr);
+
+    // How the fight ended: InProgress if the window was closed mid-fight.
+    dnd::EncounterStatus outcome() const { return encounter_.status(); }
 
 protected:
     void resizeEvent(QResizeEvent* event) override;
@@ -101,6 +113,7 @@ private:
     QPushButton* addMonsterButton_ = nullptr;
     QPushButton* rollInitiativeButton_ = nullptr;
     QPushButton* nextTurnButton_ = nullptr;
+    QPushButton* continueButton_ = nullptr;  // adventures: shown once the fight is over
 
     QLabel* currentTurnLabel_ = nullptr;
     QLabel* moveLabel_ = nullptr;

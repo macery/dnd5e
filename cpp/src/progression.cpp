@@ -109,4 +109,23 @@ void take_short_rest(Character& character, const ClassInfo& class_info) {
     restore_short_rest_features(character, class_info.name);
 }
 
+ShortRestResult short_rest(Character& character, const ClassInfo& class_info, const Dice& dice, int hit_dice) {
+    ShortRestResult result;
+    if (character.dead) return result;
+    auto slots_before = character.spell_slots_used;
+    auto features_before = character.feature_uses_spent;
+    take_short_rest(character, class_info);
+    result.slots_restored = character.spell_slots_used != slots_before;
+    result.features_restored = character.feature_uses_spent != features_before;
+    result.arcane_recovery = use_arcane_recovery(character, class_info.name);
+
+    for (int i = 0; i < hit_dice && character.current_hp < character.max_hp; ++i) {
+        int regained = spend_hit_die(character, dice, class_info.hit_die);
+        if (regained < 0) break;  // none left
+        ++result.hit_dice_spent;
+        result.hp_regained += regained;
+    }
+    return result;
+}
+
 }  // namespace dnd

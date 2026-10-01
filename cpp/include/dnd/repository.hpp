@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 
+#include "dnd/adventure_run.hpp"
 #include "dnd/character.hpp"
 #include "dnd/item.hpp"
 #include "dnd/lookup_entry.hpp"
@@ -71,6 +72,12 @@ public:
 
     void update_character(const Character& character);
     void delete_character(int character_id);
+
+    // Adventure progress (dnd/adventure_run.hpp). add returns the new run_id.
+    int add_adventure_run(const AdventureRun& run);
+    void update_adventure_run(const AdventureRun& run);
+    // Newest first; with `in_progress_only`, just the ones that can be resumed.
+    std::vector<AdventureRun> get_adventure_runs(bool in_progress_only = false) const;
 
     // Runs `work` atomically: everything it changes is committed, or -- if it
     // throws -- rolled back and the exception rethrown. Nests safely (a

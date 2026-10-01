@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <string>
 #include <vector>
 
@@ -65,5 +66,20 @@ void take_long_rest(Character& character);
 // (Spending hit dice and Arcane Recovery are the player's choice -- see
 // spend_hit_die and use_arcane_recovery.)
 void take_short_rest(Character& character, const ClassInfo& class_info);
+
+// What a short rest did, for the UI's summary.
+struct ShortRestResult {
+    int hit_dice_spent = 0;
+    int hp_regained = 0;
+    bool slots_restored = false;     // a Warlock's pact slots
+    bool features_restored = false;  // Second Wind, Action Surge, Ki, ...
+    std::array<int, 9> arcane_recovery{};  // slots a Wizard recovered, by level
+};
+
+// A whole short rest (PHB ch. 8) for one character: the automatic part
+// (take_short_rest), Arcane Recovery for a Wizard with spent slots, and up
+// to `hit_dice` hit dice spent (fewer if they don't have that many; spending
+// stops once HP is full). Nothing happens to the dead.
+ShortRestResult short_rest(Character& character, const ClassInfo& class_info, const Dice& dice, int hit_dice);
 
 }  // namespace dnd

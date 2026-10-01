@@ -93,18 +93,18 @@ EncounterRating rate_encounter(const std::vector<int>& party_levels, const std::
     return rating;
 }
 
-ScaledAdventure scale_adventure(const AdventureTemplate& adventure, const std::vector<int>& party_levels,
-                                const std::vector<Monster>& monsters) {
-    ScaledAdventure result;
-    result.adventure = adventure;
-    auto& groups = result.adventure.monster_groups;
+ScaledScene scale_scene(const AdventureScene& scene, const std::vector<int>& party_levels,
+                        const std::vector<Monster>& monsters) {
+    ScaledScene result;
+    result.scene = scene;
+    auto& groups = result.scene.monsters;
     auto rate = [&] { return rate_groups(groups, party_levels, monsters); };
     result.rating = rate();
     if (party_levels.empty()) return result;
     int level_sum = 0;
     for (int level : party_levels) level_sum += level;
     int average = std::max(1, static_cast<int>(std::lround(static_cast<double>(level_sum) / party_levels.size())));
-    result.adventure.coins_cp = adventure.coins_cp * average;
+    result.scene.coins_cp = scene.coins_cp * average;
     if (groups.empty()) return result;
 
     auto xp_of = [&](const AdventureMonsterGroup& group) { return monster_xp(monsters, group.monster_name); };
@@ -114,6 +114,7 @@ ScaledAdventure scale_adventure(const AdventureTemplate& adventure, const std::v
         for (const auto& group : groups) count += group.count;
         return count;
     };
+    Difficulty target = scene.boss ? Difficulty::Hard : Difficulty::Medium;
 
     // Too hard: remove the most expensive monster from a group with more than one.
     while (result.rating.difficulty == Difficulty::Deadly) {
@@ -127,7 +128,7 @@ ScaledAdventure scale_adventure(const AdventureTemplate& adventure, const std::v
     }
 
     // Too easy: add the cheapest monster that doesn't make it Deadly.
-    while (result.rating.difficulty < Difficulty::Medium && total() < kMaxMonsters) {
+    while (result.rating.difficulty < target && total() < kMaxMonsters) {
         AdventureMonsterGroup* pick = nullptr;
         for (auto& group : groups) {
             if (!pick || xp_of(group) < xp_of(*pick)) pick = &group;
@@ -142,7 +143,21 @@ ScaledAdventure scale_adventure(const AdventureTemplate& adventure, const std::v
     }
 
     for (size_t i = 0; i < groups.size(); ++i) {
-        if (groups[i].count != adventure.monster_groups[i].count) result.scaled = true;
+        if (groups[i].count != scene.monsters[i].count) result.scaled = true;
+    }
+    return result;
+}
+
+ScaledAdventure scale_adventure(const AdventureTemplate& adventure, const std::vector<int>& party_levels,
+                                const std::vector<Monster>& monsters) {
+    ScaledAdventure result;
+    result.adventure = adventure;
+    for (size_t i = 0; i < adventure.scenes.size(); ++i) {
+        ScaledScene scaled = scale_scene(adventure.scenes[i], party_levels, monsters);
+        result.adventure.scenes[i] = scaled.scene;
+        result.ratings.push_back(scaled.rating);
+        result.hardest = std::max(result.hardest, scaled.rating.difficulty);
+        result.scaled = result.scaled || scaled.scaled;
     }
     return result;
 }

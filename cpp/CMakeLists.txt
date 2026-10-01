@@ -31,6 +31,7 @@ FetchContent_MakeAvailable(nlohmann_json)
 
 add_library(dndcore
     src/adventure.cpp
+    src/adventure_run.cpp
     src/character_creation.cpp
     src/character_io.cpp
     src/class_features.cpp

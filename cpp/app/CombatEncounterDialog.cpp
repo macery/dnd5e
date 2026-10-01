@@ -52,20 +52,22 @@ enum Action { AttackAction, DashAction, DodgeAction, DrinkPotionAction, CastSpel
 
 CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::vector<dnd::Character> characters,
                                               std::vector<dnd::Monster> monsters, QWidget* parent,
-                                              const dnd::AdventureTemplate* adventure)
+                                              const AdventureFight* fight)
     : QDialog(parent),
       repository_(repository),
       monsters_(std::move(monsters)),
       classes_(repository.get_classes()),
       dice_(randomSource_),
       encounter_(dice_, classes_, repository.get_races()) {
-    setWindowTitle("Combat Encounter");
+    setWindowTitle(fight ? fight->title : QString("Combat Encounter"));
 
     statusLabel_ = new QLabel("Status: In Progress", this);
     statusLabel_->setStyleSheet("font-weight: bold;");
 
-    if (adventure) {
-        objectiveLabel_ = new QLabel("Objective: " + q(adventure->hook), this);
+    if (fight) {
+        objectiveLabel_ = new QLabel(QString("<b>%1.</b> %2").arg(q(fight->scene.title).toHtmlEscaped(),
+                                                                   q(fight->scene.narration).toHtmlEscaped()),
+                                     this);
         objectiveLabel_->setWordWrap(true);
     }
 
@@ -107,6 +109,10 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
     currentTurnLabel_->setStyleSheet("font-weight: bold;");
     turnRow->addWidget(rollInitiativeButton_);
     turnRow->addWidget(nextTurnButton_);
+    continueButton_ = new QPushButton("Continue", this);
+    continueButton_->setToolTip("The fight is over: back to the adventure.");
+    continueButton_->setVisible(false);
+    turnRow->addWidget(continueButton_);
     turnRow->addStretch(1);
     turnRow->addWidget(currentTurnLabel_);
 
@@ -288,8 +294,9 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
                                  repository_.get_inventory(character.character_id));
     }
 
-    if (adventure) {
-        for (const auto& group : adventure->monster_groups) {
+    if (fight) {
+        connect(continueButton_, &QPushButton::clicked, this, &QDialog::accept);
+        for (const auto& group : fight->scene.monsters) {
             for (const auto& candidate : monsters_) {
                 if (candidate.name == group.monster_name) {
                     encounter_.add_monsters(candidate, group.count);
@@ -301,12 +308,12 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
         // Loot names an Item; skip any that don't match a seeded item.
         std::vector<dnd::LootGrant> loot;
         auto items = repository_.get_items();
-        for (const auto& grant : adventure->loot) {
+        for (const auto& grant : fight->scene.loot) {
             auto item = std::find_if(items.begin(), items.end(),
                                      [&](const dnd::Item& candidate) { return candidate.name == grant.item_name; });
             if (item != items.end()) loot.push_back({*item, grant.quantity});
         }
-        encounter_.set_victory_reward(adventure->victory_text, std::move(loot), adventure->coins_cp);
+        encounter_.set_victory_reward(fight->victory_text, std::move(loot), fight->scene.coins_cp);
     }
 
     updateActionControlsVisibility();
@@ -380,6 +387,11 @@ void CombatEncounterDialog::onTurnStarted() {
 void CombatEncounterDialog::refreshState() {
     if (encounter_.status() != dnd::EncounterStatus::InProgress) {
         statusLabel_->setText("Status: " + q(encounter_.result_message()));
+        if (objectiveLabel_) {  // an adventure fight: on to what comes next
+            continueButton_->setText(encounter_.status() == dnd::EncounterStatus::Victory ? "Continue"
+                                                                                           : "End Adventure");
+            continueButton_->setVisible(true);
+        }
     }
     refreshParticipantTable();
     auto rating = encounter_.difficulty();

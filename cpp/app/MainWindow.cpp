@@ -4,6 +4,7 @@
 #include <QComboBox>
 #include <QCoreApplication>
 #include <QDate>
+#include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QFileDialog>
@@ -24,6 +25,7 @@
 
 #include <algorithm>
 
+#include "AdventureDialogs.hpp"
 #include "AdventurePickerDialog.hpp"
 #include "CharacterCreationWizard.hpp"
 #include "CharacterEditorDialog.hpp"
@@ -40,6 +42,8 @@
 #include "WindowSizing.hpp"
 
 #include "dnd/adventure.hpp"
+#include "dnd/adventure_run.hpp"
+#include "dnd/encounter_difficulty.hpp"
 #include "dnd/character_io.hpp"
 #include "dnd/class_features.hpp"
 #include "dnd/level_up.hpp"
@@ -518,60 +522,16 @@ void MainWindow::onBackupClicked() {
 void MainWindow::onShortRestClicked() {
     const dnd::Character* selected = selectedCharacter("Short Rest");
     if (!selected) return;
-
-    dnd::Character character = *selected;
-    QString name = QString::fromStdString(character.character_name);
-    if (character.dead) {
-        QMessageBox::information(this, "Short Rest", QString("%1 is dead. Resting can't bring them back.").arg(name));
-        return;
-    }
-
-    // Pact slots and short-rest features come back on any short rest, hit
-    // dice or not; a Wizard also uses Arcane Recovery if any slots are spent.
-    bool slotsRestored = false;
-    bool featuresRestored = false;
-    QStringList recoveredSlots;
-    if (const dnd::ClassInfo* info = dnd::find_class_info_by_id(classes_, character.class_id)) {
-        auto slotsBefore = character.spell_slots_used;
-        auto featuresBefore = character.feature_uses_spent;
-        dnd::take_short_rest(character, *info);
-        slotsRestored = character.spell_slots_used != slotsBefore;
-        featuresRestored = character.feature_uses_spent != featuresBefore;
-
-        auto recovered = dnd::use_arcane_recovery(character, info->name);
-        for (int level = 1; level <= 9; ++level) {
-            int count = recovered[static_cast<size_t>(level - 1)];
-            if (count > 0) recoveredSlots << QString("%1 × %2-level").arg(count).arg(QString::fromStdString(dnd::ordinal(level)));
-        }
-    }
-
-    int hit_die = dnd::hit_die_for_class_id(classes_, character.class_id);
-    int regained = dnd::spend_hit_die(character, dice_, hit_die);
-    if (regained < 0 && !slotsRestored && !featuresRestored && recoveredSlots.isEmpty()) {
+    if (selected->dead) {
         QMessageBox::information(this, "Short Rest",
-            QString("%1 has no hit dice left. Take a long rest to recover them.").arg(name));
+                                 QString("%1 is dead. Resting can't bring them back.")
+                                     .arg(QString::fromStdString(selected->character_name)));
         return;
     }
-
-    repository_.update_character(character);
+    // Choose how many hit dice to spend; features, pact slots, and Arcane Recovery come back too.
+    ShortRestDialog dialog(repository_, {*selected}, classes_, this);
+    dialog.exec();
     reloadCharactersForCurrentPlayer();
-
-    QString message = regained < 0
-        ? QString("%1 has no hit dice left to spend.").arg(name)
-        : QString("%1 spends a d%2 hit die and regains %3 HP (now %4/%5). Hit dice left: %6/%7.")
-              .arg(name)
-              .arg(hit_die)
-              .arg(regained)
-              .arg(character.current_hp)
-              .arg(character.max_hp)
-              .arg(dnd::hit_dice_remaining(character))
-              .arg(character.level);
-    if (slotsRestored) message += " Pact spell slots restored.";
-    if (featuresRestored) message += " Short-rest class features (like Second Wind) are ready again.";
-    if (!recoveredSlots.isEmpty()) {
-        message += QString(" Arcane Recovery restores %1 spell slot(s).").arg(recoveredSlots.join(", "));
-    }
-    QMessageBox::information(this, "Short Rest", message);
 }
 
 void MainWindow::onLongRestClicked() {
@@ -630,17 +590,125 @@ void MainWindow::onCombatEncounterClicked() {
 }
 
 void MainWindow::onSoloAdventureClicked() {
-    auto characters = charactersWhoCanFight("Solo Adventure");
-    if (characters.empty() && !repository_.get_characters().empty()) return;
+    auto living = charactersWhoCanFight("Solo Adventure");
+    if (living.empty()) {
+        if (repository_.get_characters().empty()) {
+            QMessageBox::information(this, "Solo Adventure", "Create a character first.");
+        }
+        return;
+    }
 
+    // Ratings are for the current player's characters (or everyone, if they have none).
     std::vector<int> partyLevels;
-    for (const auto& character : characters) partyLevels.push_back(character.level);
-    auto monsters = repository_.get_monsters();
-    AdventurePickerDialog picker(partyLevels, monsters, this);
+    for (const auto& character : living) {
+        if (character.player_id == currentPlayerId()) partyLevels.push_back(character.level);
+    }
+    if (partyLevels.empty()) {
+        for (const auto& character : living) partyLevels.push_back(character.level);
+    }
+    AdventurePickerDialog picker(partyLevels, repository_.get_monsters(), repository_.get_adventure_runs(true), this);
     if (picker.exec() != QDialog::Accepted) return;
-    dnd::AdventureTemplate adventure = picker.selectedAdventure().adventure;  // scaled for the party
+    if (picker.isResume()) {
+        playAdventure(picker.selectedRun());
+        return;
+    }
 
-    CombatEncounterDialog dialog(repository_, characters, monsters, this, &adventure);
-    dialog.exec();
+    const dnd::AdventureTemplate& adventure = picker.selectedAdventure();
+    PartyDialog partyDialog(living, repository_.get_players(), classes_, currentPlayerId(),
+                            QString::fromStdString(adventure.title), this);
+    if (partyDialog.exec() != QDialog::Accepted) return;
+
+    dnd::AdventureRun run;
+    run.title = adventure.title;
+    run.party = partyDialog.partyIds();
+    run.started_at = QDateTime::currentDateTimeUtc().toString(Qt::ISODate).toStdString();
+    run.run_id = repository_.add_adventure_run(run);
+    playAdventure(run);
+}
+
+void MainWindow::playAdventure(dnd::AdventureRun run) {
+    const dnd::AdventureTemplate* adventure = dnd::find_adventure(run.title);
+    if (!adventure) {
+        QMessageBox::warning(this, "Solo Adventure", "This adventure isn't in this version of the app.");
+        return;
+    }
+    QString title = QString::fromStdString(adventure->title);
+    auto monsters = repository_.get_monsters();
+    auto partyMembers = [&] {
+        std::vector<dnd::Character> members;
+        for (const auto& character : repository_.get_characters()) {
+            bool inParty = std::find(run.party.begin(), run.party.end(), character.character_id) != run.party.end();
+            if (inParty && !character.dead) members.push_back(character);
+        }
+        return members;
+    };
+
+    while (run.status == dnd::AdventureStatus::InProgress) {
+        auto members = partyMembers();
+        if (members.empty()) {  // everyone died (or was deleted) since
+            run.status = dnd::AdventureStatus::Defeated;
+            repository_.update_adventure_run(run);
+            QMessageBox::information(this, title, "No one in the party can go on. The adventure is over.");
+            break;
+        }
+
+        if (dnd::between_scenes(run)) {
+            BetweenScenesDialog between(repository_, run, *adventure, classes_, this);
+            between.exec();
+            if (between.choice() == BetweenScenesDialog::Choice::StopForNow) {
+                repository_.update_adventure_run(run);
+                reloadCharactersForCurrentPlayer();
+                return;  // resume from Solo Adventure
+            }
+            if (between.choice() == BetweenScenesDialog::Choice::Retreat) {
+                dnd::retreat(run);
+                repository_.update_adventure_run(run);
+                QMessageBox::information(this, title,
+                                         "The party retreats, keeping everything earned so far. The adventure is "
+                                         "over.");
+                break;
+            }
+            members = partyMembers();  // after rests and level-ups
+        }
+
+        const dnd::AdventureScene* scene = dnd::next_scene(run, *adventure);
+        std::vector<int> levels;
+        for (const auto& member : members) levels.push_back(member.level);
+        AdventureFight fight;
+        fight.scene = dnd::scale_scene(*scene, levels, monsters).scene;
+        fight.victory_text = dnd::is_last_scene(run, *adventure) ? adventure->victory_text : std::string();
+        fight.title = adventure->scenes.size() == 1
+                          ? title
+                          : QString("%1 — %2: %3")
+                                .arg(title, QString::fromStdString(dnd::progress_text(run, *adventure)),
+                                     QString::fromStdString(scene->title));
+
+        CombatEncounterDialog combat(repository_, members, monsters, this, &fight);
+        combat.exec();
+        switch (combat.outcome()) {
+            case dnd::EncounterStatus::Victory:
+                dnd::record_fight(run, *adventure, true);
+                repository_.update_adventure_run(run);
+                break;
+            case dnd::EncounterStatus::Defeat:
+                dnd::record_fight(run, *adventure, false);
+                repository_.update_adventure_run(run);
+                QMessageBox::information(this, title, "The party has fallen. The adventure is over.");
+                break;
+            case dnd::EncounterStatus::InProgress:
+                // Left mid-fight: the fight starts over on resume (the damage taken stays).
+                repository_.update_adventure_run(run);
+                QMessageBox::information(this, title,
+                                         "You left the fight. The adventure is saved before it: use Solo Adventure "
+                                         "to resume and fight it again.");
+                reloadCharactersForCurrentPlayer();
+                return;
+        }
+    }
+
+    if (run.status == dnd::AdventureStatus::Finished && adventure->scenes.size() > 1) {
+        QMessageBox::information(this, title,
+                                 QString("Adventure complete!\n\n%1").arg(QString::fromStdString(adventure->victory_text)));
+    }
     reloadCharactersForCurrentPlayer();
 }

@@ -43,63 +43,70 @@ TEST_CASE("rating an encounter", "[difficulty]") {
     REQUIRE(dnd::rate_encounter({1}, {}).adjusted_xp == 0);
 }
 
-TEST_CASE("scaling adventures toward Medium-Hard", "[difficulty]") {
+TEST_CASE("scaling scenes toward Medium-Hard (bosses toward Hard)", "[difficulty]") {
     dnd::Repository repo(":memory:");
     auto monsters = repo.get_monsters();
-    const auto& templates = dnd::adventure_templates();
-    const dnd::AdventureTemplate* goblins = nullptr;
-    const dnd::AdventureTemplate* troll = nullptr;
-    for (const auto& t : templates) {
-        if (t.title == "Ambush on the Trail") goblins = &t;
-        if (t.title == "The Troll Bridge") troll = &t;
-    }
+    const auto* goblins = dnd::find_adventure("Ambush on the Trail");
+    const auto* troll = dnd::find_adventure("The Troll Bridge");
     REQUIRE(goblins);
     REQUIRE(troll);
+    const auto& ambush = goblins->scenes.front();
 
     SECTION("three goblins are Deadly for a lone level-1 character: down to one") {
-        auto scaled = dnd::scale_adventure(*goblins, {1}, monsters);
+        auto scaled = dnd::scale_scene(ambush, {1}, monsters);
         REQUIRE(scaled.scaled);
-        REQUIRE(scaled.adventure.monster_groups[0].count == 1);  // 50 x1.5 = 75: Hard
+        REQUIRE(scaled.scene.monsters[0].count == 1);  // 50 x1.5 = 75: Hard
         REQUIRE(scaled.rating.difficulty == Difficulty::Hard);
     }
 
     SECTION("more goblins for a level-3 party") {
         // Medium is 600 for four level-3s: 6 goblins x2 = 600.
-        auto scaled = dnd::scale_adventure(*goblins, {3, 3, 3, 3}, monsters);
-        REQUIRE(scaled.scaled);
-        REQUIRE(scaled.adventure.monster_groups[0].count == 6);
+        auto scaled = dnd::scale_scene(ambush, {3, 3, 3, 3}, monsters);
+        REQUIRE(scaled.scene.monsters[0].count == 6);
         REQUIRE(scaled.rating.difficulty == Difficulty::Medium);
     }
 
+    SECTION("a boss scene aims for Hard") {
+        dnd::AdventureScene boss = ambush;
+        boss.boss = true;
+        // Hard is 900 for four level-3s: 9 goblins x2.5 = 1,125 (Hard); 8 x2.5 = 1,000 (Hard); 7 x2.5 = 875.
+        auto scaled = dnd::scale_scene(boss, {3, 3, 3, 3}, monsters);
+        REQUIRE(scaled.rating.difficulty == Difficulty::Hard);
+        REQUIRE(scaled.scene.monsters[0].count == 8);
+    }
+
     SECTION("goblins can't challenge a level-5 party: capped at 12") {
-        auto scaled = dnd::scale_adventure(*goblins, {5, 5, 5, 5}, monsters);
-        REQUIRE(scaled.adventure.monster_groups[0].count == 12);  // 600 x3 = 1,800 < Medium 2,000
+        auto scaled = dnd::scale_scene(ambush, {5, 5, 5, 5}, monsters);
+        REQUIRE(scaled.scene.monsters[0].count == 12);  // 600 x3 = 1,800 < Medium 2,000
         REQUIRE(scaled.rating.difficulty == Difficulty::Easy);
     }
 
     SECTION("coins scale with the party's average level") {
-        REQUIRE(dnd::scale_adventure(*goblins, {1}, monsters).adventure.coins_cp == goblins->coins_cp);
-        REQUIRE(dnd::scale_adventure(*goblins, {3, 4}, monsters).adventure.coins_cp == goblins->coins_cp * 4);  // 3.5 rounds to 4
-        REQUIRE(dnd::scale_adventure(*goblins, {}, monsters).adventure.coins_cp == goblins->coins_cp);
+        REQUIRE(dnd::scale_scene(ambush, {1}, monsters).scene.coins_cp == ambush.coins_cp);
+        REQUIRE(dnd::scale_scene(ambush, {3, 4}, monsters).scene.coins_cp == ambush.coins_cp * 4);  // 3.5 rounds to 4
+        REQUIRE(dnd::scale_scene(ambush, {}, monsters).scene.coins_cp == ambush.coins_cp);
     }
 
     SECTION("a lone troll stays a troll, even when it's Deadly") {
         auto scaled = dnd::scale_adventure(*troll, {1, 1}, monsters);
-        REQUIRE(scaled.adventure.monster_groups[0].count == 1);
-        REQUIRE(scaled.rating.difficulty == Difficulty::Deadly);
+        REQUIRE(scaled.adventure.scenes[0].monsters[0].count == 1);
+        REQUIRE(scaled.hardest == Difficulty::Deadly);
         REQUIRE_FALSE(scaled.scaled);
     }
 
-    SECTION("every adventure scales for any party without breaking") {
-        for (const auto& adventure : templates) {
+    SECTION("every scene of every adventure scales for any party without breaking") {
+        for (const auto& adventure : dnd::adventure_templates()) {
             for (std::vector<int> party : {std::vector<int>{1}, {3, 3, 3}, {7, 7, 7, 7}, {20}}) {
                 auto scaled = dnd::scale_adventure(adventure, party, monsters);
-                int total = 0;
-                for (const auto& group : scaled.adventure.monster_groups) {
-                    REQUIRE(group.count >= 1);
-                    total += group.count;
+                REQUIRE(scaled.ratings.size() == adventure.scenes.size());
+                for (const auto& scene : scaled.adventure.scenes) {
+                    int total = 0;
+                    for (const auto& group : scene.monsters) {
+                        REQUIRE(group.count >= 1);
+                        total += group.count;
+                    }
+                    REQUIRE(total <= 12);
                 }
-                REQUIRE(total <= 12);
             }
         }
     }

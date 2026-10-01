@@ -1,6 +1,28 @@
 # Multi-encounter adventures and currency design
 
-Status: **phase 1 (currency) done;** phase 2 (multi-scene adventures) is next. Decisions were settled on 2026-10-01; see [Decisions](#decisions).
+Status: **all phases done:** currency, multi-scene adventures, and progress that survives restarts. Phases 2 and 3 were built together. Decisions were settled on 2026-10-01; see [Decisions](#decisions).
+
+**Phases 2 and 3 as built:**
+- **Data:**
+  - `AdventureScene` (title, narration, monsters, loot, coins, `camp_after`, `boss`) and `AdventureTemplate::scenes` plus `suggested_level`.
+  - The nine existing adventures are one-scene adventures, built with a `single(...)` helper.
+  - New: **The Goblin Warren** (level 1+, three fights), **Crypt of the Restless** (level 2+, three), and **The Hill Giant's Toll** (level 5+, four), each with a camp partway and a boss at the end.
+- **Scaling:** `scale_scene` aims for Medium–Hard, or for Hard on a boss scene. Coins scale with the party's average level. `scale_adventure` scales every scene and reports the hardest.
+- **`dnd/adventure_run`:** `AdventureRun` (title, next scene, party, status, long rest taken) with `next_scene`, `record_fight`, `can_long_rest` (once per camp), `retreat`, and `progress_text`.
+- **Saving:**
+  - Migration 21 adds `AdventureRuns`, with `Repository::add_adventure_run`, `update_adventure_run`, and `get_adventure_runs`.
+  - Progress is saved after every fight and rest.
+  - Leaving mid-fight saves the place before that fight; the damage taken stays.
+- **`short_rest(character, class, dice, hit_dice)`:** the automatic part, Arcane Recovery, and up to N hit dice, stopping at full HP.
+- **UI:**
+  - **Picker:** "▶ Resume" entries first. Each adventure shows its fight count, suggested level, and hardest rating; the details list every fight's monsters and rating, camps, and total rewards.
+  - **`PartyDialog`:** a checklist of living characters, defaulting to the current player's.
+  - **Combat Encounter:** shows the scene's title and narration, and a **Continue** (or **End Adventure**) button once the fight is over.
+  - **`BetweenScenesDialog`:**
+    - the party's HP, hit dice, and remaining features and slots;
+    - **Press On**, **Short Rest…**, **Long Rest** (camps only, then Level Up for anyone ready), and **Retreat**;
+    - closing it stops for now.
+  - **`ShortRestDialog`:** hit dice per character, defaulting to enough to heal up on average. It's also used by the main window's Short Rest button.
 
 **Phase 1 as built:**
 - **Migration 20:** `Characters.Coins` ("cp:12,gp:15"), and `Character::coins` (cp, sp, ep, gp, pp).

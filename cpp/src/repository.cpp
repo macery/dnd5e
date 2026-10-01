@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "dnd/currency.hpp"
+#include "dnd/damage.hpp"
 #include "dnd/detail/statement.hpp"
 #include "dnd/inventory.hpp"
 #include "dnd/spellcasting.hpp"
@@ -614,6 +615,77 @@ void Repository::delete_character(int character_id) {
     Statement stmt(db_, "DELETE FROM Characters WHERE CharacterId = ?;");
     sqlite3_bind_int(stmt.get(), 1, character_id);
     detail::run_and_expect_done(stmt, "delete character");
+}
+
+namespace {
+
+std::string join_ids(const std::vector<int>& ids) {
+    std::string text;
+    for (int id : ids) text += (text.empty() ? "" : ",") + std::to_string(id);
+    return text;
+}
+
+std::vector<int> split_ids(const std::string& text) {
+    std::vector<int> ids;
+    for (const auto& part : split_list(text)) {
+        try {
+            ids.push_back(std::stoi(part));
+        } catch (...) {
+            // malformed: ignored
+        }
+    }
+    return ids;
+}
+
+}  // namespace
+
+int Repository::add_adventure_run(const AdventureRun& run) {
+    Statement stmt(db_,
+        "INSERT INTO AdventureRuns (Title, NextScene, Party, Status, LongRestTaken, StartedAt) "
+        "VALUES (?, ?, ?, ?, ?, ?);");
+    bind_text(stmt, 1, run.title);
+    sqlite3_bind_int(stmt.get(), 2, run.next_scene);
+    bind_text(stmt, 3, join_ids(run.party));
+    bind_text(stmt, 4, adventure_status_name(run.status));
+    sqlite3_bind_int(stmt.get(), 5, run.long_rest_taken ? 1 : 0);
+    bind_text(stmt, 6, run.started_at);
+    detail::run_and_expect_done(stmt, "insert adventure run");
+    return static_cast<int>(sqlite3_last_insert_rowid(db_));
+}
+
+void Repository::update_adventure_run(const AdventureRun& run) {
+    Statement stmt(db_,
+        "UPDATE AdventureRuns SET Title = ?, NextScene = ?, Party = ?, Status = ?, LongRestTaken = ?, StartedAt = ? "
+        "WHERE AdventureRunID = ?;");
+    bind_text(stmt, 1, run.title);
+    sqlite3_bind_int(stmt.get(), 2, run.next_scene);
+    bind_text(stmt, 3, join_ids(run.party));
+    bind_text(stmt, 4, adventure_status_name(run.status));
+    sqlite3_bind_int(stmt.get(), 5, run.long_rest_taken ? 1 : 0);
+    bind_text(stmt, 6, run.started_at);
+    sqlite3_bind_int(stmt.get(), 7, run.run_id);
+    detail::run_and_expect_done(stmt, "update adventure run");
+}
+
+std::vector<AdventureRun> Repository::get_adventure_runs(bool in_progress_only) const {
+    std::string sql = "SELECT AdventureRunID, Title, NextScene, Party, Status, LongRestTaken, StartedAt "
+                      "FROM AdventureRuns";
+    if (in_progress_only) sql += " WHERE Status = 'InProgress'";
+    sql += " ORDER BY AdventureRunID DESC;";
+    Statement stmt(db_, sql.c_str());
+    std::vector<AdventureRun> runs;
+    while (sqlite3_step(stmt.get()) == SQLITE_ROW) {
+        AdventureRun run;
+        run.run_id = sqlite3_column_int(stmt.get(), 0);
+        run.title = column_text(stmt.get(), 1);
+        run.next_scene = sqlite3_column_int(stmt.get(), 2);
+        run.party = split_ids(column_text(stmt.get(), 3));
+        run.status = adventure_status_from_name(column_text(stmt.get(), 4));
+        run.long_rest_taken = sqlite3_column_int(stmt.get(), 5) != 0;
+        run.started_at = column_text(stmt.get(), 6);
+        runs.push_back(std::move(run));
+    }
+    return runs;
 }
 
 void Repository::with_transaction(const std::function<void()>& work) {

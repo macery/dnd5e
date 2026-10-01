@@ -54,7 +54,15 @@ It manages players and characters, computes a full character sheet from the 5e r
   - Dodge imposes disadvantage on attacks against you.
   - Drink Potion heals from your inventory.
   - The encounter ends with a victory or a defeat.
-- **Solo adventures**: pre-built mini-encounters, each with a hook, its monsters, a victory payoff, and loot.
+- **Solo adventures** ([docs/adventures-and-currency.md](docs/adventures-and-currency.md)): twelve pre-built adventures. Nine are single fights; three are multi-fight runs (The Goblin Warren, Crypt of the Restless, The Hill Giant's Toll).
+  - **Party:** you pick who goes.
+  - **Fights:** each comes with narration, is scaled for the party (the final fight toward Hard), and pays coins and loot.
+  - **Between fights:**
+    - press on;
+    - take a short rest, with hit dice chosen per character;
+    - take a long rest at the adventure's camps, with Level Up for anyone ready;
+    - or retreat, keeping what you've earned.
+  - **Saving:** progress is saved between fights, and Solo Adventure offers to resume.
 - **Export, import, and backup** ([docs/save-load.md](docs/save-load.md)):
   - **Export…** saves a player's characters, or just one, to a readable `.dnd5e.json` file: stats, XP, proficiencies, spent resources, inventory, and spells, all by name.
   - **Import…** previews the file before anything changes: which player the characters go to, a choice for any name clash (import as a copy, replace, or skip), and anything this version doesn't have.
@@ -300,7 +308,8 @@ Phases 1 (core and data) and 2 (UI) are done; see [docs/magic-system.md](docs/ma
 
 - [ ] **More monsters**: 19 SRD stat blocks from CR 1/8 to 5 so far. Still to come: higher CRs, monster spellcasters, and the traits that need a map.
 - [ ] **Monster editor**: add and edit custom monsters in the UI.
-- [ ] **Multi-encounter adventures** ([docs/adventures-and-currency.md](docs/adventures-and-currency.md)): several fights in a row, with rests in between.
+- [x] **Multi-encounter adventures** ([docs/adventures-and-currency.md](docs/adventures-and-currency.md)): adventures made of scenes, party choice, short and long rests between fights (long rests at camps), retreat, progress saved between fights (Resume), and three multi-fight adventures.
+- [ ] **More adventure content**: branching choices, skill checks, and traps between fights. Scenes are narration plus a fight for now.
 - [x] **Encounter difficulty**:
   - Fights are rated Trivial, Easy, Medium, Hard, or Deadly with the 2014 encounter-building rules: XP thresholds by level, plus a multiplier for the number of monsters.
   - Combat Encounter shows the rating live.

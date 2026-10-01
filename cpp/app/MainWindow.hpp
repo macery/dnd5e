@@ -3,6 +3,7 @@
 #include <QMainWindow>
 #include <vector>
 
+#include "dnd/adventure_run.hpp"
 #include "dnd/dice.hpp"
 #include "dnd/lookup_entry.hpp"
 #include "dnd/repository.hpp"
@@ -47,6 +48,8 @@ private slots:
     void onSoloAdventureClicked();
 
 private:
+    // Plays a multi-scene adventure from wherever `run` is, saving it after each step.
+    void playAdventure(dnd::AdventureRun run);
     void reloadPlayers();
     void reloadLookupTables();
     void reloadCharactersForCurrentPlayer();
@@ -90,8 +93,6 @@ private:
     QPushButton* monstersButton_ = nullptr;
     QPushButton* combatEncounterButton_ = nullptr;
     QPushButton* soloAdventureButton_ = nullptr;
-    dnd::SystemRandomSource randomSource_;
-    dnd::Dice dice_{randomSource_};
 
     CharacterTableModel* characterModel_ = nullptr;
     DiceRollerWidget* diceRoller_ = nullptr;
