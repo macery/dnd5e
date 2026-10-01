@@ -190,10 +190,29 @@ const std::vector<FightingStyleInfo>& fighting_styles() {
     return styles;
 }
 
+int fighting_style_level(const std::string& class_name) {
+    if (class_name == "Fighter") return 1;
+    if (class_name == "Paladin" || class_name == "Ranger") return 2;
+    return 0;
+}
+
+std::vector<FightingStyle> fighting_styles_for(const std::string& class_name) {
+    using S = FightingStyle;
+    if (class_name == "Fighter") return {S::Archery, S::Defense, S::Dueling, S::GreatWeaponFighting};
+    if (class_name == "Paladin") return {S::Defense, S::Dueling, S::GreatWeaponFighting};
+    if (class_name == "Ranger") return {S::Archery, S::Defense, S::Dueling};
+    return {};
+}
+
 FightingStyle fighting_style(const Character& character, const std::string& class_name) {
-    if (class_name != "Fighter") return FightingStyle::None;
+    int level = fighting_style_level(class_name);
+    if (level == 0 || character.level < level) return FightingStyle::None;
+    auto allowed = fighting_styles_for(class_name);
     for (const auto& info : fighting_styles()) {
-        if (character.fighting_style == info.key) return info.style;
+        if (character.fighting_style == info.key &&
+            std::find(allowed.begin(), allowed.end(), info.style) != allowed.end()) {
+            return info.style;
+        }
     }
     return FightingStyle::None;
 }

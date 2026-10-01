@@ -952,24 +952,12 @@ void Encounter::award_victory_experience() {
 
     for (auto& character : characters_) {
         if (character.dead) continue;
-        int levels_gained = award_experience(character, share, hit_die_for_class_id(classes_, character.class_id));
+        int levels_available = award_experience(character, share);
         changed(character.character_id);
-
-        for (auto& combatant : combatants_) {
-            if (combatant.is_character && combatant.character_id == character.character_id) {
-                combatant.current_hp = character.current_hp;
-                combatant.max_hp = character.max_hp;
-            }
-        }
-
-        if (levels_gained > 0) {
-            log("*** " + character.character_name + " reaches level " + std::to_string(character.level) +
-                "! Max HP is now " + std::to_string(character.max_hp) + ". ***");
-            const ClassInfo* info = find_class_info_by_id(classes_, character.class_id);
-            if (info && is_spellcaster(*info)) {
-                log("    " + character.character_name +
-                    " may be able to learn new spells -- open the Spellbook from the main window.");
-            }
+        if (levels_available > 0) {
+            log("*** " + character.character_name + " has enough XP for level " +
+                std::to_string(level_for_xp(character.experience)) +
+                "! Use Level Up on the main window. ***");
         }
     }
 }

@@ -248,7 +248,7 @@ TEST_CASE("attacking to victory awards XP and loot", "[encounter]") {
     REQUIRE(encounter.take_events().empty());
 }
 
-TEST_CASE("victory can level a character up", "[encounter]") {
+TEST_CASE("victory can make a level available", "[encounter]") {
     Fixture f;
     ScriptedRandomSource rolls({20, 1, 15, 8});
     dnd::Dice dice(rolls);
@@ -261,9 +261,9 @@ TEST_CASE("victory can level a character up", "[encounter]") {
     encounter.attack(1, 5, 1, 8, 3);
 
     auto lines = logs(encounter.take_events());
-    REQUIRE(contains(lines, "*** Aria reaches level 2! Max HP is now 20. ***"));  // d10 avg 6 + CON 2
-    REQUIRE(encounter.character(1)->level == 2);
-    REQUIRE(encounter.combatants()[0].max_hp == 20);
+    REQUIRE(contains(lines, "*** Aria has enough XP for level 2! Use Level Up on the main window. ***"));
+    REQUIRE(encounter.character(1)->level == 1);  // the player levels up (dnd/level_up.hpp)
+    REQUIRE(encounter.character(1)->experience == 330);
 }
 
 TEST_CASE("defeat when every character is down", "[encounter]") {

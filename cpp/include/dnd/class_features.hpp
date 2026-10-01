@@ -86,8 +86,14 @@ struct FightingStyleInfo {
 // The styles offered (PHB ch. 3); Protection and Two-Weapon Fighting need
 // rules the app doesn't have yet (reactions, off-hand attacks).
 const std::vector<FightingStyleInfo>& fighting_styles();
-// The character's style; None if empty, unknown, or the class has no
-// Fighting Style.
+// The level a class gains its Fighting Style: Fighter 1, Paladin and Ranger
+// 2; 0 for classes without one.
+int fighting_style_level(const std::string& class_name);
+// The styles this class may choose: Fighters any; Paladins Defense, Dueling,
+// Great Weapon Fighting; Rangers Archery, Defense, Dueling. Empty otherwise.
+std::vector<FightingStyle> fighting_styles_for(const std::string& class_name);
+// The character's style; None if empty, unknown, not one the class can take,
+// or the character is below fighting_style_level.
 FightingStyle fighting_style(const Character& character, const std::string& class_name);
 const FightingStyleInfo* fighting_style_info(FightingStyle style);  // nullptr for None
 

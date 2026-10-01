@@ -64,31 +64,29 @@ TEST_CASE("level_up_hp_gain uses the fixed average plus CON, minimum 1", "[progr
     REQUIRE(dnd::level_up_hp_gain(6, 1) == 1);    // 4 - 5, floored at 1
 }
 
-TEST_CASE("award_experience levels up and grows HP", "[progression]") {
+TEST_CASE("award_experience makes levels available without applying them", "[progression]") {
     dnd::Character character;
-    character.constitution = 14;  // +2
     character.max_hp = 12;
-    character.current_hp = 5;
 
-    SECTION("below the next threshold, only XP changes") {
-        REQUIRE(dnd::award_experience(character, 299, 10) == 0);
+    SECTION("below the next threshold") {
+        REQUIRE(dnd::award_experience(character, 299) == 0);
         REQUIRE(character.experience == 299);
-        REQUIRE(character.level == 1);
+    }
+
+    SECTION("crossing several thresholds") {
+        REQUIRE(dnd::award_experience(character, 900) == 2);
+        REQUIRE(character.experience == 900);
+        REQUIRE(character.level == 1);  // the player levels up
         REQUIRE(character.max_hp == 12);
+        // Levels already available aren't counted again.
+        REQUIRE(dnd::award_experience(character, 100) == 0);
+        REQUIRE(dnd::award_experience(character, 1700) == 1);  // 2700: level 4
     }
 
-    SECTION("crossing several thresholds applies every level") {
-        REQUIRE(dnd::award_experience(character, 900, 10) == 2);
-        REQUIRE(character.level == 3);
-        REQUIRE(character.max_hp == 12 + 2 * 8);
-        REQUIRE(character.current_hp == 5 + 2 * 8);
-    }
-
-    SECTION("never goes past level 20") {
+    SECTION("never past level 20") {
         character.level = 20;
         character.experience = 355000;
-        REQUIRE(dnd::award_experience(character, 100000, 10) == 0);
-        REQUIRE(character.level == 20);
+        REQUIRE(dnd::award_experience(character, 100000) == 0);
     }
 }
 

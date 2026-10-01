@@ -1,6 +1,17 @@
 # Level-up design
 
-Status: **design settled 2026-10-01 (see [Decisions](#decisions)); phase 1 next.** Rules follow the 2014 Player's Handbook: ch. 1 ("Beyond 1st Level") and ch. 3 (class tables).
+Status: **phase 1 (rules) done;** phase 2 (the Level Up dialog and UI) is next. Decisions were settled on 2026-10-01; see [Decisions](#decisions).
+
+**Phase 1 as built (`dnd/level_up`):**
+- **`pending_levels`:** levels the XP has earned but the character hasn't taken.
+- **`has_ability_score_improvement`:** the PHB ASI levels, including the Fighter's and the Rogue's extras.
+- **`class_feature_names` / `class_features_at`:** every class's PHB ch. 3 features for levels 1–20, each flagged as automated or shown only.
+- **`level_up_plan`:** the hit die and average, the ASI, a due Fighting Style and its options, the features gained, the spell allowance before and after, and `scaling_changes`. The changes cover proficiency, max HP, hit dice, attacks, feature uses, Rage damage, Sneak Attack, the Martial Arts and Bardic Inspiration dice, spells, and slots.
+- **`validate_level_up`, `level_up_hp_increase`, `apply_level_up`:** roll or average, plus CON, minimum 1, with retroactive CON. The ASI is +2 to one ability or +1 to two, capped at 20.
+- **Fighting Styles per class:** Paladins (Defense, Dueling, Great Weapon Fighting) and Rangers (Archery, Defense, Dueling) from level 2.
+- **`award_experience`** only adds XP now and reports newly available levels. The victory log says "has enough XP for level N! Use Level Up on the main window."
+
+**Until phase 2 lands,** characters can't level up through play: XP piles up and the level stays put. Rules follow the 2014 Player's Handbook: ch. 1 ("Beyond 1st Level") and ch. 3 (class tables).
 
 ## Where things stand
 

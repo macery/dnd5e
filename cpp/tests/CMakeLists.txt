@@ -17,6 +17,7 @@ add_executable(dnd_tests
     test_encounter.cpp
     test_equipment.cpp
     test_inventory.cpp
+    test_level_up.cpp
     test_migrations.cpp
     test_progression.cpp
     test_repository.cpp

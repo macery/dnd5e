@@ -176,7 +176,14 @@ TEST_CASE("Fighting Styles belong to Fighters", "[class_features]") {
     dnd::Character c;
     c.fighting_style = "GreatWeaponFighting";
     REQUIRE(dnd::fighting_style(c, "Fighter") == dnd::FightingStyle::GreatWeaponFighting);
-    REQUIRE(dnd::fighting_style(c, "Paladin") == dnd::FightingStyle::None);  // Paladins get theirs at level 2, later
+    REQUIRE(dnd::fighting_style(c, "Wizard") == dnd::FightingStyle::None);
+    c.level = 1;
+    REQUIRE(dnd::fighting_style(c, "Paladin") == dnd::FightingStyle::None);  // Paladins choose at level 2
+    c.level = 2;
+    REQUIRE(dnd::fighting_style(c, "Paladin") == dnd::FightingStyle::GreatWeaponFighting);
+    REQUIRE(dnd::fighting_style(c, "Ranger") == dnd::FightingStyle::None);  // not a Ranger style
+    REQUIRE(dnd::fighting_style_level("Ranger") == 2);
+    REQUIRE(dnd::fighting_styles_for("Ranger").size() == 3);
     c.fighting_style = "Nonsense";
     REQUIRE(dnd::fighting_style(c, "Fighter") == dnd::FightingStyle::None);
     REQUIRE(std::string(dnd::fighting_style_info(dnd::FightingStyle::Defense)->name) == "Defense");

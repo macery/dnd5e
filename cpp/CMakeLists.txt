@@ -26,6 +26,7 @@ add_library(dndcore
     src/encounter.cpp
     src/equipment.cpp
     src/inventory.cpp
+    src/level_up.cpp
     src/migrations.cpp
     src/progression.cpp
     src/repository.cpp

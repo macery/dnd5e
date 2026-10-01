@@ -40,10 +40,10 @@ int hit_die_for_class_id(const std::vector<LookupEntry>& classes, int class_id);
 // (hit_die / 2 + 1) + CON modifier, never less than 1.
 int level_up_hp_gain(int hit_die, int constitution);
 
-// Adds `xp` to character.experience and applies every level-up it earns
-// (up to kMaxLevel): level increases, and max HP and current HP both grow
-// by level_up_hp_gain per level. Returns the number of levels gained.
-int award_experience(Character& character, int xp, int hit_die);
+// Adds `xp` to character.experience. Levels aren't applied here: XP makes
+// them available, and the player takes them with apply_level_up
+// (dnd/level_up.hpp). Returns how many more levels this XP made available.
+int award_experience(Character& character, int xp);
 
 // Hit dice available to spend on a short rest (one per level, minus any
 // already spent since the last long rest).

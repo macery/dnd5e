@@ -73,18 +73,10 @@ int level_up_hp_gain(int hit_die, int constitution) {
     return std::max(1, hit_die / 2 + 1 + ability_modifier(constitution));
 }
 
-int award_experience(Character& character, int xp, int hit_die) {
+int award_experience(Character& character, int xp) {
+    int before = std::max(character.level, level_for_xp(character.experience));
     character.experience += xp;
-
-    int levels_gained = 0;
-    int per_level = level_up_hp_gain(hit_die, character.constitution);
-    while (character.level < level_for_xp(character.experience)) {
-        ++character.level;
-        character.max_hp += per_level;
-        character.current_hp += per_level;
-        ++levels_gained;
-    }
-    return levels_gained;
+    return std::max(0, level_for_xp(character.experience) - before);
 }
 
 int hit_dice_remaining(const Character& character) {
