@@ -612,4 +612,34 @@ void Repository::delete_character(int character_id) {
     detail::run_and_expect_done(stmt, "delete character");
 }
 
+void Repository::with_transaction(const std::function<void()>& work) {
+    static int depth = 0;  // unique savepoint names for nested calls
+    std::string name = "tx" + std::to_string(++depth);
+    sqlite3_exec(db_, ("SAVEPOINT " + name + ";").c_str(), nullptr, nullptr, nullptr);
+    try {
+        work();
+        sqlite3_exec(db_, ("RELEASE " + name + ";").c_str(), nullptr, nullptr, nullptr);
+    } catch (...) {
+        sqlite3_exec(db_, ("ROLLBACK TO " + name + "; RELEASE " + name + ";").c_str(), nullptr, nullptr, nullptr);
+        --depth;
+        throw;
+    }
+    --depth;
+}
+
+void Repository::backup_to(const std::string& path) const {
+    sqlite3* destination = nullptr;
+    if (sqlite3_open(path.c_str(), &destination) != SQLITE_OK) {
+        std::string error = destination ? sqlite3_errmsg(destination) : "out of memory";
+        sqlite3_close(destination);
+        throw std::runtime_error("couldn't open " + path + ": " + error);
+    }
+    sqlite3_backup* backup = sqlite3_backup_init(destination, "main", db_, "main");
+    int result = backup ? sqlite3_backup_step(backup, -1) : SQLITE_ERROR;
+    if (backup) sqlite3_backup_finish(backup);
+    std::string error = sqlite3_errmsg(destination);
+    sqlite3_close(destination);
+    if (result != SQLITE_DONE) throw std::runtime_error("couldn't back up the database to " + path + ": " + error);
+}
+
 }  // namespace dnd

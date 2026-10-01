@@ -11,6 +11,7 @@ list(APPEND CMAKE_MODULE_PATH "${catch2_SOURCE_DIR}/extras")
 add_executable(dnd_tests
     test_adventure.cpp
     test_character_creation.cpp
+    test_character_io.cpp
     test_combat.cpp
     test_damage.cpp
     test_dice.cpp

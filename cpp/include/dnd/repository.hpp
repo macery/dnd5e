@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -70,6 +71,15 @@ public:
 
     void update_character(const Character& character);
     void delete_character(int character_id);
+
+    // Runs `work` atomically: everything it changes is committed, or -- if it
+    // throws -- rolled back and the exception rethrown. Nests safely (a
+    // savepoint, not BEGIN).
+    void with_transaction(const std::function<void()>& work);
+
+    // Writes a complete copy of the database to `path` (SQLite's online
+    // backup), overwriting it. Throws std::runtime_error on failure.
+    void backup_to(const std::string& path) const;
 
 private:
     sqlite3* db_ = nullptr;

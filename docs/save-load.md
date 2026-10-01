@@ -1,6 +1,15 @@
 # Save/load (export and import characters) design
 
-Status: **design settled 2026-10-01 (see [Decisions](#decisions)); phase 1 next.**
+Status: **phase 1 (format and core) done;** phase 2 (UI) is next. Decisions were settled on 2026-10-01; see [Decisions](#decisions).
+
+**Phase 1 as built:**
+- **nlohmann/json 3.11.3**, fetched by CMake from its release tarball with the hash pinned. It's linked privately into `dndcore`.
+- **`dnd/character_io`:**
+  - **`to_json` / `parse_character_file`:** the format and version are checked first. Newer versions are refused, and missing or mistyped fields give a "damaged or incomplete" error. Keys are written in order, so files read top-down.
+  - **`export_player` / `export_character`:** everything by name. Proficiencies are written as lists of names.
+  - **`plan_import`:** the target player is matched by name. Classes, races, and alignments are resolved, or the character is refused with a reason. Unknown items, spells, skills, and Fighting Styles become warnings. Name conflicts get the next free "Name (N)".
+  - **`apply_import`:** Import as a copy, Replace, or Skip per character, into the file's player or a chosen one, all in one transaction.
+- **`Repository::with_transaction`** (savepoints, so it nests) and **`Repository::backup_to`** (SQLite's online backup).
 
 ## Where things stand
 

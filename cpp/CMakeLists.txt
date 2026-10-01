@@ -16,9 +16,23 @@ else()
     set(sqlite3_target SQLite::SQLite3)
 endif()
 
+# JSON for character export/import (dnd/character_io): header-only, MIT,
+# fetched like Catch2. The release tarball is small; the git repo isn't.
+include(FetchContent)
+if(POLICY CMP0135)
+    cmake_policy(SET CMP0135 NEW)
+endif()
+FetchContent_Declare(
+    nlohmann_json
+    URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz
+    URL_HASH SHA256=d6c65aca6b1ed68e7a182f4757257b107ae403032760ed6ef121c9d55e81757d
+)
+FetchContent_MakeAvailable(nlohmann_json)
+
 add_library(dndcore
     src/adventure.cpp
     src/character_creation.cpp
+    src/character_io.cpp
     src/class_features.cpp
     src/combat.cpp
     src/damage.cpp
@@ -37,7 +51,7 @@ add_library(dndcore
     src/turn.cpp
 )
 target_include_directories(dndcore PUBLIC include)
-target_link_libraries(dndcore PUBLIC ${sqlite3_target})
+target_link_libraries(dndcore PUBLIC ${sqlite3_target} PRIVATE nlohmann_json::nlohmann_json)
 
 enable_testing()
 add_subdirectory(tests)
