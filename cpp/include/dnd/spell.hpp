@@ -93,6 +93,9 @@ struct Spell {
     // Save spells: targets save with advantage in combat ("if you or your
     // companions are fighting it", Charm Person).
     bool combat_save_advantage = false;
+    // Only creatures of this type can be targeted ("Humanoid" for Charm
+    // Person); empty for any.
+    std::string target_creature_type;
     std::vector<SpellEffectSpec> effects;  // SpellEffects rows
 
     std::vector<std::string> class_names;  // classes whose list includes it (ClassSpells)

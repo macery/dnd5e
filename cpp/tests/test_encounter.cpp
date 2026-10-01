@@ -1013,8 +1013,9 @@ TEST_CASE("status tooltips explain effects in plain language", "[encounter][effe
     REQUIRE(caster.size() == 1);
     REQUIRE(caster[0].rfind("Concentrating on Bless: taking damage forces a CON save", 0) == 0);
     auto goblin = encounter.status_tooltip(2);
-    REQUIRE(goblin.size() == 1);
+    REQUIRE(goblin.size() == 2);
     REQUIRE(goblin[0].rfind("Prone: Its attacks have disadvantage.", 0) == 0);
+    REQUIRE(goblin[1] == "Humanoid.");  // its creature type and traits
     REQUIRE(goblin[0].find("(from Aria)") != std::string::npos);
 }
 
@@ -1260,7 +1261,7 @@ TEST_CASE("Rage: damage, resistance, and when it ends", "[encounter][class_featu
         REQUIRE(contains(logs(encounter.take_events()), "-> hit for 10 (+2 Rage). Goblin #1 is now 0/7 HP."));
 
         encounter.next_turn();  // Goblin #2 hits Grog, halved
-        REQUIRE(contains(logs(encounter.take_events()), "-> hit for 3 (halved by Rage). Grog is now 9/12 HP."));
+        REQUIRE(contains(logs(encounter.take_events()), "-> hit for 3 (halved: resistant to slashing). Grog is now 9/12 HP."));
 
         encounter.dash();
         encounter.next_turn();  // he took damage since his last turn: the rage holds
@@ -1540,4 +1541,90 @@ TEST_CASE("Great Weapon Fighting in a fight", "[encounter][class_features]") {
     REQUIRE(encounter.attack(1, 5, 2, 6, 3));
     REQUIRE(contains(logs(encounter.take_events()),
                      "-> hit for 14 (Great Weapon Fighting rerolled 1 die). Orc is now 1/15 HP."));
+}
+
+TEST_CASE("damage types: vulnerability, immunity, and Rage as resistance", "[encounter][damage]") {
+    Fixture f;
+
+    SECTION("a mace doubles against a skeleton") {
+        // Aria first. d20 15 hits AC 13; d6 3 (+3) = 6, doubled.
+        ScriptedRandomSource rolls({20, 1, 15, 3});
+        dnd::Dice dice(rolls);
+        auto encounter = f.encounter(dice);
+        encounter.add_character(f.fighter(), {}, {{f.item("Mace"), 1, true}});
+        encounter.add_monsters(f.monster("Skeleton"), 1);
+        encounter.roll_initiative();
+        encounter.take_events();
+        REQUIRE(encounter.attack(1, 5, 1, 6, 3));
+        REQUIRE(contains(logs(encounter.take_events()),
+                         "-> hit for 12 (doubled: vulnerable to bludgeoning). Skeleton is now 1/13 HP."));
+    }
+
+    SECTION("poison does nothing to a zombie, which can't be poisoned either") {
+        // Zanna first. Poison Spray: the Zombie's CON save d20 1 fails; d12 8.
+        ScriptedRandomSource rolls({20, 1, 1, 8});
+        dnd::Dice dice(rolls);
+        auto encounter = f.encounter(dice);
+        auto spray = f.spell("Poison Spray");
+        encounter.add_character(f.wizard(1), {spray}, {});
+        encounter.add_monsters(f.monster("Zombie"), 1);
+        encounter.roll_initiative();
+        encounter.take_events();
+        REQUIRE(encounter.cast_spell(spray.spell_id, 0, {1}));
+        REQUIRE(contains(logs(encounter.take_events()), "takes 0 (immune to poison). Now 22/22 HP."));
+
+        dnd::ActiveEffect poisoned;
+        poisoned.kind = dnd::EffectKind::Condition;
+        poisoned.condition = dnd::Condition::Poisoned;
+        poisoned.target = 1;
+        REQUIRE(encounter.add_effect(poisoned) == 0);
+        REQUIRE(contains(logs(encounter.take_events()), "Zombie is immune to being poisoned."));
+        REQUIRE_FALSE(dnd::has_condition(encounter.effects(), 1, dnd::Condition::Poisoned));
+    }
+
+    SECTION("Rage resists bludgeoning, piercing, and slashing only") {
+        ScriptedRandomSource rolls({20, 1});
+        dnd::Dice dice(rolls);
+        auto encounter = f.encounter(dice);
+        encounter.add_character(classed(f, 1, "Grog", "Barbarian"), {}, {{f.item("Greataxe"), 1, true}});
+        encounter.add_monsters(f.monster("Goblin"), 1);
+        encounter.roll_initiative();
+        REQUIRE(encounter.damage_traits(0).resistances.empty());
+        REQUIRE(encounter.use_bonus_action(BonusAction::Rage));
+        auto resists = encounter.damage_traits(0).resistances;
+        REQUIRE(resists == std::vector<std::string>{"bludgeoning", "piercing", "slashing"});
+        REQUIRE(dnd::damage_modifier(encounter.damage_traits(0), "fire") == dnd::DamageModifier::Normal);
+    }
+}
+
+TEST_CASE("creature types: Charm Person and Divine Smite", "[encounter][damage]") {
+    Fixture f;
+
+    SECTION("Charm Person targets humanoids only") {
+        ScriptedRandomSource rolls({20, 1, 1});
+        dnd::Dice dice(rolls);
+        auto encounter = f.encounter(dice);
+        auto charm = f.spell("Charm Person");
+        encounter.add_character(f.wizard(1), {charm}, {});
+        encounter.add_monsters(f.monster("Goblin"), 1);
+        encounter.add_monsters(f.monster("Skeleton"), 1);
+        encounter.roll_initiative();
+        REQUIRE(encounter.spell_target_candidates(charm) == std::vector<int>{1});  // not the Skeleton (2)
+    }
+
+    SECTION("Divine Smite adds a die against undead") {
+        // Sera first. d20 15 hits the Skeleton; longsword two-handed d10 5 (+3); smite 3d8: 1 + 1 + 1.
+        ScriptedRandomSource rolls({20, 1, 15, 5, 1, 1, 1});
+        dnd::Dice dice(rolls);
+        auto encounter = f.encounter(dice);
+        encounter.add_character(classed(f, 1, "Sera", "Paladin", 2), {}, f.fighter_gear());
+        encounter.add_monsters(f.monster("Skeleton"), 1);
+        encounter.roll_initiative();
+        encounter.take_events();
+        dnd::AttackOptions smite;
+        smite.divine_smite_slot = 1;
+        REQUIRE(encounter.attack(1, 5, 1, 10, 3, smite));
+        REQUIRE(contains(logs(encounter.take_events()),
+                         "-> hit for 11 (+3 radiant, Divine Smite 3d8 vs undead, level 1 slot). Skeleton is now 2/13 HP."));
+    }
 }

@@ -18,7 +18,7 @@ using detail::Statement;
 // for future schema changes -- never edit an existing one, since a
 // migration's sql is exactly what already ran on every database that has it
 // recorded in SchemaMigrations.
-constexpr std::array<Migration, 17> kMigrations = {{
+constexpr std::array<Migration, 18> kMigrations = {{
     {1, "initial schema: Players, Classes, Characters", R"sql(
         CREATE TABLE IF NOT EXISTS Players (
             PlayerID INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -609,6 +609,63 @@ constexpr std::array<Migration, 17> kMigrations = {{
     )sql"},
     {17, "add FightingStyle to Characters", R"sql(
         ALTER TABLE Characters ADD COLUMN FightingStyle TEXT NOT NULL DEFAULT '';
+    )sql"},
+    {18, "creature types, damage traits, and MonsterAttacks", R"sql(
+        ALTER TABLE Monsters ADD COLUMN CreatureType TEXT NOT NULL DEFAULT '';
+        ALTER TABLE Monsters ADD COLUMN DamageResistances TEXT NOT NULL DEFAULT '';
+        ALTER TABLE Monsters ADD COLUMN DamageVulnerabilities TEXT NOT NULL DEFAULT '';
+        ALTER TABLE Monsters ADD COLUMN DamageImmunities TEXT NOT NULL DEFAULT '';
+        ALTER TABLE Monsters ADD COLUMN ConditionImmunities TEXT NOT NULL DEFAULT '';
+        ALTER TABLE Monsters ADD COLUMN Multiattack TEXT NOT NULL DEFAULT '';
+
+        -- Every attack a stat block makes, in order. Replaces the single-attack
+        -- columns on Monsters (AttackName ... OnHitCondition), which stay but are
+        -- no longer read.
+        CREATE TABLE MonsterAttacks (
+            MonsterAttackID  INTEGER PRIMARY KEY AUTOINCREMENT,
+            MonsterID        INTEGER NOT NULL REFERENCES Monsters(MonsterID) ON DELETE CASCADE,
+            Position         INTEGER NOT NULL DEFAULT 1,
+            Name             TEXT NOT NULL,
+            AttackBonus      INTEGER NOT NULL DEFAULT 0,
+            DamageDiceCount  INTEGER NOT NULL DEFAULT 1,
+            DamageDiceSides  INTEGER NOT NULL DEFAULT 4,
+            DamageBonus      INTEGER NOT NULL DEFAULT 0,
+            DamageType       TEXT NOT NULL DEFAULT '',
+            Ranged           INTEGER NOT NULL DEFAULT 0,
+            ExtraDiceCount   INTEGER NOT NULL DEFAULT 0,
+            ExtraDiceSides   INTEGER NOT NULL DEFAULT 0,
+            ExtraDamageType  TEXT NOT NULL DEFAULT '',
+            OnHitSaveAbility TEXT NOT NULL DEFAULT '',
+            OnHitSaveDC      INTEGER NOT NULL DEFAULT 0,
+            OnHitCondition   TEXT NOT NULL DEFAULT '',
+            Count            INTEGER NOT NULL DEFAULT 1
+        );
+        INSERT INTO MonsterAttacks (MonsterID, Position, Name, AttackBonus, DamageDiceCount, DamageDiceSides,
+                                    DamageBonus, OnHitSaveAbility, OnHitSaveDC, OnHitCondition)
+            SELECT MonsterID, 1, AttackName, AttackBonus, DamageDiceCount, DamageDiceSides, DamageBonus,
+                   OnHitSaveAbility, OnHitSaveDC, OnHitCondition
+            FROM Monsters WHERE AttackName <> '';
+
+        -- SRD 5.1 damage types for the seeded attacks.
+        UPDATE MonsterAttacks SET DamageType = 'piercing'
+            WHERE Name IN ('Dagger', 'Shortsword', 'Bite');
+        UPDATE MonsterAttacks SET DamageType = 'slashing' WHERE Name IN ('Scimitar', 'Greataxe');
+        UPDATE MonsterAttacks SET DamageType = 'bludgeoning' WHERE Name = 'Slam';
+
+        -- SRD 5.1 creature types and traits.
+        UPDATE Monsters SET CreatureType = 'Humanoid' WHERE Name IN ('Kobold', 'Goblin', 'Orc');
+        UPDATE Monsters SET CreatureType = 'Beast' WHERE Name = 'Wolf';
+        UPDATE Monsters SET CreatureType = 'Undead', DamageVulnerabilities = 'bludgeoning',
+                            DamageImmunities = 'poison', ConditionImmunities = 'Poisoned'
+            WHERE Name = 'Skeleton';
+        UPDATE Monsters SET CreatureType = 'Undead', DamageImmunities = 'poison', ConditionImmunities = 'Poisoned'
+            WHERE Name = 'Zombie';
+
+        -- Spells limited to a creature type (Charm Person: humanoids).
+        ALTER TABLE Spells ADD COLUMN TargetCreatureType TEXT NOT NULL DEFAULT '';
+        UPDATE Spells SET TargetCreatureType = 'Humanoid',
+            Description = 'A humanoid makes a WIS save, with advantage because you''re fighting it, or is charmed by you for 1 hour: it won''t attack you. Harming it ends the charm.'
+            WHERE Name = 'Charm Person';
     )sql"},
 }};
 

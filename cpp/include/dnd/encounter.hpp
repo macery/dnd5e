@@ -40,6 +40,7 @@ struct Combatant {
     bool attack_finesse_or_ranged = false;  // for Sneak Attack
     bool attack_martial_arts = false;       // an unarmed strike or monk weapon (Martial Arts)
     bool attack_great_weapon_fighting = false;  // Fighting Style: reroll 1s and 2s on damage dice
+    std::string attack_damage_type;             // "slashing", ...
 
     // Characters only: class features (dnd/class_features.hpp).
     std::string class_name;
@@ -55,10 +56,13 @@ struct Combatant {
     int xp = 0;  // monsters only: awarded to the party on victory
     // Monsters only: STR..CHA, for saving throws. (Characters use their sheet.)
     std::array<int, 6> ability_scores{10, 10, 10, 10, 10, 10};
-    // Monsters only: an effect their attack adds on a hit (see Monster).
-    Ability on_hit_save_ability = Ability::Strength;
-    int on_hit_save_dc = 0;
-    Condition on_hit_condition = Condition::Prone;
+    // Monsters only: the stat block's attacks, creature type, and traits
+    // (dnd/monster.hpp). Characters have none (Rage adds resistances while
+    // it lasts; see damage_traits()).
+    std::vector<MonsterAttack> monster_attacks;
+    std::string creature_type;
+    DamageTraits damage_traits;
+    std::vector<Condition> condition_immunities;
 
     // Characters at 0 HP: dying (rolling death saves), stable, or dead.
     // Monsters simply die at 0 HP.
@@ -156,7 +160,8 @@ public:
     // Every effect currently in play (conditions, Dodge, spell effects).
     const std::vector<ActiveEffect>& effects() const { return effects_; }
     // Adds an effect (its id is assigned here) and returns the id. For spells
-    // and monster abilities, and for tests.
+    // and monster abilities, and for tests. A condition the target is immune
+    // to is refused: logged, and 0 is returned.
     int add_effect(ActiveEffect effect);
     void remove_effect(int effect_id);
     // `source` starts concentrating on `label`, ending any earlier
@@ -167,6 +172,10 @@ public:
 
     // Base AC plus effect bonuses (Shield of Faith).
     int armor_class(int index) const;
+    // The combatant's resistances, vulnerabilities, and immunities right now:
+    // a monster's stat block, plus bludgeoning/piercing/slashing resistance
+    // while raging.
+    DamageTraits damage_traits(int index) const;
     // A short status for the UI: "Up", "Up (Dodging, Prone)", "Dying ✓○○ ✗✗○"
     // (death save successes / failures), "Stable", "Dead", or "Down" for a
     // defeated monster.
@@ -274,7 +283,13 @@ private:
     // (Rage, Sneak Attack, Divine Favor, Reckless Attack, Great Weapon
     // Fighting, a monster's rider), and logs it. `smite_slot` > 0 spends a
     // slot of that level on a hit for Divine Smite.
-    void weapon_attack(int attacker, int target, const WeaponAttack& attack, int smite_slot = 0);
+    // `monster_attack` adds a stat block attack's extra damage and on-hit save.
+    void weapon_attack(int attacker, int target, const WeaponAttack& attack, int smite_slot = 0,
+                       const MonsterAttack* monster_attack = nullptr);
+    // `amount` of `type` damage to `target` after its resistances,
+    // vulnerabilities, and immunities; appends " (halved: resistant to
+    // slashing)"-style notes to `note`.
+    int typed_damage(int target, int amount, const std::string& type, std::string& note) const;
     bool is_raging(int index) const;
     // Ends a rage early; returns the log line ("" if not raging).
     std::string end_rage(int index, const std::string& reason);

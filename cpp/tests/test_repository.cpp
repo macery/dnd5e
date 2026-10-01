@@ -56,23 +56,63 @@ TEST_CASE("get_monsters returns the seeded sample enemies", "[repository]") {
     REQUIRE(goblin->armor_class == 15);
     REQUIRE(goblin->hit_points == 7);
     REQUIRE(goblin->challenge_rating == 0.25);
-    REQUIRE(goblin->attack_name == "Scimitar");
-    REQUIRE(goblin->attack_bonus == 4);
-    REQUIRE(goblin->damage_dice_count == 1);
-    REQUIRE(goblin->damage_dice_sides == 6);
-    REQUIRE(goblin->damage_bonus == 2);
+    REQUIRE(goblin->creature_type == "Humanoid");
+    REQUIRE(goblin->attacks.size() == 1);
+    const auto& scimitar = goblin->attacks.front();
+    REQUIRE(scimitar.name == "Scimitar");
+    REQUIRE(scimitar.attack_bonus == 4);
+    REQUIRE(scimitar.damage_dice_count == 1);
+    REQUIRE(scimitar.damage_dice_sides == 6);
+    REQUIRE(scimitar.damage_bonus == 2);
+    REQUIRE(scimitar.damage_type == "slashing");
+    REQUIRE(scimitar.count == 1);
+}
+
+TEST_CASE("every seeded monster has a type and typed attacks", "[repository]") {
+    dnd::Repository repo(":memory:");
+    for (const auto& monster : repo.get_monsters()) {
+        INFO(monster.name);
+        REQUIRE_FALSE(monster.creature_type.empty());
+        REQUIRE_FALSE(monster.attacks.empty());
+        for (const auto& attack : monster.attacks) REQUIRE_FALSE(attack.damage_type.empty());
+    }
+}
+
+TEST_CASE("undead traits: the Skeleton and Zombie", "[repository]") {
+    dnd::Repository repo(":memory:");
+    for (const auto& monster : repo.get_monsters()) {
+        if (monster.name == "Skeleton") {
+            REQUIRE(monster.creature_type == "Undead");
+            REQUIRE(monster.damage.vulnerabilities == std::vector<std::string>{"bludgeoning"});
+            REQUIRE(monster.damage.immunities == std::vector<std::string>{"poison"});
+            REQUIRE(monster.condition_immunities == std::vector<dnd::Condition>{dnd::Condition::Poisoned});
+        }
+        if (monster.name == "Zombie") {
+            REQUIRE(monster.damage.immunities == std::vector<std::string>{"poison"});
+            REQUIRE(monster.attacks.front().damage_type == "bludgeoning");
+        }
+    }
 }
 
 TEST_CASE("the Wolf's bite can knock a target prone", "[repository]") {
     dnd::Repository repo(":memory:");
     for (const auto& monster : repo.get_monsters()) {
+        const auto& attack = monster.attacks.front();
         if (monster.name == "Wolf") {
-            REQUIRE(monster.on_hit_save_dc == 11);
-            REQUIRE(monster.on_hit_save_ability == dnd::Ability::Strength);
-            REQUIRE(monster.on_hit_condition == dnd::Condition::Prone);
+            REQUIRE(attack.on_hit_save_dc == 11);
+            REQUIRE(attack.on_hit_save_ability == dnd::Ability::Strength);
+            REQUIRE(attack.on_hit_condition == dnd::Condition::Prone);
         } else {
-            REQUIRE(monster.on_hit_save_dc == 0);
+            REQUIRE(attack.on_hit_save_dc == 0);
         }
+    }
+}
+
+TEST_CASE("Charm Person targets humanoids only", "[repository]") {
+    dnd::Repository repo(":memory:");
+    for (const auto& spell : repo.get_spells()) {
+        if (spell.name == "Charm Person") REQUIRE(spell.target_creature_type == "Humanoid");
+        if (spell.name == "Fire Bolt") REQUIRE(spell.target_creature_type.empty());
     }
 }
 

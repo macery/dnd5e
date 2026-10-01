@@ -1,6 +1,21 @@
 # Monsters and encounter balance design
 
-Status: **design settled 2026-10-01 (see [Decisions](#decisions)); phase 1 next.** Rules follow the 2014 Player's Handbook, and monster stat blocks the 2014 rules' SRD 5.1 (see question 1).
+Status: **phase 1 (damage and creature types) done;** phase 2 (Multiattack and the roster) is next. Decisions were settled on 2026-10-01; see [Decisions](#decisions).
+
+**Phase 1 as built:**
+- **Migration 18:**
+  - **Monster traits:** `Monsters` gains `CreatureType`, the damage resistance, vulnerability, and immunity lists, `ConditionImmunities`, and `Multiattack`. The six seeded monsters get their SRD types and traits.
+  - **The `MonsterAttacks` table**, with damage types, extra dice, the on-hit save, and a count per turn. The old single-attack columns stay but are no longer read.
+  - **`Spells.TargetCreatureType`:** "Humanoid" for *Charm Person*.
+- **`dnd/damage`:** `DamageTraits`, `damage_modifier` (immunity wins; resistance and vulnerability cancel), `adjust_damage`, and log notes.
+- **`Encounter`:**
+  - **Typed hits:** every hit is typed and adjusted per part. A weapon's own damage (with Rage and Sneak Attack), radiant (Divine Favor and Divine Smite), a monster attack's extra dice, and spell damage are each adjusted for the target's traits separately.
+  - **Rage** is resistance to bludgeoning, piercing, and slashing (`damage_traits()`).
+  - **`add_effect`** refuses conditions the target is immune to.
+  - ***Charm Person*** targets humanoids only, and **Divine Smite** adds 1d8 against undead and fiends.
+  - **Monster turns** use the first `MonsterAttacks` row. Multiattack comes in phase 2.
+  - **Status tooltips** list a monster's type and traits.
+- **Monster list:** Type, Attacks (with damage types and riders), and Traits columns. Rules follow the 2014 Player's Handbook, and monster stat blocks the 2014 rules' SRD 5.1 (see question 1).
 
 ## Where things stand
 

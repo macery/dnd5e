@@ -270,12 +270,16 @@ Phases 1 (core and data) and 2 (UI) are done; see [docs/magic-system.md](docs/ma
 - [x] **Death saving throws**: characters at 0 HP fall unconscious and roll death saves each turn. A natural 1 counts as two failures, and a natural 20 brings them back with 1 HP. Massive damage kills outright. Healing revives them, and the fight's end stabilizes them. Monsters ignore the dying. A **Stabilize** action (Medicine check, or automatic with a Healer's Kit) and *Spare the Dying* stabilize the dying. Death save pips show in combat, and the dead are marked and kept out of play.
 - [ ] **Revival**: bring dead characters back the 2014 PHB way: *Revivify*, *Raise Dead*, *Reincarnate*, *Resurrection*, *True Resurrection*, or a temple's spellcasting service. It needs the spells, their material components, currency, and time tracking; see the effects design doc's Decisions.
 - [ ] **More actions**: Disengage, Help, Hide, and Ready. (Attack, Dash, Dodge, Drink Potion, Cast a Spell, and Stabilize exist.) Most need positions or reactions to mean much without a map; Help (advantage on an ally's next attack) works without one.
-- [ ] **Monsters and encounter balance** ([docs/monsters-and-encounters.md](docs/monsters-and-encounters.md)): covers the items below on several attacks, damage types, creature types, more monsters, and encounter difficulty.
+- [ ] **Monsters and encounter balance** ([docs/monsters-and-encounters.md](docs/monsters-and-encounters.md)): covers the items below on several attacks, damage types, creature types, more monsters, and encounter difficulty. Phase 1 (damage and creature types) is done; phase 2 (Multiattack and 13 SRD monsters, CR ½–5) is next.
 - [ ] **Monsters with several attacks**: Multiattack and more than one attack per stat block.
 - [ ] **Smarter monster AI**: monsters already ignore dying characters and won't attack whoever charmed them. Beyond that, they pick a random conscious character. Better choices might be the lowest HP, the biggest threat, or the spellcaster who's concentrating.
-- [ ] **Damage types**: resistances, vulnerabilities, and immunities (e.g. skeletons are vulnerable to bludgeoning). Weapon and spell damage types are already recorded; monsters need theirs.
+- [x] **Damage types**:
+  - Every hit is typed (weapon, spell, monster attack, and radiant for Divine Favor and Divine Smite).
+  - Resistance halves, vulnerability doubles, and immunity cancels. A skeleton takes double from a mace, and a zombie shrugs off Poison Spray.
+  - Rage is resistance to bludgeoning, piercing, and slashing.
+  - Monsters can be immune to conditions.
 - [ ] **Temporary hit points**: *Heroism*, *Armor of Agathys*, and similar effects that soak damage before HP.
-- [ ] **Creature types**: humanoid, undead, beast, and so on, on each monster. *Charm Person* should only work on humanoids (today it works on anything), and *Protection from Evil and Good* needs them.
+- [x] **Creature types**: on every monster. *Charm Person* targets humanoids only, and Divine Smite adds 1d8 against undead and fiends. (*Protection from Evil and Good* is still a utility spell.)
 - [ ] **Save log**: save the combat log or an encounter summary when the encounter ends.
 
 ### Content

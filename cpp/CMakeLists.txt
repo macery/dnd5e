@@ -21,6 +21,7 @@ add_library(dndcore
     src/character_creation.cpp
     src/class_features.cpp
     src/combat.cpp
+    src/damage.cpp
     src/dice.cpp
     src/effects.cpp
     src/encounter.cpp

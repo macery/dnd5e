@@ -173,7 +173,8 @@ constexpr const char* kSpellColumns =
     "Spells.RangeText, Spells.DurationText, Spells.Concentration, Spells.Resolution, Spells.MeleeAttack, "
     "Spells.SaveAbility, Spells.SaveHalves, Spells.DiceCount, Spells.DiceSides, Spells.FlatBonus, "
     "Spells.AddsModifier, Spells.DamageType, Spells.Projectiles, Spells.MaxTargets, Spells.UpcastDice, "
-    "Spells.UpcastProjectiles, Spells.CantripScaling, Spells.UpcastTargets, Spells.CombatSaveAdvantage";
+    "Spells.UpcastProjectiles, Spells.CantripScaling, Spells.UpcastTargets, Spells.CombatSaveAdvantage, "
+    "Spells.TargetCreatureType";
 
 Spell read_spell_row(sqlite3_stmt* stmt) {
     Spell spell;
@@ -203,6 +204,7 @@ Spell read_spell_row(sqlite3_stmt* stmt) {
     spell.cantrip_scaling = cantrip_scaling_from_name(column_text(stmt, 22));
     spell.upcast_targets = sqlite3_column_int(stmt, 23);
     spell.combat_save_advantage = sqlite3_column_int(stmt, 24) != 0;
+    spell.target_creature_type = column_text(stmt, 25);
     return spell;
 }
 
@@ -342,15 +344,14 @@ std::vector<Character> Repository::get_characters_by_player(int player_id) const
 std::vector<Monster> Repository::get_monsters() const {
     Statement stmt(db_,
         "SELECT MonsterID, Name, ArmorClass, HitPoints, Strength, Dexterity, Constitution, "
-        "Intelligence, Wisdom, Charisma, ChallengeRating, AttackName, AttackBonus, "
-        "DamageDiceCount, DamageDiceSides, DamageBonus, OnHitSaveAbility, OnHitSaveDC, OnHitCondition "
+        "Intelligence, Wisdom, Charisma, ChallengeRating, CreatureType, DamageResistances, "
+        "DamageVulnerabilities, DamageImmunities, ConditionImmunities, Multiattack "
         "FROM Monsters ORDER BY ChallengeRating, Name;");
     std::vector<Monster> monsters;
     while (sqlite3_step(stmt.get()) == SQLITE_ROW) {
         Monster monster;
         monster.monster_id = sqlite3_column_int(stmt.get(), 0);
-        const unsigned char* name = sqlite3_column_text(stmt.get(), 1);
-        monster.name = name ? reinterpret_cast<const char*>(name) : "";
+        monster.name = column_text(stmt.get(), 1);
         monster.armor_class = sqlite3_column_int(stmt.get(), 2);
         monster.hit_points = sqlite3_column_int(stmt.get(), 3);
         monster.strength = sqlite3_column_int(stmt.get(), 4);
@@ -360,18 +361,44 @@ std::vector<Monster> Repository::get_monsters() const {
         monster.wisdom = sqlite3_column_int(stmt.get(), 8);
         monster.charisma = sqlite3_column_int(stmt.get(), 9);
         monster.challenge_rating = sqlite3_column_double(stmt.get(), 10);
-        const unsigned char* attack_name = sqlite3_column_text(stmt.get(), 11);
-        monster.attack_name = attack_name ? reinterpret_cast<const char*>(attack_name) : "";
-        monster.attack_bonus = sqlite3_column_int(stmt.get(), 12);
-        monster.damage_dice_count = sqlite3_column_int(stmt.get(), 13);
-        monster.damage_dice_sides = sqlite3_column_int(stmt.get(), 14);
-        monster.damage_bonus = sqlite3_column_int(stmt.get(), 15);
-        std::string save_ability = column_text(stmt.get(), 16);
-        if (!save_ability.empty()) monster.on_hit_save_ability = ability_from_name(save_ability);
-        monster.on_hit_save_dc = sqlite3_column_int(stmt.get(), 17);
-        std::string condition = column_text(stmt.get(), 18);
-        if (!condition.empty()) monster.on_hit_condition = condition_from_name(condition);
+        monster.creature_type = column_text(stmt.get(), 11);
+        monster.damage.resistances = split_list(column_text(stmt.get(), 12));
+        monster.damage.vulnerabilities = split_list(column_text(stmt.get(), 13));
+        monster.damage.immunities = split_list(column_text(stmt.get(), 14));
+        for (const auto& name : split_list(column_text(stmt.get(), 15))) {
+            monster.condition_immunities.push_back(condition_from_name(name));
+        }
+        monster.multiattack = column_text(stmt.get(), 16);
         monsters.push_back(std::move(monster));
+    }
+
+    Statement attacks(db_,
+        "SELECT MonsterID, Name, AttackBonus, DamageDiceCount, DamageDiceSides, DamageBonus, DamageType, Ranged, "
+        "ExtraDiceCount, ExtraDiceSides, ExtraDamageType, OnHitSaveAbility, OnHitSaveDC, OnHitCondition, Count "
+        "FROM MonsterAttacks ORDER BY MonsterID, Position, MonsterAttackID;");
+    while (sqlite3_step(attacks.get()) == SQLITE_ROW) {
+        int monster_id = sqlite3_column_int(attacks.get(), 0);
+        auto owner = std::find_if(monsters.begin(), monsters.end(),
+                                  [&](const Monster& m) { return m.monster_id == monster_id; });
+        if (owner == monsters.end()) continue;
+        MonsterAttack attack;
+        attack.name = column_text(attacks.get(), 1);
+        attack.attack_bonus = sqlite3_column_int(attacks.get(), 2);
+        attack.damage_dice_count = sqlite3_column_int(attacks.get(), 3);
+        attack.damage_dice_sides = sqlite3_column_int(attacks.get(), 4);
+        attack.damage_bonus = sqlite3_column_int(attacks.get(), 5);
+        attack.damage_type = column_text(attacks.get(), 6);
+        attack.ranged = sqlite3_column_int(attacks.get(), 7) != 0;
+        attack.extra_dice_count = sqlite3_column_int(attacks.get(), 8);
+        attack.extra_dice_sides = sqlite3_column_int(attacks.get(), 9);
+        attack.extra_damage_type = column_text(attacks.get(), 10);
+        std::string save_ability = column_text(attacks.get(), 11);
+        if (!save_ability.empty()) attack.on_hit_save_ability = ability_from_name(save_ability);
+        attack.on_hit_save_dc = sqlite3_column_int(attacks.get(), 12);
+        std::string condition = column_text(attacks.get(), 13);
+        if (!condition.empty()) attack.on_hit_condition = condition_from_name(condition);
+        attack.count = std::max(1, sqlite3_column_int(attacks.get(), 14));
+        owner->attacks.push_back(std::move(attack));
     }
     return monsters;
 }

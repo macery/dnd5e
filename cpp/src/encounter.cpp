@@ -123,6 +123,7 @@ void Encounter::add_character(const Character& character, std::vector<Spell> kno
     combatant.attack_finesse_or_ranged = weapon.finesse_or_ranged;
     combatant.attack_martial_arts = weapon.martial_arts;
     combatant.attack_great_weapon_fighting = weapon.great_weapon_fighting;
+    combatant.attack_damage_type = weapon.damage_type;
     combatant.class_name = class_name;
     combatant.level = character.level;
     combatant.sneak_attack_dice = class_name == "Rogue" ? sneak_attack_dice(character.level) : 0;
@@ -166,18 +167,23 @@ void Encounter::add_monsters(const Monster& monster, int count) {
         combatant.current_hp = monster.hit_points;
         combatant.max_hp = monster.hit_points;
         combatant.dex_modifier = ability_modifier(monster.dexterity);
-        combatant.attack_bonus = monster.attack_bonus;
-        combatant.damage_dice_count = monster.damage_dice_count;
-        combatant.damage_dice_sides = monster.damage_dice_sides;
-        combatant.damage_bonus = monster.damage_bonus;
-        combatant.melee_attack = true;  // every seeded monster attack is a melee attack
-        combatant.attack_name = monster.attack_name;
+        if (!monster.attacks.empty()) {  // the first attack, for display
+            const MonsterAttack& first = monster.attacks.front();
+            combatant.attack_name = first.name;
+            combatant.attack_bonus = first.attack_bonus;
+            combatant.damage_dice_count = first.damage_dice_count;
+            combatant.damage_dice_sides = first.damage_dice_sides;
+            combatant.damage_bonus = first.damage_bonus;
+            combatant.melee_attack = !first.ranged;
+            combatant.attack_damage_type = first.damage_type;
+        }
+        combatant.monster_attacks = monster.attacks;
+        combatant.creature_type = monster.creature_type;
+        combatant.damage_traits = monster.damage;
+        combatant.condition_immunities = monster.condition_immunities;
         combatant.xp = xp_for_challenge_rating(monster.challenge_rating);
         combatant.ability_scores = {monster.strength,     monster.dexterity, monster.constitution,
                                     monster.intelligence, monster.wisdom,    monster.charisma};
-        combatant.on_hit_save_ability = monster.on_hit_save_ability;
-        combatant.on_hit_save_dc = monster.on_hit_save_dc;
-        combatant.on_hit_condition = monster.on_hit_condition;
         combatants_.push_back(combatant);
     }
 }
@@ -190,6 +196,17 @@ void Encounter::set_victory_reward(std::string victory_text, std::vector<LootGra
 // --- Effects -----------------------------------------------------------------
 
 int Encounter::add_effect(ActiveEffect effect) {
+    if (effect.kind == EffectKind::Condition && effect.target >= 0 &&
+        effect.target < static_cast<int>(combatants_.size())) {
+        const auto& immune = combatants_[static_cast<size_t>(effect.target)].condition_immunities;
+        if (std::find(immune.begin(), immune.end(), effect.condition) != immune.end()) {
+            std::string condition = condition_name(effect.condition);
+            for (char& c : condition) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+            log("    " + combatants_[static_cast<size_t>(effect.target)].name + " is immune to being " + condition +
+                ".");
+            return 0;
+        }
+    }
     effect.id = next_effect_id_++;
     // "Until the end of X's next turn", applied during X's own turn, must
     // survive the end of this one.
@@ -326,6 +343,22 @@ std::vector<std::string> Encounter::status_tooltip(int index) const {
         lines.push_back(line);
     }
 
+    if (!combatant.is_character) {
+        const DamageTraits& traits = combatant.damage_traits;
+        std::vector<std::string> traitLines;
+        if (!combatant.creature_type.empty()) traitLines.push_back(combatant.creature_type + ".");
+        if (!traits.resistances.empty()) traitLines.push_back("Resistant to " + join(traits.resistances, ", ") + ".");
+        if (!traits.vulnerabilities.empty()) {
+            traitLines.push_back("Vulnerable to " + join(traits.vulnerabilities, ", ") + " (double damage).");
+        }
+        if (!traits.immunities.empty()) traitLines.push_back("Immune to " + join(traits.immunities, ", ") + " damage.");
+        if (!combatant.condition_immunities.empty()) {
+            std::vector<std::string> names;
+            for (Condition c : combatant.condition_immunities) names.push_back(condition_name(c));
+            traitLines.push_back("Can't be " + join(names, ", ") + ".");
+        }
+        if (!traitLines.empty()) lines.push_back(join(traitLines, " "));
+    }
     if (!combatant.concentration.empty()) {
         lines.push_back("Concentrating on " + combatant.concentration +
                         ": taking damage forces a CON save (DC 10 or half the damage) to keep it. Dropping to 0 HP "
@@ -594,17 +627,35 @@ void Encounter::resolve_monster_turn(Combatant& monster) {
 
     int pick = dice_.roll(static_cast<int>(candidates.size()), 1).front() - 1;
     int target = candidates[static_cast<size_t>(pick)];
+    if (monster.monster_attacks.empty()) return;
+    const MonsterAttack& stat = monster.monster_attacks.front();
     WeaponAttack attack;
-    attack.name = monster.attack_name;
-    attack.attack_bonus = monster.attack_bonus;
-    attack.damage_dice_count = monster.damage_dice_count;
-    attack.damage_dice_sides = monster.damage_dice_sides;
-    attack.damage_bonus = monster.damage_bonus;
-    attack.melee = monster.melee_attack;
-    weapon_attack(monster_index, target, attack);
+    attack.name = stat.name;
+    attack.attack_bonus = stat.attack_bonus;
+    attack.damage_dice_count = stat.damage_dice_count;
+    attack.damage_dice_sides = stat.damage_dice_sides;
+    attack.damage_bonus = stat.damage_bonus;
+    attack.damage_type = stat.damage_type;
+    attack.melee = !stat.ranged;
+    weapon_attack(monster_index, target, attack, 0, &stat);
 }
 
-void Encounter::weapon_attack(int attacker_index, int target_index, const WeaponAttack& attack, int smite_slot) {
+int Encounter::typed_damage(int target, int amount, const std::string& type, std::string& note) const {
+    DamageModifier modifier = damage_modifier(damage_traits(target), type);
+    if (modifier != DamageModifier::Normal && amount > 0) note += " (" + damage_modifier_note(modifier, type) + ")";
+    return adjust_damage(amount, modifier);
+}
+
+DamageTraits Encounter::damage_traits(int index) const {
+    DamageTraits traits = combatants_.at(static_cast<size_t>(index)).damage_traits;
+    if (is_raging(index)) {
+        for (const auto& type : physical_damage_types()) traits.resistances.push_back(type);
+    }
+    return traits;
+}
+
+void Encounter::weapon_attack(int attacker_index, int target_index, const WeaponAttack& attack, int smite_slot,
+                              const MonsterAttack* monster_attack) {
     Combatant& attacker = combatants_[static_cast<size_t>(attacker_index)];
     Combatant& target = combatants_[static_cast<size_t>(target_index)];
     int attack_bonus = attack.attack_bonus;
@@ -627,13 +678,24 @@ void Encounter::weapon_attack(int attacker_index, int target_index, const Weapon
         extra_note += " (Great Weapon Fighting rerolled " + std::to_string(result.rerolled) + " " +
                       (result.rerolled == 1 ? "die" : "dice") + ")";
     }
+    // Damage by type: the weapon's own (with Rage and Sneak Attack), radiant
+    // (Divine Favor, Divine Smite), and a monster attack's extra dice -- each
+    // adjusted for the target's resistances separately.
+    int radiant = 0;
+    int extra_damage = 0;
     if (result.hit) {
-        // Divine Favor-style extra damage dice (doubled on a crit, like all attack dice).
+        // Divine Favor-style extra damage dice (doubled on a crit, like all attack dice). Radiant.
         for (const auto& effect : effects_) {
             if (effect.target != attacker_index || effect.kind != EffectKind::ExtraWeaponDamageDice) continue;
             auto extra = dice_.roll(effect.amount, result.critical ? 2 : 1);
-            result.damage_total += sum(extra);
+            radiant += sum(extra);
             extra_note += " (+" + std::to_string(sum(extra)) + " " + (effect.label.empty() ? "extra" : effect.label) + ")";
+        }
+        if (monster_attack && monster_attack->extra_dice_count > 0) {
+            auto extra = dice_.roll(monster_attack->extra_dice_sides,
+                                    monster_attack->extra_dice_count * (result.critical ? 2 : 1));
+            extra_damage = sum(extra);
+            extra_note += " (+" + std::to_string(extra_damage) + " " + monster_attack->extra_damage_type + ")";
         }
         // Rage: extra damage on STR melee weapon attacks.
         if (is_raging(attacker_index) && attack.melee && attack.uses_strength) {
@@ -664,19 +726,25 @@ void Encounter::weapon_attack(int attacker_index, int target_index, const Weapon
             const ClassInfo* info = paladin ? find_class_info_by_id(classes_, paladin->class_id) : nullptr;
             if (paladin && info && spend_spell_slot(*paladin, *info, smite_slot)) {
                 changed(paladin->character_id);
-                int count = divine_smite_dice(smite_slot);
+                // +1d8 against undead and fiends (beyond the 5d8 cap).
+                bool undead_or_fiend = target.creature_type == "Undead" || target.creature_type == "Fiend";
+                int count = divine_smite_dice(smite_slot) + (undead_or_fiend ? 1 : 0);
                 auto extra = dice_.roll(8, count * (result.critical ? 2 : 1));
-                result.damage_total += sum(extra);
+                radiant += sum(extra);
+                std::string versus = target.creature_type;
+                for (char& c : versus) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
                 extra_note += " (+" + std::to_string(sum(extra)) + " radiant, Divine Smite " +
-                              std::to_string(count * (result.critical ? 2 : 1)) + "d8, level " +
+                              std::to_string(count * (result.critical ? 2 : 1)) + "d8" +
+                              (undead_or_fiend ? " vs " + versus : std::string()) + ", level " +
                               std::to_string(smite_slot) + " slot)";
             }
         }
-        // Rage: resistance to bludgeoning, piercing, and slashing -- every weapon attack here.
-        if (is_raging(target_index)) {
-            result.damage_total /= 2;
-            extra_note += " (halved by Rage)";
-        }
+        // Resistance, vulnerability, immunity (Rage's resistance included).
+        result.damage_total = typed_damage(target_index, result.damage_total, attack.damage_type, extra_note) +
+                              typed_damage(target_index, radiant, "radiant", extra_note) +
+                              (monster_attack ? typed_damage(target_index, extra_damage,
+                                                             monster_attack->extra_damage_type, extra_note)
+                                              : 0);
     }
 
     auto followups = result.hit ? apply_damage(target_index, result.damage_total, result.critical, attacker_index)
@@ -689,20 +757,21 @@ void Encounter::weapon_attack(int attacker_index, int target_index, const Weapon
     for (const auto& line : followups) log(line);
 
     // A monster attack's rider (Wolf: DC 11 STR save or knocked prone).
-    if (result.hit && attacker.on_hit_save_dc > 0 && target.current_hp > 0) {
+    if (result.hit && monster_attack && monster_attack->on_hit_save_dc > 0 && target.current_hp > 0) {
         std::string detail;
-        bool saved = roll_save(target_index, attacker.on_hit_save_ability, attacker.on_hit_save_dc, detail);
-        std::string condition = condition_name(attacker.on_hit_condition);
+        bool saved = roll_save(target_index, monster_attack->on_hit_save_ability, monster_attack->on_hit_save_dc,
+                               detail);
+        std::string condition = condition_name(monster_attack->on_hit_condition);
         for (char& c : condition) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-        log("    " + target.name + ": " + detail + " vs DC " + std::to_string(attacker.on_hit_save_dc) + " -> " +
-            (saved ? "saved." : "failed, " + condition + "."));
+        log("    " + target.name + ": " + detail + " vs DC " + std::to_string(monster_attack->on_hit_save_dc) +
+            " -> " + (saved ? "saved." : "failed, " + condition + "."));
         if (!saved) {
             ActiveEffect effect;
             effect.kind = EffectKind::Condition;
-            effect.condition = attacker.on_hit_condition;
+            effect.condition = monster_attack->on_hit_condition;
             effect.target = target_index;
             effect.source = attacker_index;
-            effect.label = condition_name(attacker.on_hit_condition);
+            effect.label = condition_name(monster_attack->on_hit_condition);
             add_effect(effect);
         }
     }
@@ -747,7 +816,7 @@ std::vector<std::string> Encounter::apply_spell_effects(const Spell& spell, Spel
                 effect.duration.participant = target;
                 break;
         }
-        add_effect(effect);
+        if (add_effect(effect) == 0) continue;  // immune
         if (!spec.label.empty() && std::find(labels.begin(), labels.end(), spec.label) == labels.end()) {
             labels.push_back(spec.label);
         }
@@ -1140,7 +1209,9 @@ std::vector<int> Encounter::spell_target_candidates(const Spell& spell) const {
                 break;
             default:  // living enemies (not whoever charmed the caster)
                 eligible = !candidate.is_character && candidate.current_hp > 0 &&
-                           !(actor_index >= 0 && charmed_by(actor_index, i));
+                           !(actor_index >= 0 && charmed_by(actor_index, i)) &&
+                           (spell.target_creature_type.empty() ||
+                            candidate.creature_type == spell.target_creature_type);
                 break;
         }
         if (eligible) candidates.push_back(i);
@@ -1514,6 +1585,7 @@ bool Encounter::attack(int target_index, int attack_bonus, int damage_dice_count
     attack.finesse_or_ranged = attacker.attack_finesse_or_ranged;
     attack.martial_arts = attacker.attack_martial_arts;
     attack.great_weapon_fighting = attacker.attack_great_weapon_fighting;
+    attack.damage_type = attacker.attack_damage_type;
     weapon_attack(actor, target_index, attack, options.divine_smite_slot);
     if (turn_.attacks_left > 0) {
         log("    (Extra Attack: " + std::to_string(turn_.attacks_left) + " more attack" +
@@ -1728,19 +1800,24 @@ bool Encounter::cast_spell(int spell_id, int slot_level, const std::vector<int>&
         std::string outcome;
         std::vector<std::string> followups;
         std::vector<std::string> labels;
+        std::string damage_note;  // resistance, vulnerability, immunity
+        bool deals_damage = spell.resolution == SpellResolution::Attack || spell.resolution == SpellResolution::Save ||
+                            spell.resolution == SpellResolution::AutoHit;
+        int dealt = deals_damage ? typed_damage(target_index, effect.amount, spell.damage_type, damage_note)
+                                 : effect.amount;
         switch (spell.resolution) {
             case SpellResolution::Attack:
-                followups = effect.hit ? apply_damage(target_index, effect.amount, effect.critical, actor_index)
+                followups = effect.hit ? apply_damage(target_index, dealt, effect.critical, actor_index)
                                        : std::vector<std::string>{};
                 if (effect.hit && target.current_hp > 0) {
                     labels = apply_spell_effects(spell, SpellEffectTrigger::OnHit, actor_index, target_index);
                 }
                 outcome = "d20(" + std::to_string(effect.attack_roll) + ") " +
                           format_modifier(caster.spell_attack_bonus) + bonus_note(mods.bonus_dice, effect.bonus_rolls) +
-                          mode_note(mods) + " -> " + attack_outcome(effect.hit, effect.critical, effect.amount);
+                          mode_note(mods) + " -> " + attack_outcome(effect.hit, effect.critical, dealt) + damage_note;
                 break;
             case SpellResolution::Save:
-                followups = apply_damage(target_index, effect.amount, false, actor_index);
+                followups = apply_damage(target_index, dealt, false, actor_index);
                 if (!effect.saved && target.current_hp > 0) {
                     labels = apply_spell_effects(spell, SpellEffectTrigger::OnFailedSave, actor_index, target_index);
                 }
@@ -1749,7 +1826,7 @@ bool Encounter::cast_spell(int spell_id, int slot_level, const std::vector<int>&
                           bonus_note(mods.bonus_dice, effect.bonus_rolls) + mode_note(mods) +
                           (effect.auto_failed ? " (automatic failure)" : "") + " vs DC " +
                           std::to_string(caster.spell_save_dc) + " -> " + (effect.saved ? "saved" : "failed");
-                if (!result.dice.empty()) outcome += ", takes " + std::to_string(effect.amount);
+                if (!result.dice.empty()) outcome += ", takes " + std::to_string(dealt) + damage_note;
                 break;
             case SpellResolution::Buff:
                 labels = apply_spell_effects(spell, SpellEffectTrigger::OnCastTarget, actor_index, target_index);
@@ -1762,8 +1839,8 @@ bool Encounter::cast_spell(int spell_id, int slot_level, const std::vector<int>&
                 outcome = "stable";
                 break;
             case SpellResolution::AutoHit:
-                followups = apply_damage(target_index, effect.amount, false, actor_index);
-                outcome = "hit for " + std::to_string(effect.amount);
+                followups = apply_damage(target_index, dealt, false, actor_index);
+                outcome = "hit for " + std::to_string(dealt) + damage_note;
                 break;
             case SpellResolution::Heal: {
                 int healed = 0;
