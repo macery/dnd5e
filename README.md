@@ -55,6 +55,10 @@ It manages players and characters, computes a full character sheet from the 5e r
   - Drink Potion heals from your inventory.
   - The encounter ends with a victory or a defeat.
 - **Solo adventures**: pre-built mini-encounters, each with a hook, its monsters, a victory payoff, and loot.
+- **Export, import, and backup** ([docs/save-load.md](docs/save-load.md)):
+  - **Export…** saves a player's characters, or just one, to a readable `.dnd5e.json` file: stats, XP, proficiencies, spent resources, inventory, and spells, all by name.
+  - **Import…** previews the file before anything changes: which player the characters go to, a choice for any name clash (import as a copy, replace, or skip), and anything this version doesn't have.
+  - **Back Up Database…** saves a complete copy of everything.
 - **Spellcasting** (2014 PHB rules):
   - **Spells:** 42 seeded spells. 18 are resolved automatically: spell attacks, saving throws (half or no damage on a success), always-hit spells, and heals. 24 are utility spells with no automated effect yet.
   - **Creation:** Bards, Clerics, Druids, Sorcerers, Warlocks, and Wizards choose their cantrips and spells in the character creation wizard.
@@ -167,7 +171,7 @@ Things to know:
 - **FUSE:** AppImages need FUSE 2. If it won't start on Ubuntu, either `sudo apt install libfuse2t64`, or run it with `APPIMAGE_EXTRACT_AND_RUN=1 ./DnD_Engine-x86_64.AppImage`.
 - **OpenGL:** it expects the desktop's graphics libraries. On a minimal install, `sudo apt install libopengl0` provides the one most likely to be missing.
 - **Display:** only the X11 platform plugin is bundled. On a Wayland session it runs through XWayland.
-- **Save data:** each machine has its own database. Characters don't move between machines yet; that's the save/load TODO.
+- **Save data:** each machine has its own database. To move characters, use **Export…** on one machine and **Import…** on the other (see Features).
 
 ### Where your data lives
 
@@ -315,7 +319,7 @@ Phases 1 (core and data) and 2 (UI) are done; see [docs/magic-system.md](docs/ma
 - [ ] **Wayland plugin**: bundle Qt's Wayland platform plugin so the app runs natively on Wayland instead of through XWayland.
 - [ ] **Code style**: add `clang-format` / `clang-tidy` configs and check them in CI.
 - [ ] **Legacy code**: decide whether to archive or remove the legacy `DND5EProject/` C# code.
-- [ ] **Per-player save/load** ([docs/save-load.md](docs/save-load.md)): export a player's characters (stats, XP, inventory, spells) to a file and import them into another database, for backups, sharing, and moving between machines. The design doc settles scope, format, conflicts, stable IDs, and versioning.
+- [x] **Per-player save/load** ([docs/save-load.md](docs/save-load.md)): Export… (a player or one character), Import… (with a preview and per-character conflict choices), and Back Up Database…. Files are versioned JSON that names everything, so they load into any database.
 
 ## License
 

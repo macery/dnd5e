@@ -34,6 +34,9 @@ private slots:
     void onInventoryClicked();
     void onSpellbookClicked();
     void onLevelUpClicked();
+    void onExportClicked();
+    void onImportClicked();
+    void onBackupClicked();
     void onDamageClicked();
     void onHealClicked();
     void onShortRestClicked();
@@ -75,6 +78,9 @@ private:
     QPushButton* inventoryButton_ = nullptr;
     QPushButton* spellbookButton_ = nullptr;
     QPushButton* levelUpButton_ = nullptr;
+    QPushButton* exportButton_ = nullptr;
+    QPushButton* importButton_ = nullptr;
+    QPushButton* backupButton_ = nullptr;
     QSpinBox* hpAmountSpin_ = nullptr;
     QPushButton* damageButton_ = nullptr;
     QPushButton* healButton_ = nullptr;

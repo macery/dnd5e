@@ -1,6 +1,19 @@
 # Save/load (export and import characters) design
 
-Status: **phase 1 (format and core) done;** phase 2 (UI) is next. Decisions were settled on 2026-10-01; see [Decisions](#decisions).
+Status: **phases 1 (format and core) and 2 (UI) done.** Decisions were settled on 2026-10-01; see [Decisions](#decisions).
+
+**Phase 2 as built:**
+- **Main window:** a row with **Export…**, **Import…**, and **Back Up Database…**.
+  - **Export** exports the selected player. With a character selected, it asks "all of Adam's, or just Aria?" first. It saves `<name>.dnd5e.json` (Documents by default).
+  - **Import** opens a file, refuses bad or newer files with the parser's message, and shows the preview.
+  - **Back Up** saves `dnd5e-backup-<date>.db` and says which file to copy it over to restore.
+- **`ImportDialog`** (the preview):
+  - who exported the file and when (local time);
+  - **Import into:** the file's player (matched or new), or any existing player;
+  - per character: Import, a conflict choice (**Import as a copy: "Aria (2)"** by default, **Replace Beth's Aria**, or **Skip**), or "Can't import: Unknown class …" in red;
+  - the items and spells that won't come across.
+
+  Import applies it in one transaction, then the main window switches to that player and lists what happened.
 
 **Phase 1 as built:**
 - **nlohmann/json 3.11.3**, fetched by CMake from its release tarball with the hash pinned. It's linked privately into `dndcore`.

@@ -2,6 +2,11 @@
 
 #include <QAbstractItemView>
 #include <QComboBox>
+#include <QCoreApplication>
+#include <QDate>
+#include <QDir>
+#include <QFile>
+#include <QFileDialog>
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -10,7 +15,9 @@
 #include <QMessageBox>
 #include <QModelIndex>
 #include <QPushButton>
+#include <QRegularExpression>
 #include <QSpinBox>
+#include <QStandardPaths>
 #include <QTableView>
 #include <QVBoxLayout>
 #include <QWidget>
@@ -25,6 +32,7 @@
 #include "CombatEncounterDialog.hpp"
 #include "DiceRollerWidget.hpp"
 #include "InitiativeTrackerDialog.hpp"
+#include "ImportDialog.hpp"
 #include "InventoryDialog.hpp"
 #include "LevelUpDialog.hpp"
 #include "MonsterListDialog.hpp"
@@ -32,6 +40,7 @@
 #include "WindowSizing.hpp"
 
 #include "dnd/adventure.hpp"
+#include "dnd/character_io.hpp"
 #include "dnd/class_features.hpp"
 #include "dnd/level_up.hpp"
 #include "dnd/progression.hpp"
@@ -57,6 +66,22 @@ MainWindow::MainWindow(dnd::Repository& repository, QWidget* parent)
     playerRow->addWidget(editPlayerButton_);
     playerRow->addWidget(deletePlayerButton_);
     rootLayout->addLayout(playerRow);
+
+    // Save files: share or move characters, and back up everything (docs/save-load.md).
+    auto* fileRow = new QHBoxLayout();
+    exportButton_ = new QPushButton("Export…", central);
+    exportButton_->setToolTip("Save this player's characters -- or just the selected character -- to a file you "
+                              "can back up, share, or import on another machine.");
+    importButton_ = new QPushButton("Import…", central);
+    importButton_->setToolTip("Load characters from an exported file. You'll see what will happen before anything "
+                              "changes.");
+    backupButton_ = new QPushButton("Back Up Database…", central);
+    backupButton_->setToolTip("Save a complete copy of everything: every player, character, and item.");
+    fileRow->addWidget(exportButton_);
+    fileRow->addWidget(importButton_);
+    fileRow->addWidget(backupButton_);
+    fileRow->addStretch(1);
+    rootLayout->addLayout(fileRow);
 
     characterModel_ = new CharacterTableModel(central);
     characterTable_ = new QTableView(central);
@@ -138,6 +163,9 @@ MainWindow::MainWindow(dnd::Repository& repository, QWidget* parent)
     connect(inventoryButton_, &QPushButton::clicked, this, &MainWindow::onInventoryClicked);
     connect(spellbookButton_, &QPushButton::clicked, this, &MainWindow::onSpellbookClicked);
     connect(levelUpButton_, &QPushButton::clicked, this, &MainWindow::onLevelUpClicked);
+    connect(exportButton_, &QPushButton::clicked, this, &MainWindow::onExportClicked);
+    connect(importButton_, &QPushButton::clicked, this, &MainWindow::onImportClicked);
+    connect(backupButton_, &QPushButton::clicked, this, &MainWindow::onBackupClicked);
     connect(characterTable_, &QTableView::doubleClicked, this, &MainWindow::onCharacterActivated);
     connect(damageButton_, &QPushButton::clicked, this, &MainWindow::onDamageClicked);
     connect(healButton_, &QPushButton::clicked, this, &MainWindow::onHealClicked);
@@ -373,6 +401,117 @@ void MainWindow::onLevelUpClicked() {
         character = dialog.character();
     }
     reloadCharactersForCurrentPlayer();
+}
+
+namespace {
+
+QString documentsFolder() {
+    QString folder = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+    return folder.isEmpty() ? QDir::homePath() : folder;
+}
+
+// A safe file name from a player or character name ("Aria/Zed" -> "Aria_Zed").
+QString safeFileName(QString name) {
+    name.replace(QRegularExpression(R"([/\\:*?"<>|])"), "_");  // characters file systems reject
+    return name.trimmed().isEmpty() ? QString("characters") : name.trimmed();
+}
+
+}  // namespace
+
+void MainWindow::onExportClicked() {
+    if (playerCombo_->count() == 0) {
+        QMessageBox::information(this, "Export", "Add a player first.");
+        return;
+    }
+    int playerId = currentPlayerId();
+    QString playerName = currentPlayerName();
+    const dnd::Character* selected = nullptr;
+    QModelIndex index = characterTable_->currentIndex();
+    if (index.isValid()) selected = &characterModel_->characterAt(index.row());
+
+    // With a character selected, ask: the whole player, or just that character?
+    bool justOne = false;
+    if (selected) {
+        QMessageBox ask(QMessageBox::Question, "Export",
+                        QString("Export all of %1's characters, or just %2?")
+                            .arg(playerName, QString::fromStdString(selected->character_name)),
+                        QMessageBox::Cancel, this);
+        auto* all = ask.addButton(QString("All of %1's").arg(playerName), QMessageBox::AcceptRole);
+        auto* one = ask.addButton(QString("Just %1").arg(QString::fromStdString(selected->character_name)),
+                                  QMessageBox::AcceptRole);
+        ask.setDefaultButton(all);
+        ask.exec();
+        if (ask.clickedButton() == one) {
+            justOne = true;
+        } else if (ask.clickedButton() != all) {
+            return;
+        }
+    }
+
+    QString suggested = safeFileName(justOne ? QString::fromStdString(selected->character_name) : playerName);
+    QString path = QFileDialog::getSaveFileName(this, "Export Characters",
+                                                documentsFolder() + "/" + suggested + ".dnd5e.json",
+                                                "Character files (*.dnd5e.json);;All files (*)");
+    if (path.isEmpty()) return;
+
+    dnd::CharacterExport file = justOne ? dnd::export_character(repository_, selected->character_id)
+                                        : dnd::export_player(repository_, playerId);
+    file.app_version = QCoreApplication::applicationVersion().toStdString();
+    QFile out(path);
+    if (!out.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text) ||
+        out.write(QByteArray::fromStdString(dnd::to_json(file))) < 0) {
+        QMessageBox::warning(this, "Export", QString("Couldn't write %1:\n%2").arg(path, out.errorString()));
+        return;
+    }
+    QMessageBox::information(this, "Export",
+                             QString("Exported %1 character%2 to:\n%3")
+                                 .arg(file.characters.size())
+                                 .arg(file.characters.size() == 1 ? "" : "s")
+                                 .arg(path));
+}
+
+void MainWindow::onImportClicked() {
+    QString path = QFileDialog::getOpenFileName(this, "Import Characters", documentsFolder(),
+                                                "Character files (*.dnd5e.json *.json);;All files (*)");
+    if (path.isEmpty()) return;
+    QFile in(path);
+    if (!in.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        QMessageBox::warning(this, "Import", QString("Couldn't read %1:\n%2").arg(path, in.errorString()));
+        return;
+    }
+    auto parsed = dnd::parse_character_file(in.readAll().toStdString());
+    if (!parsed.file) {
+        QMessageBox::warning(this, "Import", QString::fromStdString(parsed.error));
+        return;
+    }
+
+    ImportDialog dialog(repository_, *parsed.file, this);
+    if (dialog.exec() != QDialog::Accepted) return;
+    const auto& result = dialog.result();
+    reloadPlayers();
+    int row = playerCombo_->findData(result.player_id);
+    if (row >= 0) playerCombo_->setCurrentIndex(row);
+    QStringList lines;
+    for (const auto& message : result.messages) lines << QString::fromStdString(message);
+    QMessageBox::information(this, "Import", lines.join("\n"));
+}
+
+void MainWindow::onBackupClicked() {
+    QString suggested = QString("dnd5e-backup-%1.db").arg(QDate::currentDate().toString(Qt::ISODate));
+    QString path = QFileDialog::getSaveFileName(this, "Back Up Database", documentsFolder() + "/" + suggested,
+                                                "Database backups (*.db);;All files (*)");
+    if (path.isEmpty()) return;
+    try {
+        repository_.backup_to(path.toStdString());
+    } catch (const std::exception& error) {
+        QMessageBox::warning(this, "Back Up Database", error.what());
+        return;
+    }
+    QMessageBox::information(this, "Back Up Database",
+                             QString("Saved a complete copy of the database to:\n%1\n\nTo restore it, close the app "
+                                     "and copy it over:\n%2")
+                                 .arg(path, QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) +
+                                                "/dnd.db"));
 }
 
 void MainWindow::onShortRestClicked() {

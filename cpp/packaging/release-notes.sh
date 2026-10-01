@@ -29,5 +29,5 @@ chmod +x DnD_Engine-x86_64.AppImage && ./DnD_Engine-x86_64.AppImage
 
 Runs on Ubuntu 24.04 and newer distros; nothing else to install. If it won't start, install FUSE 2
 (\`sudo apt install libfuse2t64\`) or run it with \`APPIMAGE_EXTRACT_AND_RUN=1\`. Each machine keeps its
-own save file; characters don't transfer between machines yet.
+own save file; use Export… and Import… on the main window to move characters between machines.
 NOTES
