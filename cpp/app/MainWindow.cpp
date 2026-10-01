@@ -29,6 +29,7 @@
 #include "LevelUpDialog.hpp"
 #include "MonsterListDialog.hpp"
 #include "SpellbookDialog.hpp"
+#include "WindowSizing.hpp"
 
 #include "dnd/adventure.hpp"
 #include "dnd/class_features.hpp"
@@ -109,17 +110,22 @@ MainWindow::MainWindow(dnd::Repository& repository, QWidget* parent)
     combatRow->addWidget(shortRestButton_);
     combatRow->addWidget(longRestButton_);
     combatRow->addStretch(1);
-    combatRow->addWidget(initiativeTrackerButton_);
-    combatRow->addWidget(monstersButton_);
-    combatRow->addWidget(combatEncounterButton_);
-    combatRow->addWidget(soloAdventureButton_);
     rootLayout->addLayout(combatRow);
+
+    // Fights on their own row, so the window stays narrow enough for small screens.
+    auto* playRow = new QHBoxLayout();
+    playRow->addWidget(initiativeTrackerButton_);
+    playRow->addWidget(monstersButton_);
+    playRow->addWidget(combatEncounterButton_);
+    playRow->addWidget(soloAdventureButton_);
+    playRow->addStretch(1);
+    rootLayout->addLayout(playRow);
 
     diceRoller_ = new DiceRollerWidget(central);
     rootLayout->addWidget(diceRoller_);
 
     setCentralWidget(central);
-    resize(640, 480);
+    fitToScreen(this, QSize(900, 600), "MainWindow");
 
     connect(playerCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             &MainWindow::onPlayerSelected);

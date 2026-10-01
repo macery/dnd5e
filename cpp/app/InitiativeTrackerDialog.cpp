@@ -8,6 +8,7 @@
 
 #include <algorithm>
 
+#include "WindowSizing.hpp"
 #include "dnd/rules.hpp"
 
 namespace {
@@ -37,7 +38,7 @@ InitiativeTrackerDialog::InitiativeTrackerDialog(std::vector<dnd::Character> cha
     auto* layout = new QVBoxLayout(this);
     layout->addWidget(table_, 1);
     layout->addWidget(rollAllButton_);
-    resize(320, 400);
+    fitToScreen(this, QSize(360, 440), "InitiativeTracker");
 }
 
 void InitiativeTrackerDialog::onRollAllClicked() {

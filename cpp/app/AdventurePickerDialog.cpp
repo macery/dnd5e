@@ -7,6 +7,7 @@
 #include <QStringList>
 #include <QVBoxLayout>
 
+#include "WindowSizing.hpp"
 #include "dnd/adventure.hpp"
 
 namespace {
@@ -68,7 +69,7 @@ AdventurePickerDialog::AdventurePickerDialog(std::vector<int> party_levels, std:
     layout->addWidget(partyLabel);
     layout->addLayout(contentRow, 1);
     layout->addWidget(buttons);
-    resize(760, 360);
+    fitToScreen(this, QSize(760, 380), "AdventurePicker");
 
     connect(list_, &QListWidget::currentRowChanged, this, &AdventurePickerDialog::onSelectionChanged);
     if (list_->count() > 0) list_->setCurrentRow(0);

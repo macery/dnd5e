@@ -12,6 +12,7 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
+#include "WindowSizing.hpp"
 #include "dnd/character_creation.hpp"
 #include "dnd/class_features.hpp"
 #include "dnd/equipment.hpp"
@@ -87,6 +88,8 @@ CharacterSheetDialog::CharacterSheetDialog(const dnd::Character& character,
     // label (found via labelForField) with the same explanation.
     auto addExplainedRow = [](QFormLayout* form, const QString& name, QWidget* value,
                                const QString& explanation) {
+        // Long values wrap rather than being cut off in a narrow column.
+        if (auto* label = qobject_cast<QLabel*>(value)) label->setWordWrap(true);
         form->addRow(name, value);
         value->setToolTip(explanation);
         if (QWidget* nameLabel = form->labelForField(value)) nameLabel->setToolTip(explanation);
@@ -324,23 +327,23 @@ CharacterSheetDialog::CharacterSheetDialog(const dnd::Character& character,
             "Open the Spellbook from the main window for details, to learn spells, or to cast outside combat.");
     }
 
-    auto* skillsScroll = new QScrollArea(this);
-    skillsScroll->setWidget(skillsGroup);
-    skillsScroll->setWidgetResizable(true);
+    // The sections in two columns when there's room, one scrolling column when not.
+    auto* sections = new ReflowColumns(620, this);
+    sections->addWidget(0, summaryGroup);
+    sections->addWidget(0, abilitiesGroup);
+    sections->addWidget(0, savesGroup);
+    if (featuresGroup) sections->addWidget(1, featuresGroup);
+    if (spellsGroup) sections->addWidget(1, spellsGroup);
+    sections->addWidget(1, skillsGroup);
 
     auto* layout = new QVBoxLayout(this);
     layout->addWidget(header);
     if (deadBanner) layout->addWidget(deadBanner);
     layout->addLayout(rollModeRow);
     layout->addWidget(lastRollLabel_);
-    layout->addWidget(summaryGroup);
-    layout->addWidget(abilitiesGroup);
-    layout->addWidget(savesGroup);
-    if (featuresGroup) layout->addWidget(featuresGroup);
-    if (spellsGroup) layout->addWidget(spellsGroup);
-    layout->addWidget(skillsScroll, 1);
+    layout->addWidget(scrollable(sections, this), 1);
 
-    resize(380, 640);
+    fitToScreen(this, QSize(820, 760), "CharacterSheet");
 }
 
 void CharacterSheetDialog::rollAndShow(const QString& label, int bonus) {

@@ -13,6 +13,7 @@
 
 #include <algorithm>
 
+#include "WindowSizing.hpp"
 #include "dnd/spellcasting.hpp"
 
 namespace {
@@ -96,7 +97,7 @@ SpellbookDialog::SpellbookDialog(dnd::Repository& repository, dnd::Character cha
     layout->addWidget(messageLabel_);
     layout->addLayout(learnRow);
     layout->addWidget(buttons);
-    resize(640, 480);
+    fitToScreen(this, QSize(720, 520), "Spellbook");
 
     connect(table_, &QTableWidget::itemSelectionChanged, this, &SpellbookDialog::onSelectionChanged);
     connect(castButton_, &QPushButton::clicked, this, &SpellbookDialog::onCastClicked);

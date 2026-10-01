@@ -11,6 +11,7 @@
 #include <QTabWidget>
 #include <QVBoxLayout>
 
+#include "WindowSizing.hpp"
 #include "dnd/class_features.hpp"
 
 namespace {
@@ -40,7 +41,7 @@ CharacterEditorDialog::CharacterEditorDialog(const std::vector<dnd::LookupEntry>
     auto* layout = new QVBoxLayout(this);
     layout->addWidget(tabs);
     layout->addWidget(buttons);
-    resize(420, 360);
+    fitToScreen(this, QSize(460, 440), "CharacterEditor");
 
     if (existing) populateFrom(*existing);
 }

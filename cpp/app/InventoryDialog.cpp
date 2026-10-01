@@ -12,6 +12,7 @@
 #include <QTableWidget>
 #include <QVBoxLayout>
 
+#include "WindowSizing.hpp"
 #include "dnd/equipment.hpp"
 #include "dnd/inventory.hpp"
 
@@ -94,7 +95,7 @@ InventoryDialog::InventoryDialog(dnd::Repository& repository, dnd::Character cha
     layout->addWidget(messageLabel_);
     layout->addLayout(addRow);
     layout->addWidget(buttons);
-    resize(460, 420);
+    fitToScreen(this, QSize(560, 460), "Inventory");
 
     connect(addButton_, &QPushButton::clicked, this, &InventoryDialog::onAddClicked);
     connect(dropButton_, &QPushButton::clicked, this, &InventoryDialog::onDropClicked);

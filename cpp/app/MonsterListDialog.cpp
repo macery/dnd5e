@@ -5,6 +5,7 @@
 #include <QTableWidget>
 #include <QVBoxLayout>
 
+#include "WindowSizing.hpp"
 #include "dnd/damage.hpp"
 #include "dnd/effects.hpp"
 #include "dnd/rules.hpp"
@@ -105,5 +106,5 @@ MonsterListDialog::MonsterListDialog(std::vector<dnd::Monster> monsters, QWidget
 
     auto* layout = new QVBoxLayout(this);
     layout->addWidget(table);
-    resize(900, 360);
+    fitToScreen(this, QSize(1100, 620), "Monsters");
 }

@@ -302,7 +302,12 @@ Phases 1 (core and data) and 2 (UI) are done; see [docs/magic-system.md](docs/ma
 ### Technical / housekeeping
 
 - [x] **Stale comment in `app/main.cpp`**: the comment and the database-error message now describe migrations: older save files upgrade in place, so a failure means a damaged file or a failed upgrade.
-- [ ] **Resizable windows and dialogs** (quality of life): several windows and dialogs are too tall for smaller screens and don't adapt well when resized. Examples are the combat screen's "Your Turn" box and the character sheet. They need a layout approach that redraws sensibly on resize: scroll areas, collapsible sections or tabs, and sizes based on the screen rather than fixed sizes.
+- [x] **Resizable windows and dialogs**:
+  - Every window opens at a size that fits the screen (at most 90% of it) and remembers the size you leave it at.
+  - **Combat Encounter** puts the fight and "Your Turn" side by side in a splitter when the window is wide, and stacks them when it's narrow. The participants and log share a splitter of their own, and the turn box scrolls.
+  - **The character sheet** shows two columns when wide and one scrolling column when narrow, and long values wrap.
+  - **The main window's** fight buttons have their own row.
+  - **Scrolling pages:** the Level Up summary and the creation Review page scroll.
 - [ ] **Qt UI tests**: turn the offscreen walkthroughs used during development into automated tests that run in CI. They build dialogs with an in-memory database and `QT_QPA_PLATFORM=offscreen`, click through them, and check the results. Combat logic already lives in the tested `dnd::Encounter`; the wizard, Spellbook, and main window are what's left.
 - [x] **Linux AppImage**: a local build script (`cpp/packaging/build-appimage.sh`).
 - [x] **AppImage in CI**: built on every push and attached to releases for `v*` tags.

@@ -23,6 +23,7 @@
 #include <array>
 #include <stdexcept>
 
+#include "WindowSizing.hpp"
 #include "dnd/class_features.hpp"
 #include "dnd/equipment.hpp"
 #include "dnd/rules.hpp"
@@ -948,7 +949,7 @@ public:
         summary_->setAlignment(Qt::AlignTop | Qt::AlignLeft);
 
         auto* layout = new QVBoxLayout(this);
-        layout->addWidget(summary_, 1);
+        layout->addWidget(scrollable(summary_, this), 1);  // a long review scrolls instead of being cut off
         layout->addWidget(errorLabel_);
     }
 
@@ -1076,7 +1077,7 @@ CharacterCreationWizard::CharacterCreationWizard(dnd::Repository& repository, in
     setPage(EquipmentPageId, new EquipmentPage(*context_));
     setPage(ReviewPageId, new ReviewPage(*context_));
 
-    resize(680, 560);
+    fitToScreen(this, QSize(720, 600), "CharacterCreation");
 }
 
 CharacterCreationWizard::~CharacterCreationWizard() = default;

@@ -13,12 +13,15 @@
 #include <QListWidget>
 #include <QPlainTextEdit>
 #include <QPushButton>
+#include <QResizeEvent>
 #include <QSpinBox>
+#include <QSplitter>
 #include <QTableWidget>
 #include <QVBoxLayout>
 
 #include <algorithm>
 
+#include "WindowSizing.hpp"
 #include "dnd/character_creation.hpp"
 #include "dnd/class_features.hpp"
 #include "dnd/rules.hpp"
@@ -221,17 +224,48 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
     logView_ = new QPlainTextEdit(this);
     logView_->setReadOnly(true);
 
+    // Layout: the fight (status, setup, participants, log) and "Your Turn"
+    // side by side in a splitter -- stacked when the window is narrow (see
+    // resizeEvent). The participants and log share a splitter of their own,
+    // and the turn box scrolls when it doesn't fit.
+    auto* logPanel = new QWidget(this);
+    auto* logLayout = new QVBoxLayout(logPanel);
+    logLayout->setContentsMargins(0, 0, 0, 0);
+    logLayout->addWidget(new QLabel("Log", logPanel));
+    logLayout->addWidget(logView_, 1);
+    auto* tableAndLog = new QSplitter(Qt::Vertical, this);
+    tableAndLog->addWidget(participantTable_);
+    tableAndLog->addWidget(logPanel);
+    tableAndLog->setStretchFactor(0, 2);
+    tableAndLog->setStretchFactor(1, 3);
+    tableAndLog->setChildrenCollapsible(false);
+
+    auto* fightPanel = new QWidget(this);
+    auto* fightLayout = new QVBoxLayout(fightPanel);
+    fightLayout->setContentsMargins(0, 0, 0, 0);
+    fightLayout->addWidget(statusLabel_);
+    if (objectiveLabel_) fightLayout->addWidget(objectiveLabel_);
+    fightLayout->addLayout(monsterRow);
+    fightLayout->addWidget(difficultyLabel_);
+    fightLayout->addLayout(turnRow);
+    fightLayout->addWidget(tableAndLog, 1);
+
+    auto* turnPanel = new QWidget(this);
+    auto* turnLayout = new QVBoxLayout(turnPanel);
+    turnLayout->setContentsMargins(0, 0, 0, 0);
+    turnLayout->addWidget(attackGroup);
+    turnLayout->addStretch(1);
+
+    mainSplitter_ = new QSplitter(Qt::Horizontal, this);
+    mainSplitter_->addWidget(fightPanel);
+    mainSplitter_->addWidget(scrollable(turnPanel, this));
+    mainSplitter_->setStretchFactor(0, 3);
+    mainSplitter_->setStretchFactor(1, 2);
+    mainSplitter_->setChildrenCollapsible(false);
+
     auto* layout = new QVBoxLayout(this);
-    layout->addWidget(statusLabel_);
-    if (objectiveLabel_) layout->addWidget(objectiveLabel_);
-    layout->addWidget(participantTable_, 1);
-    layout->addLayout(monsterRow);
-    layout->addWidget(difficultyLabel_);
-    layout->addLayout(turnRow);
-    layout->addWidget(attackGroup);
-    layout->addWidget(new QLabel("Log", this));
-    layout->addWidget(logView_, 1);
-    resize(520, 700);
+    layout->addWidget(mainSplitter_);
+    fitToScreen(this, QSize(1000, 720), "CombatEncounter");
 
     connect(addMonsterButton_, &QPushButton::clicked, this, &CombatEncounterDialog::onAddMonsterClicked);
     connect(rollInitiativeButton_, &QPushButton::clicked, this, &CombatEncounterDialog::onRollInitiativeClicked);
@@ -277,6 +311,18 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
 
     updateActionControlsVisibility();
     refreshState();
+}
+
+void CombatEncounterDialog::resizeEvent(QResizeEvent* event) {
+    QDialog::resizeEvent(event);
+    // Side by side when there's room; the turn box below the fight otherwise.
+    Qt::Orientation wanted = event->size().width() >= 820 ? Qt::Horizontal : Qt::Vertical;
+    if (mainSplitter_ && mainSplitter_->orientation() != wanted) {
+        mainSplitter_->setOrientation(wanted);
+        // Rebalance for the new direction: the fight gets a bit more than half.
+        int total = wanted == Qt::Horizontal ? event->size().width() : event->size().height();
+        mainSplitter_->setSizes({total * 55 / 100, total * 45 / 100});
+    }
 }
 
 // --- Encounter plumbing ------------------------------------------------------

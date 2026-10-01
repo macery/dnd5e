@@ -19,6 +19,8 @@ class QLabel;
 class QListWidget;
 class QPlainTextEdit;
 class QPushButton;
+class QResizeEvent;
+class QSplitter;
 class QSpinBox;
 class QTableWidget;
 
@@ -35,6 +37,9 @@ public:
     CombatEncounterDialog(dnd::Repository& repository, std::vector<dnd::Character> characters,
                            std::vector<dnd::Monster> monsters, QWidget* parent = nullptr,
                            const dnd::AdventureTemplate* adventure = nullptr);
+
+protected:
+    void resizeEvent(QResizeEvent* event) override;
 
 private slots:
     void onAddMonsterClicked();
@@ -128,4 +133,5 @@ private:
     QFormLayout* attackFormLayout_ = nullptr;
 
     QPlainTextEdit* logView_ = nullptr;
+    QSplitter* mainSplitter_ = nullptr;  // the fight | "Your Turn"
 };

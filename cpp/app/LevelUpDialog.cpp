@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <stdexcept>
 
+#include "WindowSizing.hpp"
 #include "dnd/character_creation.hpp"
 #include "dnd/class_features.hpp"
 #include "dnd/dice.hpp"
@@ -536,7 +537,7 @@ LevelUpDialog::LevelUpDialog(dnd::Repository& repository, const dnd::Character& 
     setPage(SpellsPageId, new SpellsPage(*context_));
     setPage(SummaryPageId, new SummaryPage(*context_));
     setButtonText(QWizard::FinishButton, "Level Up");
-    resize(560, 520);
+    fitToScreen(this, QSize(600, 560), "LevelUp");
 }
 
 LevelUpDialog::~LevelUpDialog() = default;

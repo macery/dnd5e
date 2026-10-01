@@ -14,6 +14,7 @@ add_executable(dnd_app
     InventoryDialog.cpp
     SpellbookDialog.cpp
     LevelUpDialog.cpp
+    WindowSizing.cpp
     MonsterListDialog.cpp
     CombatEncounterDialog.cpp
     AdventurePickerDialog.cpp
