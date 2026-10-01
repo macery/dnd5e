@@ -315,12 +315,7 @@ Phases 1 (core and data) and 2 (UI) are done; see [docs/magic-system.md](docs/ma
 - [ ] **Wayland plugin**: bundle Qt's Wayland platform plugin so the app runs natively on Wayland instead of through XWayland.
 - [ ] **Code style**: add `clang-format` / `clang-tidy` configs and check them in CI.
 - [ ] **Legacy code**: decide whether to archive or remove the legacy `DND5EProject/` C# code.
-- [ ] **Per-player save/load**: export a player's characters (stats, XP, inventory) to a file and import them into another database, for backups, sharing, and moving between machines. It starts per-player, but the scope still needs working through. Open questions:
-  - **Scope:** per player, per character, or the whole database?
-  - **Format:** JSON (readable, diff-friendly), or a copy of the SQLite file (simpler, but all-or-nothing)?
-  - **Conflicts:** what happens on import when a name already exists? Rename, overwrite, or skip?
-  - **Stable IDs:** how to map class, race, item and weapon IDs between databases, for example by exporting names instead of IDs.
-  - **Versioning:** how to version the file format so older exports still load after schema changes.
+- [ ] **Per-player save/load** ([docs/save-load.md](docs/save-load.md)): export a player's characters (stats, XP, inventory, spells) to a file and import them into another database, for backups, sharing, and moving between machines. The design doc settles scope, format, conflicts, stable IDs, and versioning.
 
 ## License
 
