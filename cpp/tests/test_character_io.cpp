@@ -135,7 +135,8 @@ TEST_CASE("a player's characters round-trip into another database", "[character_
     REQUIRE(players[0].player_name == "Adam");
     auto imported = target.get_characters();
     const auto* aria = named(imported, "Aria");
-    const auto* before = named(source.get_characters(), "Aria");
+    auto originals = source.get_characters();  // keep the vector alive: named() points into it
+    const auto* before = named(originals, "Aria");
     REQUIRE(aria);
     REQUIRE(aria->player_id == players[0].player_id);
     REQUIRE(aria->class_id == lookup(target.get_classes(), "Fighter"));
