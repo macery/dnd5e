@@ -317,6 +317,7 @@ TEST_CASE("update_character changes fields in place", "[repository]") {
     updated.dead = true;
     updated.feature_uses_spent = {{"SecondWind", 1}, {"Rage", 2}};
     updated.fighting_style = "Defense";
+    updated.coins = {12, 0, 0, 15, 1};
     repo.update_character(updated);
 
     auto reloaded = repo.get_characters();
@@ -329,6 +330,7 @@ TEST_CASE("update_character changes fields in place", "[repository]") {
     REQUIRE(reloaded[0].dead);
     REQUIRE(reloaded[0].feature_uses_spent == std::map<std::string, int>{{"Rage", 2}, {"SecondWind", 1}});
     REQUIRE(reloaded[0].fighting_style == "Defense");
+    REQUIRE(reloaded[0].coins == std::array<int, 5>{12, 0, 0, 15, 1});
 }
 
 TEST_CASE("delete_character removes only that character", "[repository]") {

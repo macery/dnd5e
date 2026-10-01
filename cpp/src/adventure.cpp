@@ -10,6 +10,7 @@ const std::vector<AdventureTemplate>& adventure_templates() {
             "The trail is clear. The goblins won't trouble travelers again.",
             {{"Goblin", 3}},
             {{"Potion of Healing", 1}, {"Rations (1 day)", 2}},
+            800,  // 8 gp
         },
         {
             "Wolves at the Campfire",
@@ -17,6 +18,7 @@ const std::vector<AdventureTemplate>& adventure_templates() {
             "The wolves retreat into the night. You can finally get some rest.",
             {{"Wolf", 2}},
             {{"Potion of Healing", 1}},
+            300,  // 3 gp
         },
         {
             "The Crypt Awakens",
@@ -24,6 +26,7 @@ const std::vector<AdventureTemplate>& adventure_templates() {
             "The crypt falls silent again. Whatever disturbed the dead here is gone.",
             {{"Skeleton", 2}, {"Zombie", 1}},
             {{"Potion of Healing", 1}, {"Torch", 3}},
+            1500,  // 15 gp
         },
         {
             "Orc Raiding Party",
@@ -31,6 +34,7 @@ const std::vector<AdventureTemplate>& adventure_templates() {
             "The raiding party is broken. This stretch of road is safe again.",
             {{"Orc", 1}, {"Goblin", 2}},
             {{"Potion of Healing", 2}, {"Hempen Rope (50 feet)", 1}},
+            1200,  // 12 gp
         },
         // Tougher fights for levelled parties (SRD monsters, CR 1/2-5);
         // roughly levels 3 to 7 for a party of three or four.
@@ -41,6 +45,7 @@ const std::vector<AdventureTemplate>& adventure_templates() {
             "The ogre topples like a felled tree. The stolen stores can go back to the village.",
             {{"Ogre", 1}, {"Goblin", 2}},
             {{"Potion of Healing", 2}, {"Rations (1 day)", 5}},
+            2000,  // 20 gp
         },
         {
             "The Ghoul Crypt",
@@ -49,6 +54,7 @@ const std::vector<AdventureTemplate>& adventure_templates() {
             "The last ghoul falls still. Sunlight finally reaches the crypt floor.",
             {{"Ghoul", 2}, {"Skeleton", 2}},
             {{"Potion of Healing", 2}, {"Healer's Kit", 1}},
+            2500,  // 25 gp
         },
         {
             "The Bandit Captain's Camp",
@@ -57,6 +63,7 @@ const std::vector<AdventureTemplate>& adventure_templates() {
             "The captain's camp is scattered. Travelers can cross the ford for free again.",
             {{"Bandit Captain", 1}, {"Hobgoblin", 2}},
             {{"Potion of Healing", 2}, {"Longsword", 1}, {"Shield", 1}},
+            4000,  // 40 gp
         },
         {
             "Hounds of the Burning Pass",
@@ -64,6 +71,7 @@ const std::vector<AdventureTemplate>& adventure_templates() {
             "The pass cools. Whatever summoned the hounds has lost its pack.",
             {{"Hell Hound", 2}},
             {{"Potion of Healing", 3}},
+            1500,  // 15 gp
         },
         {
             "The Troll Bridge",
@@ -71,6 +79,7 @@ const std::vector<AdventureTemplate>& adventure_templates() {
             "The troll finally stays down. The bridge is open again.",
             {{"Troll", 1}},
             {{"Potion of Healing", 3}, {"Chain Mail", 1}},
+            5000,  // 50 gp
         },
     };
     return templates;

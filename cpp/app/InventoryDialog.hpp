@@ -50,6 +50,7 @@ private:
 
     QLabel* hpLabel_ = nullptr;
     QLabel* weightLabel_ = nullptr;
+    QLabel* coinsLabel_ = nullptr;
     QLabel* equipmentLabel_ = nullptr;
     QPushButton* equipButton_ = nullptr;
     QTableWidget* table_ = nullptr;

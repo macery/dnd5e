@@ -49,7 +49,8 @@ struct ScaledAdventure {
 // adds monsters (the cheapest group first) while it's below Medium and the
 // next one wouldn't make it Deadly, and removes them (the most expensive
 // group with more than one first) while it's Deadly. Every group keeps at
-// least one monster, so a party can still face a Deadly fight. Unknown
+// least one monster, so a party can still face a Deadly fight. Coins are
+// multiplied by the party's average level (rounded, at least 1). Unknown
 // monster names count as 0 XP; an empty party leaves it unchanged.
 ScaledAdventure scale_adventure(const AdventureTemplate& adventure, const std::vector<int>& party_levels,
                                 const std::vector<Monster>& monsters);

@@ -30,6 +30,9 @@ struct AdventureTemplate {
     std::string victory_text;
     std::vector<AdventureMonsterGroup> monster_groups;
     std::vector<AdventureLoot> loot;  // handed out on victory
+    // Coins on victory, split among the survivors -- for a level-1 party;
+    // scale_adventure multiplies it by the party's average level.
+    int coins_cp = 0;
 };
 
 const std::vector<AdventureTemplate>& adventure_templates();

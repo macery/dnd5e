@@ -209,7 +209,11 @@ Any pending schema migrations run on launch, so older save files are upgraded in
 - [x] **Equipment design**: see [docs/equipment-system.md](docs/equipment-system.md). Phases 1 (data and rules) and 2 (combat, Inventory, sheet, wizard) are done. It covers the next two items and *Weapon proficiencies*, with its decisions settled: calculated AC, warnings plus combat penalties for armor you aren't proficient with, fixed starting kits per class, weapon proficiency included, and existing weapons converted to inventory items.
 - [x] **Equipping & weapons in the inventory**: weapons are inventory items, and the Inventory dialog equips one armor, one shield, and one weapon at a time. The old `WeaponID` column is retired.
 - [x] **Armor & shields**: the PHB armor table and the shield are seeded. AC is calculated from the worn armor, DEX (capped for medium), a shield, and Unarmored Defense, and is never entered by hand.
-- [ ] **Currency** ([docs/adventures-and-currency.md](docs/adventures-and-currency.md)): track CP/SP/EP/GP/PP and have adventures award gold alongside XP.
+- [x] **Currency** ([docs/adventures-and-currency.md](docs/adventures-and-currency.md)):
+  - Characters carry cp, sp, ep, gp, and pp, and start with their background's purse.
+  - Adventures pay coins scaled to the party's level, split among the survivors.
+  - Coins show on the sheet and in the Inventory (with what the items are worth), and travel in exports.
+- [ ] **Shops and spending**: buy and sell gear at list price, and pay for services such as a temple's revival spells. Coins exist; there's nothing to spend them on yet.
 - [ ] **Encumbrance** (optional): item weights compared with carrying capacity (STR × 15).
 - [ ] **Item uses**: a Healer's Kit has 10 uses in the PHB, but they aren't tracked, so stabilizing with one never uses it up. The same applies to other limited-use gear later (torches burning out, rations eaten).
 

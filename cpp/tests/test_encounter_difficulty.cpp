@@ -77,6 +77,12 @@ TEST_CASE("scaling adventures toward Medium-Hard", "[difficulty]") {
         REQUIRE(scaled.rating.difficulty == Difficulty::Easy);
     }
 
+    SECTION("coins scale with the party's average level") {
+        REQUIRE(dnd::scale_adventure(*goblins, {1}, monsters).adventure.coins_cp == goblins->coins_cp);
+        REQUIRE(dnd::scale_adventure(*goblins, {3, 4}, monsters).adventure.coins_cp == goblins->coins_cp * 4);  // 3.5 rounds to 4
+        REQUIRE(dnd::scale_adventure(*goblins, {}, monsters).adventure.coins_cp == goblins->coins_cp);
+    }
+
     SECTION("a lone troll stays a troll, even when it's Deadly") {
         auto scaled = dnd::scale_adventure(*troll, {1, 1}, monsters);
         REQUIRE(scaled.adventure.monster_groups[0].count == 1);

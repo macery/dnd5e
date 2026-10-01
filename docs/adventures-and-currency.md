@@ -1,6 +1,16 @@
 # Multi-encounter adventures and currency design
 
-Status: **design settled 2026-10-01 (see [Decisions](#decisions)); phase 1 (currency) next.** Rules follow the 2014 Player's Handbook (ch. 5 coins and starting equipment, ch. 8 resting).
+Status: **phase 1 (currency) done;** phase 2 (multi-scene adventures) is next. Decisions were settled on 2026-10-01; see [Decisions](#decisions).
+
+**Phase 1 as built:**
+- **Migration 20:** `Characters.Coins` ("cp:12,gp:15"), and `Character::coins` (cp, sp, ep, gp, pp).
+- **`dnd/currency`:** coin values, `total_cp`, `coins_from_cp` (gold, silver, and copper for payouts), `format_coins`, storage text, `split_cp` (leftover copper to the first), and `background_purse_gp` (the PHB purses, 5–25 gp).
+- **Creation:** new characters get their background's purse, shown on the Review page.
+- **Rewards:**
+  - `AdventureTemplate::coins_cp` is set for a level-1 party, and `scale_adventure` multiplies it by the party's average level.
+  - `Encounter::set_victory_reward` takes the coins and splits them among the survivors: "The party finds 24 gp", or each share when they differ.
+- **Exports** carry a `coins` object. Older files without it import with no coins, so the format stays version 1.
+- **UI:** a Coins row on the sheet, and a coin line in the Inventory with what the carried items are worth. The editor keeps coins when saving. Rules follow the 2014 Player's Handbook (ch. 5 coins and starting equipment, ch. 8 resting).
 
 ## Where things stand
 

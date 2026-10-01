@@ -134,7 +134,8 @@ public:
     // Adds `count` copies (numbered "#1", "#2", ... when count > 1).
     void add_monsters(const Monster& monster, int count);
     // Shown after "Victory!" and handed out on victory, for adventures.
-    void set_victory_reward(std::string victory_text, std::vector<LootGrant> loot);
+    // `coins_cp` is split evenly among the surviving characters (dnd/currency.hpp).
+    void set_victory_reward(std::string victory_text, std::vector<LootGrant> loot, int coins_cp = 0);
 
     // --- Turns ---------------------------------------------------------------
     // (Re)rolls initiative for everyone and runs monster turns until a living
@@ -354,6 +355,7 @@ private:
     void check_for_victory_or_defeat();
     void award_victory_experience();
     void award_loot();
+    void award_coins();
     // Copies a character combatant's HP onto its Character and reports it.
     void sync_character_hp(const Combatant& combatant);
 
@@ -375,6 +377,7 @@ private:
     std::string result_message_;
     std::string victory_text_;
     std::vector<LootGrant> loot_;
+    int coins_cp_ = 0;
     std::vector<EncounterEvent> events_;
     std::vector<ActiveEffect> effects_;
     int next_effect_id_ = 1;

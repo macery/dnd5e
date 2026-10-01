@@ -100,7 +100,12 @@ ScaledAdventure scale_adventure(const AdventureTemplate& adventure, const std::v
     auto& groups = result.adventure.monster_groups;
     auto rate = [&] { return rate_groups(groups, party_levels, monsters); };
     result.rating = rate();
-    if (party_levels.empty() || groups.empty()) return result;
+    if (party_levels.empty()) return result;
+    int level_sum = 0;
+    for (int level : party_levels) level_sum += level;
+    int average = std::max(1, static_cast<int>(std::lround(static_cast<double>(level_sum) / party_levels.size())));
+    result.adventure.coins_cp = adventure.coins_cp * average;
+    if (groups.empty()) return result;
 
     auto xp_of = [&](const AdventureMonsterGroup& group) { return monster_xp(monsters, group.monster_name); };
     constexpr int kMaxMonsters = 12;  // keep fights playable on one screen

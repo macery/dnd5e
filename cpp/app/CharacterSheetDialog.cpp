@@ -15,6 +15,7 @@
 #include "WindowSizing.hpp"
 #include "dnd/character_creation.hpp"
 #include "dnd/class_features.hpp"
+#include "dnd/currency.hpp"
 #include "dnd/equipment.hpp"
 #include "dnd/level_up.hpp"
 #include "dnd/progression.hpp"
@@ -129,6 +130,10 @@ CharacterSheetDialog::CharacterSheetDialog(const dnd::Character& character,
         experienceText += QString(" — <b>ready to level up</b> (level %1): use Level Up on the main window")
                               .arg(dnd::level_for_xp(character.experience));
     }
+    addExplainedRow(summaryForm, "Coins",
+        new QLabel(QString::fromStdString(dnd::format_coins(character.coins)), summaryGroup),
+        "Platinum, gold, electrum, silver, and copper pieces (1 gp = 10 sp = 100 cp). Adventures pay coins, split "
+        "among the survivors; new characters start with their background's purse.");
     addExplainedRow(summaryForm, "Experience", new QLabel(experienceText, summaryGroup),
         "Earned by defeating monsters, split evenly across the party. Reaching the next threshold makes a "
         "level available: take it with Level Up on the main window (hit points, Ability Score Improvements, "

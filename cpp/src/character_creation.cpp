@@ -5,6 +5,7 @@
 #include <stdexcept>
 
 #include "dnd/class_features.hpp"
+#include "dnd/currency.hpp"
 
 namespace dnd {
 
@@ -317,6 +318,8 @@ Character build_character(const CreationChoices& choices) {
     character.background = background.name;
     character.level = 1;
     if (choices.class_name == "Fighter") character.fighting_style = choices.fighting_style;
+    // The background's purse (PHB ch. 4), on top of the class kit.
+    character.coins[static_cast<size_t>(Coin::Gold)] = background_purse_gp(background.name);
 
     character.strength = scores[index_of(A::Strength)];
     character.dexterity = scores[index_of(A::Dexterity)];

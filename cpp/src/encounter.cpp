@@ -6,6 +6,7 @@
 #include "dnd/character_creation.hpp"
 #include "dnd/class_features.hpp"
 #include "dnd/combat.hpp"
+#include "dnd/currency.hpp"
 #include "dnd/equipment.hpp"
 #include "dnd/inventory.hpp"
 #include "dnd/progression.hpp"
@@ -191,9 +192,10 @@ void Encounter::add_monsters(const Monster& monster, int count) {
     }
 }
 
-void Encounter::set_victory_reward(std::string victory_text, std::vector<LootGrant> loot) {
+void Encounter::set_victory_reward(std::string victory_text, std::vector<LootGrant> loot, int coins_cp) {
     victory_text_ = std::move(victory_text);
     loot_ = std::move(loot);
+    coins_cp_ = coins_cp;
 }
 
 // --- Effects -----------------------------------------------------------------
@@ -1108,6 +1110,7 @@ void Encounter::check_for_victory_or_defeat() {
         stabilize_dying();  // the party tends to its fallen once the fight is won
         award_victory_experience();
         award_loot();
+        award_coins();
     }
     if (status_ != EncounterStatus::InProgress) {
         effects_.clear();  // combat effects end with the fight
@@ -1178,6 +1181,27 @@ void Encounter::award_loot() {
         found += std::to_string(grant.quantity) + " × " + grant.item.name;
     }
     log("Loot! " + recipient->character_name + " takes: " + found + ".");
+}
+
+void Encounter::award_coins() {
+    std::vector<Character*> survivors;
+    for (auto& character : characters_) {
+        if (!character.dead) survivors.push_back(&character);
+    }
+    if (coins_cp_ <= 0 || survivors.empty()) return;
+
+    auto shares = split_cp(coins_cp_, static_cast<int>(survivors.size()));
+    bool even = std::all_of(shares.begin(), shares.end(), [&](int share) { return share == shares.front(); });
+    std::string line = "The party finds " + format_cp(coins_cp_);
+    if (survivors.size() > 1 && even) line += " (" + format_cp(shares.front()) + " each)";
+    std::vector<std::string> parts;
+    for (size_t i = 0; i < survivors.size(); ++i) {
+        add_coins(survivors[i]->coins, coins_from_cp(shares[i]));
+        changed(survivors[i]->character_id);
+        parts.push_back(survivors[i]->character_name + " " + format_cp(shares[i]));
+    }
+    if (survivors.size() > 1 && !even) line += ": " + join(parts, "; ");
+    log(line + ".");
 }
 
 // --- State -------------------------------------------------------------------

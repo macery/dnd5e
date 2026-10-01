@@ -13,6 +13,7 @@
 #include <QVBoxLayout>
 
 #include "WindowSizing.hpp"
+#include "dnd/currency.hpp"
 #include "dnd/equipment.hpp"
 #include "dnd/inventory.hpp"
 
@@ -42,6 +43,12 @@ InventoryDialog::InventoryDialog(dnd::Repository& repository, dnd::Character cha
     headerRow->addWidget(hpLabel_);
     headerRow->addStretch(1);
     headerRow->addWidget(weightLabel_);
+
+    coinsLabel_ = new QLabel(this);
+    coinsLabel_->setWordWrap(true);
+    coinsLabel_->setToolTip("Coins carried: platinum, gold, electrum, silver, copper (1 pp = 10 gp = 20 ep = 100 sp = "
+                            "1,000 cp). Adventures pay coins, split among the survivors. There's nothing to spend "
+                            "them on yet.");
 
     equipmentLabel_ = new QLabel(this);
     equipmentLabel_->setWordWrap(true);
@@ -89,6 +96,7 @@ InventoryDialog::InventoryDialog(dnd::Repository& repository, dnd::Character cha
 
     auto* layout = new QVBoxLayout(this);
     layout->addLayout(headerRow);
+    layout->addWidget(coinsLabel_);
     layout->addWidget(equipmentLabel_);
     layout->addWidget(table_, 1);
     layout->addLayout(rowButtons);
@@ -125,6 +133,11 @@ void InventoryDialog::reload() {
 
     hpLabel_->setText(QString("HP: %1 / %2").arg(character_.current_hp).arg(character_.max_hp));
     weightLabel_->setText(QString("Carrying: %1 lb").arg(dnd::total_weight(inventory_)));
+    int itemsValue = 0;
+    for (const auto& entry : inventory_) itemsValue += entry.item.cost_cp * entry.quantity;
+    coinsLabel_->setText(QString("<b>Coins:</b> %1 · <b>Items worth:</b> %2")
+                             .arg(QString::fromStdString(dnd::format_coins(character_.coins)),
+                                  QString::fromStdString(dnd::format_cp(itemsValue))));
 
     auto armorClass = dnd::calculate_armor_class(character_, className_, inventory_);
     auto attack = dnd::weapon_attack(character_, className_, raceName_, inventory_);

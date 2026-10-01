@@ -266,6 +266,26 @@ TEST_CASE("victory can make a level available", "[encounter]") {
     REQUIRE(encounter.character(1)->experience == 330);
 }
 
+TEST_CASE("victory coins are split among the survivors", "[encounter][currency]") {
+    Fixture f;
+    // Init: Aria 20, Zanna 1, Goblin 1 (Aria, then Goblin before Zanna on the tie? Aria first either way).
+    ScriptedRandomSource rolls({20, 1, 1, 15, 8});
+    dnd::Dice dice(rolls);
+    auto encounter = f.encounter(dice);
+    encounter.add_character(f.fighter(1), {}, f.fighter_gear());
+    encounter.add_character(f.wizard(2), {}, {});
+    encounter.add_monsters(f.monster("Goblin"), 1);
+    encounter.set_victory_reward("", {}, 1001);  // 10 gp, 1 cp
+    encounter.roll_initiative();
+    encounter.take_events();
+    REQUIRE(encounter.current()->name == "Aria");
+    REQUIRE(encounter.attack(2, 5, 1, 8, 3));
+    auto lines = logs(encounter.take_events());
+    REQUIRE(contains(lines, "The party finds 10 gp, 1 cp: Aria 5 gp, 1 cp; Zanna 5 gp."));
+    REQUIRE(encounter.character(1)->coins == std::array<int, 5>{1, 0, 0, 5, 0});
+    REQUIRE(encounter.character(2)->coins == std::array<int, 5>{0, 0, 0, 5, 0});
+}
+
 TEST_CASE("defeat when every character is down", "[encounter]") {
     Fixture f;
     // Init: Aria 1, Orc 20. Orc: pick, d20 20 (crit), 2d12 = 12 + 12 + 3 = 27.

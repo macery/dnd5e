@@ -9,6 +9,7 @@
 #include <nlohmann/json.hpp>
 
 #include "dnd/class_features.hpp"
+#include "dnd/currency.hpp"
 #include "dnd/rules.hpp"
 
 namespace dnd {
@@ -77,6 +78,7 @@ ExportedCharacter export_one(const Repository& repo, const Character& c, const s
         out.inventory.push_back({entry.item.name, entry.quantity, entry.equipped});
     }
     for (const auto& spell : repo.get_character_spells(c.character_id)) out.spells.push_back(spell.name);
+    out.coins = c.coins;
     return out;
 }
 
@@ -87,6 +89,12 @@ CharacterExport start_export(const Repository& repo, int player_id) {
         if (player.player_id == player_id) file.player_name = player.player_name;
     }
     return file;
+}
+
+json coins_json(const std::array<int, 5>& coins) {
+    json out = json::object();
+    for (int i = 0; i < kCoinCount; ++i) out[coin_abbreviation(static_cast<Coin>(i))] = coins[static_cast<size_t>(i)];
+    return out;
 }
 
 }  // namespace
@@ -123,6 +131,7 @@ std::string to_json(const CharacterExport& file) {
             {"feature_uses_spent", c.feature_uses_spent},
             {"inventory", inventory},
             {"spells", c.spells},
+            {"coins", coins_json(c.coins)},
         });
     }
     json root = {
@@ -202,6 +211,11 @@ ParseResult parse_character_file(const std::string& text) {
                 }
             }
             out.spells = c.value("spells", std::vector<std::string>{});
+            if (c.contains("coins")) {  // optional: files from before currency have none
+                for (int i = 0; i < kCoinCount; ++i) {
+                    out.coins[static_cast<size_t>(i)] = c.at("coins").value(coin_abbreviation(static_cast<Coin>(i)), 0);
+                }
+            }
             file.characters.push_back(std::move(out));
         }
         result.file = std::move(file);
@@ -383,6 +397,7 @@ ImportResult apply_import(Repository& repo, const ImportPlan& plan, const Import
             }
             c.spell_slots_used = source.spell_slots_used;
             c.feature_uses_spent = source.feature_uses_spent;
+            c.coins = source.coins;
             int id = repo.add_character(c);
 
             for (const auto& entry : source.inventory) {

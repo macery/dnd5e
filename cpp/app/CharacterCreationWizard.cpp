@@ -25,6 +25,7 @@
 
 #include "WindowSizing.hpp"
 #include "dnd/class_features.hpp"
+#include "dnd/currency.hpp"
 #include "dnd/equipment.hpp"
 #include "dnd/rules.hpp"
 #include "dnd/spellcasting.hpp"
@@ -1005,6 +1006,7 @@ private:
             gear << (entry.equipped ? name + " (equipped)" : name);
         }
         if (context_.take_explorers_pack) gear << "Explorer's Pack";
+        QString purse = QString::fromStdString(dnd::format_coins(character.coins));
 
         return QString("<h2>%1</h2>"
                        "<p>Level 1 %2 %3 · %4 · %5</p>"
@@ -1012,7 +1014,8 @@ private:
                        "<b>Proficiency</b> %10 · <b>Passive Perception</b> %11</p>"
                        "<table cellspacing='4'>%12</table>"
                        "<p><b>Skills:</b> %13</p>"
-                       "<p><b>Weapon:</b> %14<br><b>Gear:</b> %15</p>%16%17")
+                       "<p><b>Weapon:</b> %14<br><b>Gear:</b> %15<br><b>Coins:</b> %18 (your background's "
+                       "purse)</p>%16%17")
             .arg(q(character.character_name), q(choices.race_name), q(choices.class_name),
                  q(choices.background_name), nameFor(context_.alignments, character.alignment))
             .arg(character.max_hp)
@@ -1022,7 +1025,8 @@ private:
             .arg(formatModifier(dnd::proficiency_bonus(character.level)))
             .arg(dnd::passive_perception(character))
             .arg(abilities, skills.join(", "), weaponText, gear.isEmpty() ? QString("none") : gear.join(", "),
-                 spellsText(character), fightingStyleText(character));
+                 spellsText(character), fightingStyleText(character))
+            .arg(purse);
     }
 
     QString fightingStyleText(const dnd::Character& character) const {

@@ -46,6 +46,7 @@ struct ExportedCharacter {
     std::map<std::string, int> feature_uses_spent;
     std::vector<ExportedItem> inventory;
     std::vector<std::string> spells;
+    std::array<int, 5> coins{};  // cp, sp, ep, gp, pp; optional in files (added after version 1 shipped)
 };
 
 struct CharacterExport {

@@ -9,6 +9,7 @@
 
 #include "WindowSizing.hpp"
 #include "dnd/adventure.hpp"
+#include "dnd/currency.hpp"
 
 namespace {
 
@@ -100,12 +101,11 @@ void AdventurePickerDialog::onSelectionChanged(int index) {
     text += QString("<p><b>Difficulty:</b> <span style='color:%1'>%2</span></p>")
                 .arg(colorFor(scaled.rating.difficulty), QString::fromStdString(scaled.rating.text()).toHtmlEscaped());
 
-    if (!scaled.adventure.loot.empty()) {
-        QStringList rewards;
-        for (const auto& loot : scaled.adventure.loot) {
-            rewards << QString("%1 × %2").arg(loot.quantity).arg(QString::fromStdString(loot.item_name));
-        }
-        text += "<p><b>Reward:</b> " + rewards.join(", ") + "</p>";
+    QStringList rewards;
+    if (scaled.adventure.coins_cp > 0) rewards << QString::fromStdString(dnd::format_cp(scaled.adventure.coins_cp));
+    for (const auto& loot : scaled.adventure.loot) {
+        rewards << QString("%1 × %2").arg(loot.quantity).arg(QString::fromStdString(loot.item_name));
     }
+    if (!rewards.isEmpty()) text += "<p><b>Reward:</b> " + rewards.join(", ") + "</p>";
     detailsLabel_->setText(text);
 }

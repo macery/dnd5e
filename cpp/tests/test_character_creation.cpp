@@ -257,6 +257,7 @@ TEST_CASE("build_character assembles a full level-1 character", "[creation]") {
     REQUIRE(character.max_hp == 12);  // d10 + CON +2
     REQUIRE(character.current_hp == 12);
     REQUIRE(character.fighting_style == "Defense");
+    REQUIRE(character.coins[3] == 10);  // a Soldier's purse: 10 gp
 
     choices.name = "   ";
     REQUIRE_THROWS_AS(dnd::build_character(choices), std::invalid_argument);

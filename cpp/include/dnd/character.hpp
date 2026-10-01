@@ -38,6 +38,8 @@ struct Character {
     // A Fighter's Fighting Style ("Defense", "Archery", ...); empty if none
     // (see dnd/class_features.hpp).
     std::string fighting_style;
+    // Coins carried: cp, sp, ep, gp, pp (dnd/currency.hpp's Coin order).
+    std::array<int, 5> coins{};
 
     int experience = 0;
     // Spent on short rests, partly recovered on a long rest; the total

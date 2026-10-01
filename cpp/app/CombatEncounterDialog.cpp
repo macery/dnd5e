@@ -306,7 +306,7 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
                                      [&](const dnd::Item& candidate) { return candidate.name == grant.item_name; });
             if (item != items.end()) loot.push_back({*item, grant.quantity});
         }
-        encounter_.set_victory_reward(adventure->victory_text, std::move(loot));
+        encounter_.set_victory_reward(adventure->victory_text, std::move(loot), adventure->coins_cp);
     }
 
     updateActionControlsVisibility();

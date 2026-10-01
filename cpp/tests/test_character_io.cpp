@@ -62,6 +62,7 @@ int seed_party(dnd::Repository& repo) {
                                (1u << static_cast<int>(dnd::Skill::Perception));
     aria.fighting_style = "Defense";
     aria.feature_uses_spent = {{"SecondWind", 1}};
+    aria.coins = {7, 3, 0, 42, 1};
     int aria_id = repo.add_character(aria);
     repo.add_to_inventory(aria_id, item_id(repo, "Chain Mail"));
     repo.set_equipped(aria_id, item_id(repo, "Chain Mail"), true);
@@ -149,6 +150,7 @@ TEST_CASE("a player's characters round-trip into another database", "[character_
     REQUIRE(aria->background == "Soldier");
     REQUIRE(aria->fighting_style == "Defense");
     REQUIRE(aria->feature_uses_spent == std::map<std::string, int>{{"SecondWind", 1}});
+    REQUIRE(aria->coins == std::array<int, 5>{7, 3, 0, 42, 1});
 
     auto inventory = target.get_inventory(aria->character_id);
     REQUIRE(inventory.size() == 3);
@@ -164,6 +166,16 @@ TEST_CASE("a player's characters round-trip into another database", "[character_
     REQUIRE(zanna->spell_slots_used[0] == 2);
     REQUIRE(zanna->spell_slots_used[1] == 1);
     REQUIRE(target.get_character_spells(zanna->character_id).size() == 2);
+}
+
+TEST_CASE("files from before coins existed still import, with no coins", "[character_io][currency]") {
+    auto parsed = dnd::parse_character_file(R"({"format": "dnd5e-characters", "version": 1, "player": {"name": "Old"},
+        "characters": [{"name": "Vex", "class": "Rogue", "race": "Halfling", "alignment": "Chaotic Good"}]})");
+    REQUIRE(parsed.file);
+    REQUIRE(parsed.file->characters[0].coins == std::array<int, 5>{});
+    dnd::Repository repo(":memory:");
+    auto result = dnd::apply_import(repo, dnd::plan_import(repo, *parsed.file), {});
+    REQUIRE(result.imported_character_ids.size() == 1);
 }
 
 TEST_CASE("exporting one character", "[character_io]") {

@@ -35,6 +35,7 @@ add_library(dndcore
     src/character_io.cpp
     src/class_features.cpp
     src/combat.cpp
+    src/currency.cpp
     src/damage.cpp
     src/dice.cpp
     src/effects.cpp
