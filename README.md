@@ -270,7 +270,13 @@ Phases 1 (core and data) and 2 (UI) are done; see [docs/magic-system.md](docs/ma
 - [x] **Death saving throws**: characters at 0 HP fall unconscious and roll death saves each turn. A natural 1 counts as two failures, and a natural 20 brings them back with 1 HP. Massive damage kills outright. Healing revives them, and the fight's end stabilizes them. Monsters ignore the dying. A **Stabilize** action (Medicine check, or automatic with a Healer's Kit) and *Spare the Dying* stabilize the dying. Death save pips show in combat, and the dead are marked and kept out of play.
 - [ ] **Revival**: bring dead characters back the 2014 PHB way: *Revivify*, *Raise Dead*, *Reincarnate*, *Resurrection*, *True Resurrection*, or a temple's spellcasting service. It needs the spells, their material components, currency, and time tracking; see the effects design doc's Decisions.
 - [ ] **More actions**: Disengage, Help, Hide, and Ready. (Attack, Dash, Dodge, Drink Potion, Cast a Spell, and Stabilize exist.) Most need positions or reactions to mean much without a map; Help (advantage on an ally's next attack) works without one.
-- [ ] **Monsters and encounter balance** ([docs/monsters-and-encounters.md](docs/monsters-and-encounters.md)): covers the items below on several attacks, damage types, creature types, more monsters, and encounter difficulty. Phases 1 (damage and creature types) and 2 (Multiattack, 13 SRD monsters from CR ½ to 5, monster traits, and five new adventures) are done. Phase 3 (encounter difficulty and adventure scaling) is next.
+- [x] **Monsters and encounter balance** ([docs/monsters-and-encounters.md](docs/monsters-and-encounters.md)):
+  - Damage and creature types.
+  - Multiattack and 13 SRD monsters from CR ½ to 5, with monster traits.
+  - Five new adventures.
+  - Encounter difficulty and adventure scaling.
+
+  Follow-ups are the open items below.
 - [x] **Monsters with several attacks**: Multiattack (the Bandit Captain, Owlbear, Ettin, Hill Giant, and Troll), with later attacks moving to someone else when a target drops.
 - [ ] **Smarter monster AI**: monsters already ignore dying characters and won't attack whoever charmed them. Beyond that, they pick a random conscious character. Better choices might be the lowest HP, the biggest threat, or the spellcaster who's concentrating.
 - [x] **Damage types**:
@@ -287,7 +293,10 @@ Phases 1 (core and data) and 2 (UI) are done; see [docs/magic-system.md](docs/ma
 - [ ] **More monsters**: 19 SRD stat blocks from CR 1/8 to 5 so far. Still to come: higher CRs, monster spellcasters, and the traits that need a map.
 - [ ] **Monster editor**: add and edit custom monsters in the UI.
 - [ ] **Multi-encounter adventures**: several fights in a row, with rests in between.
-- [ ] **Encounter difficulty**: rate encounters Easy/Medium/Hard/Deadly from party XP budgets, and scale adventures to the party's level. In testing, a lone level-3 Wizard loses to the three-goblin adventure about half the time, so solo play needs this.
+- [x] **Encounter difficulty**:
+  - Fights are rated Trivial, Easy, Medium, Hard, or Deadly with the 2014 encounter-building rules: XP thresholds by level, plus a multiplier for the number of monsters.
+  - Combat Encounter shows the rating live.
+  - The Solo Adventure picker rates every adventure for the party and adjusts monster counts toward Medium–Hard (at most 12 monsters; every group keeps at least one, so a lone Troll can still be Deadly).
 - [x] **Loot**: adventure rewards that drop items into inventory (depends on the inventory system).
 
 ### Technical / housekeeping

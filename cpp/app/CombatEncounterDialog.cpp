@@ -89,6 +89,13 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
     monsterRow->addWidget(monsterTypeCombo_, 1);
     monsterRow->addWidget(monsterCountSpin_);
     monsterRow->addWidget(addMonsterButton_);
+    difficultyLabel_ = new QLabel(this);
+    difficultyLabel_->setWordWrap(true);
+    difficultyLabel_->setToolTip(
+        "How hard this fight is for the characters in it, from the 2014 encounter-building rules: the monsters' "
+        "XP, multiplied for how many there are (more monsters are more dangerous), against the party's Easy / "
+        "Medium / Hard / Deadly thresholds. Deadly fights can kill characters. The XP awarded on victory is the "
+        "unmultiplied total.");
 
     auto* turnRow = new QHBoxLayout();
     rollInitiativeButton_ = new QPushButton("Roll Initiative", this);
@@ -219,6 +226,7 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
     if (objectiveLabel_) layout->addWidget(objectiveLabel_);
     layout->addWidget(participantTable_, 1);
     layout->addLayout(monsterRow);
+    layout->addWidget(difficultyLabel_);
     layout->addLayout(turnRow);
     layout->addWidget(attackGroup);
     layout->addWidget(new QLabel("Log", this));
@@ -328,6 +336,13 @@ void CombatEncounterDialog::refreshState() {
         statusLabel_->setText("Status: " + q(encounter_.result_message()));
     }
     refreshParticipantTable();
+    auto rating = encounter_.difficulty();
+    bool anyMonster = std::any_of(encounter_.combatants().begin(), encounter_.combatants().end(),
+                                  [](const dnd::Combatant& c) { return !c.is_character; });
+    difficultyLabel_->setText(anyMonster ? "Difficulty: " + q(rating.text()) : QString("Add monsters to fight."));
+    difficultyLabel_->setStyleSheet(rating.difficulty == dnd::Difficulty::Deadly ? "color: #b00020; font-weight: bold;"
+                                    : rating.difficulty == dnd::Difficulty::Hard ? "color: #c05000;"
+                                                                                 : "");
     takeActionButton_->setEnabled(encounter_.awaiting_action() || encounter_.bonus_action_available());
     refreshBonusControls();
 

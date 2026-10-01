@@ -6,7 +6,7 @@ const std::vector<AdventureTemplate>& adventure_templates() {
     static const std::vector<AdventureTemplate> templates = {
         {
             "Ambush on the Trail",
-            "Three goblins burst from the underbrush, blades drawn.",
+            "Goblins burst from the underbrush, blades drawn.",
             "The trail is clear. The goblins won't trouble travelers again.",
             {{"Goblin", 3}},
             {{"Potion of Healing", 1}, {"Rations (1 day)", 2}},
@@ -52,7 +52,7 @@ const std::vector<AdventureTemplate>& adventure_templates() {
         },
         {
             "The Bandit Captain's Camp",
-            "A bandit captain and a pair of hobgoblin mercenaries hold the ford, taking a toll from everyone who "
+            "A bandit captain and hobgoblin mercenaries hold the ford, taking a toll from everyone who "
             "crosses.",
             "The captain's camp is scattered. Travelers can cross the ford for free again.",
             {{"Bandit Captain", 1}, {"Hobgoblin", 2}},

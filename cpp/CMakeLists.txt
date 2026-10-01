@@ -25,6 +25,7 @@ add_library(dndcore
     src/dice.cpp
     src/effects.cpp
     src/encounter.cpp
+    src/encounter_difficulty.cpp
     src/equipment.cpp
     src/inventory.cpp
     src/level_up.cpp

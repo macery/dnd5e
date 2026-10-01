@@ -484,17 +484,17 @@ void MainWindow::onCombatEncounterClicked() {
 }
 
 void MainWindow::onSoloAdventureClicked() {
-    AdventurePickerDialog picker(this);
-    if (picker.exec() != QDialog::Accepted) return;
-
-    const auto& templates = dnd::adventure_templates();
-    int index = picker.selectedIndex();
-    if (index < 0 || index >= static_cast<int>(templates.size())) return;
-
     auto characters = charactersWhoCanFight("Solo Adventure");
     if (characters.empty() && !repository_.get_characters().empty()) return;
-    CombatEncounterDialog dialog(repository_, characters, repository_.get_monsters(), this,
-                                  &templates[static_cast<size_t>(index)]);
+
+    std::vector<int> partyLevels;
+    for (const auto& character : characters) partyLevels.push_back(character.level);
+    auto monsters = repository_.get_monsters();
+    AdventurePickerDialog picker(partyLevels, monsters, this);
+    if (picker.exec() != QDialog::Accepted) return;
+    dnd::AdventureTemplate adventure = picker.selectedAdventure().adventure;  // scaled for the party
+
+    CombatEncounterDialog dialog(repository_, characters, monsters, this, &adventure);
     dialog.exec();
     reloadCharactersForCurrentPlayer();
 }

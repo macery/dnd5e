@@ -9,6 +9,7 @@
 #include "dnd/character.hpp"
 #include "dnd/dice.hpp"
 #include "dnd/effects.hpp"
+#include "dnd/encounter_difficulty.hpp"
 #include "dnd/equipment.hpp"
 #include "dnd/item.hpp"
 #include "dnd/lookup_entry.hpp"
@@ -160,6 +161,9 @@ public:
     const std::string& result_message() const { return result_message_; }
 
     const Character* character(int character_id) const;
+    // How hard this fight is for the characters in it (dead ones excluded),
+    // counting every monster added (dnd/encounter_difficulty.hpp).
+    EncounterRating difficulty() const;
 
     // Every effect currently in play (conditions, Dodge, spell effects).
     const std::vector<ActiveEffect>& effects() const { return effects_; }

@@ -1,6 +1,22 @@
 # Monsters and encounter balance design
 
-Status: **phases 1 (damage and creature types) and 2 (Multiattack and the roster) done;** phase 3 (encounter difficulty) is next. Decisions were settled on 2026-10-01; see [Decisions](#decisions).
+Status: **all three phases done:** damage and creature types, Multiattack and the roster, and encounter difficulty. Decisions were settled on 2026-10-01; see [Decisions](#decisions).
+
+**Phase 3 as built:**
+- **`dnd/encounter_difficulty`:**
+  - **`xp_thresholds`:** the 2014 per-level table.
+  - **`encounter_multiplier`:** ×0.5 to ×5, including the small- and large-party steps.
+  - **`rate_encounter`:** base and adjusted XP, the party's thresholds, and the rating (Trivial below Easy).
+  - **`scale_adventure`:** adjusts monster counts toward Medium–Hard.
+    - **While it's Deadly,** it removes the most expensive monster from a group of more than one.
+    - **While it's below Medium,** it adds the cheapest monster, unless that would make it Deadly.
+    - **Limits:** at most 12 monsters, and every group keeps at least one, so a lone Troll stays a (possibly Deadly) Troll and goblins can't challenge a level-5 party.
+- **`Encounter::difficulty()`** rates the fight for its living characters.
+- **Combat Encounter:** a difficulty line under the monster picker, orange for Hard and bold red for Deadly, with a tooltip explaining the rules.
+- **Solo Adventure picker:**
+  - It takes the party first, and lists each adventure with its rating.
+  - It shows the scaled lineup ("1 × Goblin (was 3)"), the rating, and the reward, and the fight uses the scaled lineup.
+  - Hooks no longer name monster counts.
 
 **Phase 2 as built:**
 - **Migration 19:**

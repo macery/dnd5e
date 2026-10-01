@@ -16,6 +16,7 @@ add_executable(dnd_tests
     test_dice.cpp
     test_effects.cpp
     test_encounter.cpp
+    test_encounter_difficulty.cpp
     test_equipment.cpp
     test_inventory.cpp
     test_level_up.cpp

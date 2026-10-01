@@ -371,6 +371,19 @@ std::vector<std::string> Encounter::status_tooltip(int index) const {
     return lines;
 }
 
+EncounterRating Encounter::difficulty() const {
+    std::vector<int> party_levels;
+    std::vector<int> monster_xp;
+    for (const auto& combatant : combatants_) {
+        if (combatant.is_character) {
+            if (!combatant.death_saves.dead) party_levels.push_back(combatant.level);
+        } else {
+            monster_xp.push_back(combatant.xp);
+        }
+    }
+    return rate_encounter(party_levels, monster_xp);
+}
+
 // --- Turns -------------------------------------------------------------------
 
 void Encounter::roll_initiative() {

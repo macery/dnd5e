@@ -89,6 +89,7 @@ private:
 
     QLabel* statusLabel_ = nullptr;
     QLabel* objectiveLabel_ = nullptr;  // only created when launched from an adventure
+    QLabel* difficultyLabel_ = nullptr;  // the fight's rating for the party
     QTableWidget* participantTable_ = nullptr;
     QComboBox* monsterTypeCombo_ = nullptr;
     QSpinBox* monsterCountSpin_ = nullptr;
