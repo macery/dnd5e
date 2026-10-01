@@ -33,6 +33,7 @@ private slots:
     void onCharacterActivated(const QModelIndex& index);
     void onInventoryClicked();
     void onSpellbookClicked();
+    void onLevelUpClicked();
     void onDamageClicked();
     void onHealClicked();
     void onShortRestClicked();
@@ -73,6 +74,7 @@ private:
     QPushButton* deleteCharacterButton_ = nullptr;
     QPushButton* inventoryButton_ = nullptr;
     QPushButton* spellbookButton_ = nullptr;
+    QPushButton* levelUpButton_ = nullptr;
     QSpinBox* hpAmountSpin_ = nullptr;
     QPushButton* damageButton_ = nullptr;
     QPushButton* healButton_ = nullptr;

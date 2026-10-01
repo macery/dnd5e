@@ -15,6 +15,7 @@
 #include "dnd/character_creation.hpp"
 #include "dnd/class_features.hpp"
 #include "dnd/equipment.hpp"
+#include "dnd/level_up.hpp"
 #include "dnd/progression.hpp"
 #include "dnd/rules.hpp"
 #include "dnd/spellcasting.hpp"
@@ -121,9 +122,14 @@ CharacterSheetDialog::CharacterSheetDialog(const dnd::Character& character,
               .arg(character.experience)
               .arg(dnd::xp_threshold_for_level(character.level + 1))
               .arg(character.level + 1);
+    if (dnd::pending_levels(character) > 0) {
+        experienceText += QString(" — <b>ready to level up</b> (level %1): use Level Up on the main window")
+                              .arg(dnd::level_for_xp(character.experience));
+    }
     addExplainedRow(summaryForm, "Experience", new QLabel(experienceText, summaryGroup),
-        "Earned by defeating monsters, split evenly across the party. Reaching the next threshold levels "
-        "this character up, raising max HP and, every few levels, the proficiency bonus.");
+        "Earned by defeating monsters, split evenly across the party. Reaching the next threshold makes a "
+        "level available: take it with Level Up on the main window (hit points, Ability Score Improvements, "
+        "new features and spells).");
     int hitDie = dnd::hit_die_for_class_id(classes, character.class_id);
     addExplainedRow(summaryForm, "Hit Dice",
         new QLabel(QString("%1 / %2 (d%3)").arg(dnd::hit_dice_remaining(character)).arg(character.level).arg(hitDie),

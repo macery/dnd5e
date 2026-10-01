@@ -13,6 +13,7 @@ add_executable(dnd_app
     InitiativeTrackerDialog.cpp
     InventoryDialog.cpp
     SpellbookDialog.cpp
+    LevelUpDialog.cpp
     MonsterListDialog.cpp
     CombatEncounterDialog.cpp
     AdventurePickerDialog.cpp

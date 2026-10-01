@@ -61,6 +61,14 @@ QWidget* CharacterEditorDialog::buildBasicsTab(const std::vector<dnd::LookupEntr
     levelSpin_ = new QSpinBox(page);
     levelSpin_->setRange(1, 20);
     levelSpin_->setValue(1);
+    levelSpin_->setReadOnly(true);
+    levelSpin_->setButtonSymbols(QAbstractSpinBox::NoButtons);
+    levelSpin_->setToolTip("Levels come from XP: raise Experience, then use Level Up on the main window to take "
+                           "the level (hit points, Ability Score Improvements, features, spells).");
+    experienceSpin_ = new QSpinBox(page);
+    experienceSpin_->setRange(0, 999999);
+    experienceSpin_->setToolTip("Experience points. Passing the next level's threshold makes a level available "
+                                "through Level Up.");
     currentHpSpin_ = new QSpinBox(page);
     currentHpSpin_->setRange(0, 999);
     maxHpSpin_ = new QSpinBox(page);
@@ -82,6 +90,7 @@ QWidget* CharacterEditorDialog::buildBasicsTab(const std::vector<dnd::LookupEntr
     form->addRow("Alignment", alignmentCombo_);
     form->addRow("Fighting Style", fightingStyleCombo_);
     form->addRow("Level", levelSpin_);
+    form->addRow("Experience", experienceSpin_);
     form->addRow("Current HP", currentHpSpin_);
     form->addRow("Max HP", maxHpSpin_);
     refreshFightingStyle();
@@ -152,6 +161,7 @@ void CharacterEditorDialog::populateFrom(const dnd::Character& existing) {
     raceCombo_->setCurrentIndex(raceCombo_->findData(existing.race));
     alignmentCombo_->setCurrentIndex(alignmentCombo_->findData(existing.alignment));
     levelSpin_->setValue(existing.level);
+    experienceSpin_->setValue(existing.experience);
     currentHpSpin_->setValue(existing.current_hp);
     maxHpSpin_->setValue(existing.max_hp);
     int style = fightingStyleCombo_->findData(QString::fromStdString(existing.fighting_style));
@@ -179,6 +189,7 @@ dnd::Character CharacterEditorDialog::character() const {
     character.race = raceCombo_->currentData().toInt();
     character.alignment = alignmentCombo_->currentData().toInt();
     character.level = levelSpin_->value();
+    character.experience = experienceSpin_->value();
     character.current_hp = currentHpSpin_->value();
     character.max_hp = maxHpSpin_->value();
     if (fightingStyleCombo_->isEnabled()) {

@@ -42,7 +42,8 @@ private:
     QComboBox* raceCombo_ = nullptr;
     QComboBox* alignmentCombo_ = nullptr;
     QComboBox* fightingStyleCombo_ = nullptr;  // enabled for Fighters only
-    QSpinBox* levelSpin_ = nullptr;
+    QSpinBox* levelSpin_ = nullptr;       // read-only: levels come from XP through Level Up
+    QSpinBox* experienceSpin_ = nullptr;
     QSpinBox* currentHpSpin_ = nullptr;
     QSpinBox* maxHpSpin_ = nullptr;
 

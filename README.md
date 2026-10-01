@@ -252,9 +252,12 @@ Phases 1 (core and data) and 2 (UI) are done; see [docs/magic-system.md](docs/ma
 
     Uses are saved on the character and restored by rests.
   - **Later:** Paladin and Ranger Fighting Styles at level 2, two-weapon fighting, subclasses, Warlock invocations, Sorcery Points, reactions, and Divine Smite's extra die against undead and fiends.
-- [ ] **Level-up choices** ([docs/level-up.md](docs/level-up.md)): Ability Score Improvements at levels 4/8/12/16/19, and an option to roll HP instead of taking the average.
+- [x] **Level-up choices** ([docs/level-up.md](docs/level-up.md)):
+  - XP makes a level available, and **Level Up** on the main window walks through it: roll or average HP, Ability Score Improvements (with retroactive CON), Paladin and Ranger Fighting Styles, and new spells.
+  - A summary shows every PHB feature gained, marked where it isn't automated yet.
+  - Feats, subclasses, and multiclassing are still to do.
 - [x] **Starting HP**: level-1 max HP is the class hit die plus CON, calculated by the wizard.
-- [ ] **Keep level and XP in sync**: editing the level by hand in the editor can leave it out of step with XP.
+- [x] **Keep level and XP in sync**: the editor edits XP, and Level is read-only; levels change only through Level Up.
 - [x] **Weapon proficiencies**: class (PHB ch. 3) and base-Dwarf weapon training. Proficiency is added only with trained weapons, and the wizard and Inventory warn about untrained ones. The Elf's training waits for subraces.
 - [x] **Backgrounds**: 13 PHB backgrounds, each granting two skill proficiencies, stored on the character and shown on the sheet. Background features and tool proficiencies aren't modeled.
 

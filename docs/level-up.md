@@ -1,6 +1,17 @@
 # Level-up design
 
-Status: **phase 1 (rules) done;** phase 2 (the Level Up dialog and UI) is next. Decisions were settled on 2026-10-01; see [Decisions](#decisions).
+Status: **phases 1 (rules) and 2 (UI) done.** Decisions were settled on 2026-10-01; see [Decisions](#decisions).
+
+**Phase 2 as built:**
+- **`LevelUpDialog`:** a wizard with Hit Points, Ability Score Improvement, Fighting Style, New Spells, and Summary pages. Pages that don't apply are skipped.
+  - **Hit Points:** take the average, or roll once and keep the result.
+  - **Ability Score Improvement:** two "+1 to" picks, where the same ability twice gives +2. It shows each new score and modifier.
+  - **New Spells:** lists only the new picks, after the ASI (prepared counts follow the casting ability). You can also pick them later in the Spellbook.
+  - **Summary:** scrolls, and marks features that aren't automated yet.
+  - **Finish** applies `apply_level_up` and saves the character and any new spells.
+- **Main window:** a **Level Up** button runs the dialog once per pending level. The Level column shows "3 → 5" in bold, with a tooltip, when levels are waiting.
+- **Character sheet:** the Experience row says "ready to level up".
+- **Editor:** XP is editable, and Level is read-only.
 
 **Phase 1 as built (`dnd/level_up`):**
 - **`pending_levels`:** levels the XP has earned but the character hasn't taken.

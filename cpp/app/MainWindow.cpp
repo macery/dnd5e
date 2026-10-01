@@ -26,11 +26,13 @@
 #include "DiceRollerWidget.hpp"
 #include "InitiativeTrackerDialog.hpp"
 #include "InventoryDialog.hpp"
+#include "LevelUpDialog.hpp"
 #include "MonsterListDialog.hpp"
 #include "SpellbookDialog.hpp"
 
 #include "dnd/adventure.hpp"
 #include "dnd/class_features.hpp"
+#include "dnd/level_up.hpp"
 #include "dnd/progression.hpp"
 #include "dnd/spellcasting.hpp"
 
@@ -77,6 +79,11 @@ MainWindow::MainWindow(dnd::Repository& repository, QWidget* parent)
     spellbookButton_->setToolTip("The selected character's spells and spell slots: learn spells, and cast healing "
                                  "or utility spells outside combat.");
     characterRow->addWidget(spellbookButton_);
+    levelUpButton_ = new QPushButton("Level Up", central);
+    levelUpButton_->setToolTip("Take a level the selected character's XP has earned: hit points, Ability Score "
+                               "Improvements, new features, and new spells. The Level column shows \"3 → 4\" "
+                               "when one is ready.");
+    characterRow->addWidget(levelUpButton_);
     rootLayout->addLayout(characterRow);
 
     auto* combatRow = new QHBoxLayout();
@@ -124,6 +131,7 @@ MainWindow::MainWindow(dnd::Repository& repository, QWidget* parent)
     connect(deleteCharacterButton_, &QPushButton::clicked, this, &MainWindow::onDeleteCharacterClicked);
     connect(inventoryButton_, &QPushButton::clicked, this, &MainWindow::onInventoryClicked);
     connect(spellbookButton_, &QPushButton::clicked, this, &MainWindow::onSpellbookClicked);
+    connect(levelUpButton_, &QPushButton::clicked, this, &MainWindow::onLevelUpClicked);
     connect(characterTable_, &QTableView::doubleClicked, this, &MainWindow::onCharacterActivated);
     connect(damageButton_, &QPushButton::clicked, this, &MainWindow::onDamageClicked);
     connect(healButton_, &QPushButton::clicked, this, &MainWindow::onHealClicked);
@@ -244,7 +252,6 @@ void MainWindow::onEditCharacterClicked() {
         updated.character_id = existing.character_id;
         updated.player_id = existing.player_id;
         // Not editable in the dialog -- earned/spent through play only.
-        updated.experience = existing.experience;
         updated.hit_dice_used = existing.hit_dice_used;
         updated.background = existing.background;
         updated.spell_slots_used = existing.spell_slots_used;
@@ -330,6 +337,36 @@ void MainWindow::onSpellbookClicked() {
     SpellbookDialog dialog(repository_, *selected, classes_, this);
     dialog.exec();
     reloadCharactersForCurrentPlayer();  // casting changes HP and slots
+}
+
+void MainWindow::onLevelUpClicked() {
+    const dnd::Character* selected = selectedCharacter("Level Up");
+    if (!selected) return;
+    dnd::Character character = *selected;
+    if (character.dead) {
+        QMessageBox::information(this, "Level Up", QString::fromStdString(character.character_name) +
+                                                       " is dead and can't level up.");
+        return;
+    }
+    if (dnd::pending_levels(character) == 0) {
+        QString message = character.level >= dnd::kMaxLevel
+            ? QString("%1 is already level 20.").arg(QString::fromStdString(character.character_name))
+            : QString("%1 has %2 XP and needs %3 for level %4.")
+                  .arg(QString::fromStdString(character.character_name))
+                  .arg(character.experience)
+                  .arg(dnd::xp_threshold_for_level(character.level + 1))
+                  .arg(character.level + 1);
+        QMessageBox::information(this, "Level Up", message);
+        return;
+    }
+
+    // One level per dialog; keep going while more are earned and the player finishes each.
+    while (dnd::pending_levels(character) > 0) {
+        LevelUpDialog dialog(repository_, character, classes_, this);
+        if (dialog.exec() != QDialog::Accepted) break;
+        character = dialog.character();
+    }
+    reloadCharactersForCurrentPlayer();
 }
 
 void MainWindow::onShortRestClicked() {

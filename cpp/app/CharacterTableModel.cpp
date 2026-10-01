@@ -1,7 +1,11 @@
 #include "CharacterTableModel.hpp"
 
 #include <QBrush>
+#include <QFont>
 #include <QColor>
+
+#include "dnd/level_up.hpp"
+#include "dnd/progression.hpp"
 
 namespace {
 
@@ -67,6 +71,14 @@ QVariant CharacterTableModel::data(const QModelIndex& index, int role) const {
         if (character.current_hp <= 0) return "Unconscious at 0 HP (stable). Any healing wakes them.";
         return {};
     }
+    if (role == Qt::ToolTipRole && index.column() == 4 && dnd::pending_levels(character) > 0) {
+        return "Ready to level up: select this character and click Level Up.";
+    }
+    if (role == Qt::FontRole && index.column() == 4 && dnd::pending_levels(character) > 0) {
+        QFont bold;
+        bold.setBold(true);
+        return bold;
+    }
     if (role != Qt::DisplayRole) return {};
 
     switch (index.column()) {
@@ -74,7 +86,11 @@ QVariant CharacterTableModel::data(const QModelIndex& index, int role) const {
         case 1: return nameFor(classes_, character.class_id);
         case 2: return nameFor(races_, character.race);
         case 3: return nameFor(alignments_, character.alignment);
-        case 4: return character.level;
+        case 4:
+            if (dnd::pending_levels(character) > 0) {
+                return QString("%1 → %2").arg(character.level).arg(dnd::level_for_xp(character.experience));
+            }
+            return character.level;
         case 5: return QString("%1/%2").arg(character.current_hp).arg(character.max_hp);
         case 6:
             if (character.dead) return "Dead";
