@@ -1,5 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 
+#include "dnd/progression.hpp"
 #include "dnd/repository.hpp"
 
 TEST_CASE("Repository bootstraps its schema on an empty database", "[repository]") {
@@ -46,7 +47,7 @@ TEST_CASE("get_monsters returns the seeded sample enemies", "[repository]") {
     dnd::Repository repo(":memory:");
 
     auto monsters = repo.get_monsters();
-    REQUIRE(monsters.size() == 6);
+    REQUIRE(monsters.size() == 19);
 
     const dnd::Monster* goblin = nullptr;
     for (const auto& monster : monsters) {
@@ -102,9 +103,50 @@ TEST_CASE("the Wolf's bite can knock a target prone", "[repository]") {
             REQUIRE(attack.on_hit_save_dc == 11);
             REQUIRE(attack.on_hit_save_ability == dnd::Ability::Strength);
             REQUIRE(attack.on_hit_condition == dnd::Condition::Prone);
-        } else {
+        } else if (monster.name != "Dire Wolf" && monster.name != "Ghoul") {
             REQUIRE(attack.on_hit_save_dc == 0);
         }
+    }
+}
+
+TEST_CASE("the SRD roster: Multiattack, extra damage, riders, traits", "[repository]") {
+    dnd::Repository repo(":memory:");
+    auto find = [&](const std::string& name) {
+        for (const auto& m : repo.get_monsters()) {
+            if (m.name == name) return m;
+        }
+        FAIL("no monster " << name);
+        return dnd::Monster{};
+    };
+    auto troll = find("Troll");
+    REQUIRE(troll.challenge_rating == 5);
+    REQUIRE(troll.multiattack == "A bite and two claw attacks");
+    REQUIRE(troll.attacks.size() == 2);
+    REQUIRE(troll.attacks[1].name == "Claw");
+    REQUIRE(troll.attacks[1].count == 2);
+    REQUIRE(troll.traits == std::vector<std::string>{"Regeneration"});
+
+    auto hound = find("Hell Hound");
+    REQUIRE(hound.creature_type == "Fiend");
+    REQUIRE(hound.attacks.front().extra_dice_count == 2);
+    REQUIRE(hound.attacks.front().extra_damage_type == "fire");
+    REQUIRE(hound.damage.immunities == std::vector<std::string>{"fire"});
+
+    auto ghoul = find("Ghoul");
+    REQUIRE(ghoul.multiattack.empty());
+    REQUIRE(ghoul.attacks.front().name == "Claws");  // without Multiattack, the first attack is used
+    REQUIRE(ghoul.attacks.front().on_hit_condition == dnd::Condition::Paralyzed);
+    REQUIRE(ghoul.attacks.front().on_hit_rounds == 10);
+    REQUIRE(ghoul.attacks.front().on_hit_repeat_save);
+    REQUIRE(ghoul.condition_immunities ==
+            std::vector<dnd::Condition>{dnd::Condition::Charmed, dnd::Condition::Poisoned});
+
+    REQUIRE(find("Kobold").traits == std::vector<std::string>{"PackTactics"});
+    REQUIRE(find("Zombie").traits == std::vector<std::string>{"UndeadFortitude"});
+    REQUIRE(find("Hobgoblin").traits == std::vector<std::string>{"MartialAdvantage"});
+    for (const auto& m : repo.get_monsters()) {
+        INFO(m.name);
+        REQUIRE_NOTHROW(dnd::xp_for_challenge_rating(m.challenge_rating));
     }
 }
 

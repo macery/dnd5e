@@ -1,6 +1,22 @@
 # Monsters and encounter balance design
 
-Status: **phase 1 (damage and creature types) done;** phase 2 (Multiattack and the roster) is next. Decisions were settled on 2026-10-01; see [Decisions](#decisions).
+Status: **phases 1 (damage and creature types) and 2 (Multiattack and the roster) done;** phase 3 (encounter difficulty) is next. Decisions were settled on 2026-10-01; see [Decisions](#decisions).
+
+**Phase 2 as built:**
+- **Migration 19:**
+  - **The roster:** the 13 SRD monsters (Hobgoblin through Troll) with their attacks, and a `Traits` column.
+  - **On-hit conditions** can last N rounds with a repeat save (`OnHitRounds`, `OnHitRepeatSave`). A Ghoul's paralysis lasts 1 minute, with a DC 10 CON save at the end of each turn, and spares elves and undead.
+  - **Existing monsters:** Kobolds and Wolves get Pack Tactics, and Zombies get Undead Fortitude.
+- **Multiattack:** each attack is made its `count` times, and later attacks move to another conscious character if the target drops. Without a Multiattack only the first attack is used. That matches the SRD for the Ghoul, Gnoll, and Minotaur: the Ghoul has no Multiattack, so it claws (the claws paralyze) rather than bites. The design's roster table was wrong about that.
+- **Monster attacks' extra dice** (a Hell Hound's +2d6 fire) are adjusted for the target's resistances separately.
+- **Traits:**
+  - **Pack Tactics:** advantage while another monster is up and not incapacitated.
+  - **Martial Advantage:** +2d6 once per turn under the same condition.
+  - **Undead Fortitude:** a CON save, DC 5 + the damage, to stay at 1 HP. It doesn't work against radiant damage or a critical hit.
+  - **Regeneration:** 10 HP at the start of the Troll's turn, unless it took fire or acid since its last one. **A simplification:** a Troll at 0 HP is defeated like any monster. In the SRD it only dies if it starts its turn at 0 HP and doesn't regenerate.
+  - **Turn state** now resets for each combatant's turn, so a monster's once-per-turn flags never leak into a character's turn.
+- **Five adventures:** The Ogre's Larder, The Ghoul Crypt, The Bandit Captain's Camp, Hounds of the Burning Pass, and The Troll Bridge.
+- **Monster list:** shows trait names, the Multiattack summary, and "or ..." for alternative attacks.
 
 **Phase 1 as built:**
 - **Migration 18:**
@@ -111,7 +127,7 @@ Every one fights with weapons or natural attacks:
 | ½ | Gnoll | Bite or spear |
 | 1 | Bugbear | 2d8 morningstar hits hard at low level |
 | 1 | Dire Wolf | Bite with a DC 13 knock-prone |
-| 1 | Ghoul | Multiattack; claws paralyze (DC 10 CON); immune to Charmed and poison; **undead** |
+| 1 | Ghoul | Claws paralyze (DC 10 CON; no Multiattack); immune to Charmed and poison; **undead** |
 | 2 | Ogre | One big greatclub, 2d8+4; **giant** |
 | 2 | Bandit Captain | Multiattack with three attacks; a humanoid for *Charm Person* |
 | 3 | Owlbear | Multiattack: beak and claws; **monstrosity** |

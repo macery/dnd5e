@@ -18,7 +18,7 @@ using detail::Statement;
 // for future schema changes -- never edit an existing one, since a
 // migration's sql is exactly what already ran on every database that has it
 // recorded in SchemaMigrations.
-constexpr std::array<Migration, 18> kMigrations = {{
+constexpr std::array<Migration, 19> kMigrations = {{
     {1, "initial schema: Players, Classes, Characters", R"sql(
         CREATE TABLE IF NOT EXISTS Players (
             PlayerID INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -666,6 +666,70 @@ constexpr std::array<Migration, 18> kMigrations = {{
         UPDATE Spells SET TargetCreatureType = 'Humanoid',
             Description = 'A humanoid makes a WIS save, with advantage because you''re fighting it, or is charmed by you for 1 hour: it won''t attack you. Harming it ends the charm.'
             WHERE Name = 'Charm Person';
+    )sql"},
+    {19, "Multiattack roster: 13 SRD monsters (CR 1/2-5), monster traits", R"sql(
+        -- Map-free traits the engine applies: PackTactics, MartialAdvantage,
+        -- UndeadFortitude, Regeneration (comma list).
+        ALTER TABLE Monsters ADD COLUMN Traits TEXT NOT NULL DEFAULT '';
+        -- An on-hit condition can last OnHitRounds rounds (0 = until removed),
+        -- with a save to end it at the end of each of the target's turns.
+        ALTER TABLE MonsterAttacks ADD COLUMN OnHitRounds INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE MonsterAttacks ADD COLUMN OnHitRepeatSave INTEGER NOT NULL DEFAULT 0;
+
+        UPDATE Monsters SET Traits = 'PackTactics' WHERE Name IN ('Kobold', 'Wolf');
+        UPDATE Monsters SET Traits = 'UndeadFortitude' WHERE Name = 'Zombie';
+
+        -- SRD 5.1 stat blocks.
+        INSERT INTO Monsters (Name, ArmorClass, HitPoints, Strength, Dexterity, Constitution, Intelligence, Wisdom,
+                              Charisma, ChallengeRating, CreatureType, DamageImmunities, ConditionImmunities,
+                              Multiattack, Traits) VALUES
+            ('Hobgoblin',      18, 11,  13, 12, 12, 10, 10, 9, 0.5, 'Humanoid',    '',       '',                 '', 'MartialAdvantage'),
+            ('Gnoll',          15, 22,  14, 12, 11, 6,  10, 7, 0.5, 'Humanoid',    '',       '',                 '', ''),
+            ('Bugbear',        16, 27,  15, 14, 13, 8,  11, 9, 1,   'Humanoid',    '',       '',                 '', ''),
+            ('Dire Wolf',      14, 37,  17, 15, 15, 3,  12, 7, 1,   'Beast',       '',       '',                 '', 'PackTactics'),
+            ('Ghoul',          12, 22,  13, 15, 10, 7,  10, 6, 1,   'Undead',      'poison', 'Charmed,Poisoned', '', ''),
+            ('Ogre',           11, 59,  19, 8,  16, 5,  7,  7, 2,   'Giant',       '',       '',                 '', ''),
+            ('Bandit Captain', 15, 65,  15, 16, 14, 14, 11, 14, 2,  'Humanoid',    '',       '',                 'Two scimitar attacks and a dagger attack', ''),
+            ('Owlbear',        13, 59,  20, 12, 17, 3,  12, 7, 3,   'Monstrosity', '',       '',                 'A beak attack and a claws attack', ''),
+            ('Hell Hound',     15, 45,  17, 12, 14, 6,  13, 6, 3,   'Fiend',       'fire',   '',                 '', 'PackTactics'),
+            ('Minotaur',       14, 76,  18, 11, 16, 6,  16, 9, 3,   'Monstrosity', '',       '',                 '', ''),
+            ('Ettin',          12, 85,  21, 8,  17, 6,  10, 8, 4,   'Giant',       '',       '',                 'A battleaxe attack and a morningstar attack', ''),
+            ('Hill Giant',     13, 105, 21, 8,  19, 5,  9,  6, 5,   'Giant',       '',       '',                 'Two greatclub attacks', ''),
+            ('Troll',          15, 84,  18, 13, 20, 7,  9,  7, 5,   'Giant',       '',       '',                 'A bite and two claw attacks', 'Regeneration');
+
+        -- Attacks, in the order they're made. Without a Multiattack, only the
+        -- first is used (a Ghoul claws rather than bites: the claws paralyze).
+        INSERT INTO MonsterAttacks (MonsterID, Position, Name, AttackBonus, DamageDiceCount, DamageDiceSides,
+                                    DamageBonus, DamageType, ExtraDiceCount, ExtraDiceSides, ExtraDamageType,
+                                    OnHitSaveAbility, OnHitSaveDC, OnHitCondition, OnHitRounds, OnHitRepeatSave, Count)
+        SELECT MonsterID, a.Position, a.Name, a.Bonus, a.DiceCount, a.DiceSides, a.DamageBonus, a.Type,
+               a.ExtraCount, a.ExtraSides, a.ExtraType, a.SaveAbility, a.SaveDC, a.Condition, a.Rounds, a.Repeat,
+               a.Count
+        FROM Monsters JOIN (
+            SELECT 'Hobgoblin' AS Monster, 1 AS Position, 'Longsword' AS Name, 3 AS Bonus, 1 AS DiceCount,
+                   8 AS DiceSides, 1 AS DamageBonus, 'slashing' AS Type, 0 AS ExtraCount, 0 AS ExtraSides,
+                   '' AS ExtraType, '' AS SaveAbility, 0 AS SaveDC, '' AS Condition, 0 AS Rounds, 0 AS Repeat,
+                   1 AS Count
+            UNION ALL SELECT 'Gnoll',          1, 'Spear',       4, 1, 6,  2, 'piercing',    0, 0, '',     '',             0,  '',          0,  0, 1
+            UNION ALL SELECT 'Gnoll',          2, 'Bite',        4, 1, 4,  2, 'piercing',    0, 0, '',     '',             0,  '',          0,  0, 1
+            UNION ALL SELECT 'Bugbear',        1, 'Morningstar', 4, 2, 8,  2, 'piercing',    0, 0, '',     '',             0,  '',          0,  0, 1
+            UNION ALL SELECT 'Dire Wolf',      1, 'Bite',        5, 2, 6,  3, 'piercing',    0, 0, '',     'Strength',     13, 'Prone',     0,  0, 1
+            UNION ALL SELECT 'Ghoul',          1, 'Claws',       4, 2, 4,  2, 'slashing',    0, 0, '',     'Constitution', 10, 'Paralyzed', 10, 1, 1
+            UNION ALL SELECT 'Ghoul',          2, 'Bite',        2, 2, 6,  2, 'piercing',    0, 0, '',     '',             0,  '',          0,  0, 1
+            UNION ALL SELECT 'Ogre',           1, 'Greatclub',   6, 2, 8,  4, 'bludgeoning', 0, 0, '',     '',             0,  '',          0,  0, 1
+            UNION ALL SELECT 'Bandit Captain', 1, 'Scimitar',    5, 1, 6,  3, 'slashing',    0, 0, '',     '',             0,  '',          0,  0, 2
+            UNION ALL SELECT 'Bandit Captain', 2, 'Dagger',      5, 1, 4,  3, 'piercing',    0, 0, '',     '',             0,  '',          0,  0, 1
+            UNION ALL SELECT 'Owlbear',        1, 'Beak',        7, 1, 10, 5, 'piercing',    0, 0, '',     '',             0,  '',          0,  0, 1
+            UNION ALL SELECT 'Owlbear',        2, 'Claws',       7, 2, 8,  5, 'slashing',    0, 0, '',     '',             0,  '',          0,  0, 1
+            UNION ALL SELECT 'Hell Hound',     1, 'Bite',        5, 1, 8,  3, 'piercing',    2, 6, 'fire', '',             0,  '',          0,  0, 1
+            UNION ALL SELECT 'Minotaur',       1, 'Greataxe',    6, 2, 12, 4, 'slashing',    0, 0, '',     '',             0,  '',          0,  0, 1
+            UNION ALL SELECT 'Minotaur',       2, 'Gore',        6, 2, 8,  4, 'piercing',    0, 0, '',     '',             0,  '',          0,  0, 1
+            UNION ALL SELECT 'Ettin',          1, 'Battleaxe',   7, 2, 8,  5, 'slashing',    0, 0, '',     '',             0,  '',          0,  0, 1
+            UNION ALL SELECT 'Ettin',          2, 'Morningstar', 7, 2, 8,  5, 'piercing',    0, 0, '',     '',             0,  '',          0,  0, 1
+            UNION ALL SELECT 'Hill Giant',     1, 'Greatclub',   8, 3, 8,  5, 'bludgeoning', 0, 0, '',     '',             0,  '',          0,  0, 2
+            UNION ALL SELECT 'Troll',          1, 'Bite',        7, 1, 6,  4, 'piercing',    0, 0, '',     '',             0,  '',          0,  0, 1
+            UNION ALL SELECT 'Troll',          2, 'Claw',        7, 2, 6,  4, 'slashing',    0, 0, '',     '',             0,  '',          0,  0, 2
+        ) AS a ON a.Monster = Monsters.Name;
     )sql"},
 }};
 

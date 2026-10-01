@@ -63,6 +63,10 @@ struct Combatant {
     std::string creature_type;
     DamageTraits damage_traits;
     std::vector<Condition> condition_immunities;
+    std::string multiattack;           // the stat block's Multiattack summary; empty if none
+    std::vector<std::string> traits;   // "PackTactics", "MartialAdvantage", "UndeadFortitude", "Regeneration"
+    bool regeneration_blocked = false; // took fire or acid damage since its last turn (Regeneration)
+    std::string race_name;             // characters only (a Ghoul's paralysis spares elves)
 
     // Characters at 0 HP: dying (rolling death saves), stable, or dead.
     // Monsters simply die at 0 HP.
@@ -276,7 +280,9 @@ private:
     // handles dropping to 0 (dying, massive damage, monster death), damage
     // while dying, concentration checks, and charm-breaking; both return the
     // extra log lines to print after the line describing the hit or heal.
-    std::vector<std::string> apply_damage(int target, int amount, bool critical, int source);
+    // `damage_type` is "radiant" if any of the damage was (Undead Fortitude).
+    std::vector<std::string> apply_damage(int target, int amount, bool critical, int source,
+                                          const std::string& damage_type = "");
     std::vector<std::string> apply_healing(int target, int amount, int& healed);
 
     // Resolves a weapon attack with every effect and class feature applied
@@ -289,7 +295,13 @@ private:
     // `amount` of `type` damage to `target` after its resistances,
     // vulnerabilities, and immunities; appends " (halved: resistant to
     // slashing)"-style notes to `note`.
-    int typed_damage(int target, int amount, const std::string& type, std::string& note) const;
+    // Fire or acid also stops a Troll's Regeneration on its next turn.
+    int typed_damage(int target, int amount, const std::string& type, std::string& note);
+    bool has_trait(int index, const std::string& trait) const;
+    // Another combatant on `index`'s side is up and not incapacitated (Pack
+    // Tactics, Martial Advantage, Sneak Attack: with no map, "an ally within
+    // 5 feet of the target").
+    bool ally_fighting(int index) const;
     bool is_raging(int index) const;
     // Ends a rage early; returns the log line ("" if not raging).
     std::string end_rage(int index, const std::string& reason);

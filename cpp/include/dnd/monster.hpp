@@ -26,6 +26,8 @@ struct MonsterAttack {
     Ability on_hit_save_ability = Ability::Strength;
     int on_hit_save_dc = 0;  // 0 = no on-hit effect
     Condition on_hit_condition = Condition::Prone;
+    int on_hit_rounds = 0;            // how long the condition lasts; 0 = until removed (prone: until it stands)
+    bool on_hit_repeat_save = false;  // the target repeats the save at the end of each of its turns
     int count = 1;  // made this many times per turn (Multiattack)
 };
 
@@ -49,8 +51,14 @@ struct Monster {
     std::string creature_type;  // "Humanoid", "Undead", "Beast", "Fiend", ...
     DamageTraits damage;
     std::vector<Condition> condition_immunities;
-    std::string multiattack;  // summary for the UI ("Two claws and a bite"); empty if none
+    // Multiattack, summarized for the UI ("A bite and two claw attacks").
+    // With one, every attack is made (each `count` times); without, only the
+    // first.
+    std::string multiattack;
     std::vector<MonsterAttack> attacks;  // in order; at least one for every seeded monster
+    // Traits the engine applies: "PackTactics", "MartialAdvantage",
+    // "UndeadFortitude", "Regeneration".
+    std::vector<std::string> traits;
 };
 
 }  // namespace dnd

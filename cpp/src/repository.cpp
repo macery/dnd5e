@@ -345,7 +345,7 @@ std::vector<Monster> Repository::get_monsters() const {
     Statement stmt(db_,
         "SELECT MonsterID, Name, ArmorClass, HitPoints, Strength, Dexterity, Constitution, "
         "Intelligence, Wisdom, Charisma, ChallengeRating, CreatureType, DamageResistances, "
-        "DamageVulnerabilities, DamageImmunities, ConditionImmunities, Multiattack "
+        "DamageVulnerabilities, DamageImmunities, ConditionImmunities, Multiattack, Traits "
         "FROM Monsters ORDER BY ChallengeRating, Name;");
     std::vector<Monster> monsters;
     while (sqlite3_step(stmt.get()) == SQLITE_ROW) {
@@ -369,13 +369,14 @@ std::vector<Monster> Repository::get_monsters() const {
             monster.condition_immunities.push_back(condition_from_name(name));
         }
         monster.multiattack = column_text(stmt.get(), 16);
+        monster.traits = split_list(column_text(stmt.get(), 17));
         monsters.push_back(std::move(monster));
     }
 
     Statement attacks(db_,
         "SELECT MonsterID, Name, AttackBonus, DamageDiceCount, DamageDiceSides, DamageBonus, DamageType, Ranged, "
-        "ExtraDiceCount, ExtraDiceSides, ExtraDamageType, OnHitSaveAbility, OnHitSaveDC, OnHitCondition, Count "
-        "FROM MonsterAttacks ORDER BY MonsterID, Position, MonsterAttackID;");
+        "ExtraDiceCount, ExtraDiceSides, ExtraDamageType, OnHitSaveAbility, OnHitSaveDC, OnHitCondition, Count, "
+        "OnHitRounds, OnHitRepeatSave FROM MonsterAttacks ORDER BY MonsterID, Position, MonsterAttackID;");
     while (sqlite3_step(attacks.get()) == SQLITE_ROW) {
         int monster_id = sqlite3_column_int(attacks.get(), 0);
         auto owner = std::find_if(monsters.begin(), monsters.end(),
@@ -398,6 +399,8 @@ std::vector<Monster> Repository::get_monsters() const {
         std::string condition = column_text(attacks.get(), 13);
         if (!condition.empty()) attack.on_hit_condition = condition_from_name(condition);
         attack.count = std::max(1, sqlite3_column_int(attacks.get(), 14));
+        attack.on_hit_rounds = sqlite3_column_int(attacks.get(), 15);
+        attack.on_hit_repeat_save = sqlite3_column_int(attacks.get(), 16) != 0;
         owner->attacks.push_back(std::move(attack));
     }
     return monsters;

@@ -1628,3 +1628,116 @@ TEST_CASE("creature types: Charm Person and Divine Smite", "[encounter][damage]"
                          "-> hit for 11 (+3 radiant, Divine Smite 3d8 vs undead, level 1 slot). Skeleton is now 2/13 HP."));
     }
 }
+
+TEST_CASE("Multiattack: every attack, retargeting when a target drops", "[encounter][monsters]") {
+    Fixture f;
+    // Init: Aria 1, Zanna 1, Bandit Captain 20 (first). Pick Aria (1 of 2 -> 1).
+    // Scimitar d20 15 hits (+5 vs AC 16), d6 6 (+3) = 9 -> Aria 3/12. Second scimitar: hits, 9 -> Aria down.
+    // Dagger: retargets Zanna (pick 1 of 1), d20 15 hits AC 12, d4 4 (+3) = 7 -> Zanna 1/8.
+    ScriptedRandomSource rolls({1, 1, 20, 1, 15, 6, 15, 6, 1, 15, 4});
+    dnd::Dice dice(rolls);
+    auto encounter = f.encounter(dice);
+    encounter.add_character(f.fighter(1), {}, f.fighter_gear());
+    encounter.add_character(f.wizard(2), {}, {});
+    encounter.add_monsters(f.monster("Bandit Captain"), 1);
+    encounter.roll_initiative();
+    auto lines = logs(encounter.take_events());
+    REQUIRE(contains(lines, "Bandit Captain uses Multiattack: Two scimitar attacks and a dagger attack."));
+    REQUIRE(std::count_if(lines.begin(), lines.end(), [](const std::string& l) {
+                return l.rfind("Bandit Captain attacks Aria", 0) == 0;
+            }) == 2);
+    REQUIRE(contains(lines, "Bandit Captain attacks Zanna: d20(15) +5 -> hit for 7. Zanna is now 1/8 HP."));
+}
+
+TEST_CASE("monster traits", "[encounter][monsters]") {
+    Fixture f;
+
+    SECTION("Pack Tactics: advantage while an ally is fighting") {
+        // Aria 1; Kobolds 20 and 20. Kobold #1: pick, d20 2 and 18 with advantage (+4) hits AC 16.
+        ScriptedRandomSource rolls({1, 20, 20, 1, 2, 18, 3});
+        dnd::Dice dice(rolls);
+        auto encounter = f.encounter(dice);
+        encounter.add_character(f.fighter(1), {}, f.fighter_gear());
+        encounter.add_monsters(f.monster("Kobold"), 2);
+        encounter.roll_initiative();
+        REQUIRE(contains(logs(encounter.take_events()), "Kobold #1 attacks Aria: d20(18) +4 with advantage (Pack Tactics)"));
+    }
+
+    SECTION("Martial Advantage: +2d6 once per turn with an ally fighting") {
+        // Aria 1; Hobgoblins 20, 20. #1: pick, d20 15 (+3) hits AC 16, d8 4 (+1), 2d6 3 + 3.
+        ScriptedRandomSource rolls({1, 20, 20, 1, 15, 4, 3, 3, 1});
+        dnd::Dice dice(rolls);
+        auto encounter = f.encounter(dice);
+        encounter.add_character(f.fighter(1), {}, f.fighter_gear());
+        encounter.add_monsters(f.monster("Hobgoblin"), 2);
+        encounter.roll_initiative();
+        REQUIRE(contains(logs(encounter.take_events()),
+                         "Hobgoblin #1 attacks Aria: d20(15) +3 -> hit for 11 (+6 Martial Advantage). Aria is now 1/12 HP."));
+    }
+
+    SECTION("Undead Fortitude: a zombie can stay up at 1 HP") {
+        // Aria (level 5, Extra Attack) first. Two hits for 13 each (d20 15, d10 10 +3): the second would
+        // drop the Zombie (9 HP), so it makes a CON save, DC 5 + 13 = 18: d20 20 (+3) succeeds.
+        ScriptedRandomSource rolls({20, 1, 15, 10, 15, 10, 20});
+        dnd::Dice dice(rolls);
+        auto encounter = f.encounter(dice);
+        encounter.add_character(classed(f, 1, "Aria", "Fighter", 5), {}, f.fighter_gear());  // Extra Attack
+        encounter.add_monsters(f.monster("Zombie"), 1);
+        encounter.roll_initiative();
+        encounter.take_events();
+        REQUIRE(encounter.attack(1, 5, 1, 10, 3));
+        REQUIRE(encounter.combatants()[1].current_hp == 9);
+        encounter.take_events();
+        REQUIRE(encounter.attack(1, 5, 1, 10, 3));
+        auto lines = logs(encounter.take_events());
+        REQUIRE(contains(lines, "Undead Fortitude: Zombie CON save d20(20) +3 vs DC 18 -> stays up with 1 HP!"));
+        REQUIRE(encounter.combatants()[1].current_hp == 1);
+    }
+
+    SECTION("Regeneration, stopped by fire") {
+        ScriptedRandomSource rolls({1, 20, 20});  // Zanna 1, Troll 20; then 20s: Fire Bolt crits
+        dnd::Dice dice(rolls);
+        auto encounter = f.encounter(dice);
+        encounter.add_character(f.wizard(1), {f.spell("Fire Bolt")}, {});
+        encounter.add_monsters(f.monster("Troll"), 1);
+        auto& troll = const_cast<dnd::Combatant&>(encounter.combatants()[1]);
+        troll.current_hp = 50;
+        troll.monster_attacks.clear();  // keep the wizard alive for the test
+        encounter.roll_initiative();    // Troll first: regenerates to 60
+        auto lines = logs(encounter.take_events());
+        REQUIRE(contains(lines, "Troll regenerates 10 HP (now 60/84)."));
+        // Fire Bolt hits (d20 20 crit): fire damage blocks the next regeneration.
+        REQUIRE(encounter.cast_spell(f.spell("Fire Bolt").spell_id, 0, {1}));
+        encounter.next_turn();
+        auto after = logs(encounter.take_events());
+        REQUIRE(contains(after, "Troll doesn't regenerate (fire or acid)."));
+    }
+
+    SECTION("a Ghoul's claws paralyze, with a save each turn") {
+        // Aria 1, Ghoul 20. Claws d20 15 hits AC 16? +4 = 19 hits; 2d4 2 + 2 (+2) = 6; CON save d20 1 fails.
+        ScriptedRandomSource rolls({1, 20, 1, 15, 2, 2, 1});
+        dnd::Dice dice(rolls);
+        auto encounter = f.encounter(dice);
+        encounter.add_character(f.fighter(1), {}, f.fighter_gear());
+        encounter.add_monsters(f.monster("Ghoul"), 1);
+        encounter.roll_initiative();
+        REQUIRE(dnd::has_condition(encounter.effects(), 0, dnd::Condition::Paralyzed));
+        auto paralysis = std::find_if(encounter.effects().begin(), encounter.effects().end(),
+                                      [](const dnd::ActiveEffect& e) { return e.condition == dnd::Condition::Paralyzed; });
+        REQUIRE(paralysis->save_to_end.has_value());
+        REQUIRE(paralysis->save_to_end->dc == 10);
+        REQUIRE(paralysis->duration.rounds == 10);
+    }
+
+    SECTION("Hell Hound: fire on the bite, and immune to fire") {
+        ScriptedRandomSource rolls({1, 20, 1, 15, 4, 3, 3});
+        dnd::Dice dice(rolls);
+        auto encounter = f.encounter(dice);
+        encounter.add_character(f.fighter(1), {}, f.fighter_gear());
+        encounter.add_monsters(f.monster("Hell Hound"), 1);
+        encounter.roll_initiative();
+        // Bite d8 4 (+3) = 7 piercing, + 2d6 (3 + 3) fire = 13.
+        REQUIRE(contains(logs(encounter.take_events()), "-> hit for 13 (+6 fire). Aria is now 0/12 HP."));
+        REQUIRE(dnd::damage_modifier(encounter.damage_traits(1), "fire") == dnd::DamageModifier::Immune);
+    }
+}

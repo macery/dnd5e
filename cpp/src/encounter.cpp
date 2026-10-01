@@ -124,6 +124,7 @@ void Encounter::add_character(const Character& character, std::vector<Spell> kno
     combatant.attack_martial_arts = weapon.martial_arts;
     combatant.attack_great_weapon_fighting = weapon.great_weapon_fighting;
     combatant.attack_damage_type = weapon.damage_type;
+    combatant.race_name = race_name;
     combatant.class_name = class_name;
     combatant.level = character.level;
     combatant.sneak_attack_dice = class_name == "Rogue" ? sneak_attack_dice(character.level) : 0;
@@ -181,6 +182,8 @@ void Encounter::add_monsters(const Monster& monster, int count) {
         combatant.creature_type = monster.creature_type;
         combatant.damage_traits = monster.damage;
         combatant.condition_immunities = monster.condition_immunities;
+        combatant.multiattack = monster.multiattack;
+        combatant.traits = monster.traits;
         combatant.xp = xp_for_challenge_rating(monster.challenge_rating);
         combatant.ability_scores = {monster.strength,     monster.dexterity, monster.constitution,
                                     monster.intelligence, monster.wisdom,    monster.charisma};
@@ -404,6 +407,7 @@ void Encounter::advance_to_actionable_turn() {
     for (size_t guard = 0; guard < turn_order_.size() && status_ == EncounterStatus::InProgress; ++guard) {
         int index = turn_order_[static_cast<size_t>(current_turn_)];
         Combatant& current = combatants_[static_cast<size_t>(index)];
+        turn_ = TurnState{};  // each combatant's turn starts fresh (monsters' once-per-turn flags too)
         auto move_on = [this, index]() {
             end_turn(index);
             current_turn_ = (current_turn_ + 1) % static_cast<int>(turn_order_.size());
@@ -452,6 +456,20 @@ void Encounter::advance_to_actionable_turn() {
 }
 
 void Encounter::start_turn(int index) {
+    // Regeneration (Troll): 10 HP at the start of its turn, unless it took
+    // fire or acid damage since its last one.
+    Combatant& self = combatants_[static_cast<size_t>(index)];
+    if (has_trait(index, "Regeneration") && self.current_hp > 0) {
+        if (self.regeneration_blocked) {
+            log(self.name + " doesn't regenerate (fire or acid).");
+        } else if (self.current_hp < self.max_hp) {
+            int before = self.current_hp;
+            self.current_hp = std::min(self.max_hp, self.current_hp + 10);
+            log(self.name + " regenerates " + std::to_string(self.current_hp - before) + " HP (now " +
+                hp_text(self) + ").");
+        }
+        self.regeneration_blocked = false;
+    }
     // Durations that run out now: "until the start of X's next turn", and
     // rounds counted on the source's turn.
     for (auto& effect : effects_) {
@@ -628,22 +646,65 @@ void Encounter::resolve_monster_turn(Combatant& monster) {
     int pick = dice_.roll(static_cast<int>(candidates.size()), 1).front() - 1;
     int target = candidates[static_cast<size_t>(pick)];
     if (monster.monster_attacks.empty()) return;
-    const MonsterAttack& stat = monster.monster_attacks.front();
-    WeaponAttack attack;
-    attack.name = stat.name;
-    attack.attack_bonus = stat.attack_bonus;
-    attack.damage_dice_count = stat.damage_dice_count;
-    attack.damage_dice_sides = stat.damage_dice_sides;
-    attack.damage_bonus = stat.damage_bonus;
-    attack.damage_type = stat.damage_type;
-    attack.melee = !stat.ranged;
-    weapon_attack(monster_index, target, attack, 0, &stat);
+
+    // Multiattack: every attack, each `count` times; otherwise just the first.
+    std::vector<const MonsterAttack*> sequence;
+    if (monster.multiattack.empty()) {
+        sequence.push_back(&monster.monster_attacks.front());
+    } else {
+        log(monster.name + " uses Multiattack: " + monster.multiattack + ".");
+        for (const auto& stat : monster.monster_attacks) {
+            for (int n = 0; n < stat.count; ++n) sequence.push_back(&stat);
+        }
+    }
+    for (const MonsterAttack* stat : sequence) {
+        if (combatants_[static_cast<size_t>(target)].current_hp <= 0) {
+            // The target dropped: the rest of the attacks go to someone still up.
+            std::vector<int> still_up;
+            for (int candidate : candidates) {
+                if (combatants_[static_cast<size_t>(candidate)].current_hp > 0) still_up.push_back(candidate);
+            }
+            if (still_up.empty()) break;
+            target = still_up[static_cast<size_t>(dice_.roll(static_cast<int>(still_up.size()), 1).front() - 1)];
+        }
+        WeaponAttack attack;
+        attack.name = stat->name;
+        attack.attack_bonus = stat->attack_bonus;
+        attack.damage_dice_count = stat->damage_dice_count;
+        attack.damage_dice_sides = stat->damage_dice_sides;
+        attack.damage_bonus = stat->damage_bonus;
+        attack.damage_type = stat->damage_type;
+        attack.melee = !stat->ranged;
+        weapon_attack(monster_index, target, attack, 0, stat);
+        if (status_ != EncounterStatus::InProgress) break;
+    }
 }
 
-int Encounter::typed_damage(int target, int amount, const std::string& type, std::string& note) const {
+int Encounter::typed_damage(int target, int amount, const std::string& type, std::string& note) {
     DamageModifier modifier = damage_modifier(damage_traits(target), type);
     if (modifier != DamageModifier::Normal && amount > 0) note += " (" + damage_modifier_note(modifier, type) + ")";
-    return adjust_damage(amount, modifier);
+    int dealt = adjust_damage(amount, modifier);
+    if (dealt > 0 && (type == "fire" || type == "acid")) {
+        combatants_[static_cast<size_t>(target)].regeneration_blocked = true;
+    }
+    return dealt;
+}
+
+bool Encounter::has_trait(int index, const std::string& trait) const {
+    const auto& traits = combatants_.at(static_cast<size_t>(index)).traits;
+    return std::find(traits.begin(), traits.end(), trait) != traits.end();
+}
+
+bool Encounter::ally_fighting(int index) const {
+    const Combatant& self = combatants_.at(static_cast<size_t>(index));
+    for (int i = 0; i < static_cast<int>(combatants_.size()); ++i) {
+        const Combatant& other = combatants_[static_cast<size_t>(i)];
+        if (i != index && other.is_character == self.is_character && other.current_hp > 0 &&
+            !is_incapacitated(effects_, i)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 DamageTraits Encounter::damage_traits(int index) const {
@@ -664,6 +725,9 @@ void Encounter::weapon_attack(int attacker_index, int target_index, const Weapon
     RollModifiers mods = attack_roll_modifiers(effects_, attacker_index, target_index, attack.melee, alive_flags());
     if (turn_.reckless && attacker_index == current_index() && attack.melee && attack.uses_strength) {
         mods.advantage.push_back("Reckless Attack");
+    }
+    if (has_trait(attacker_index, "PackTactics") && ally_fighting(attacker_index)) {
+        mods.advantage.push_back("Pack Tactics");
     }
     std::vector<int> bonus_rolls;
     for (int sides : mods.bonus_dice) bonus_rolls.push_back(dice_.roll(sides, 1).front());
@@ -707,11 +771,7 @@ void Encounter::weapon_attack(int attacker_index, int target_index, const Weapon
         // with no map, when another party member is fighting too (docs/class-features.md).
         if (attacker.sneak_attack_dice > 0 && attack.finesse_or_ranged && !turn_.sneak_attack_used &&
             mods.mode() != RollMode::Disadvantage) {
-            bool ally_fighting = std::any_of(combatants_.begin(), combatants_.end(), [&](const Combatant& c) {
-                return c.is_character && &c != &attacker && c.current_hp > 0 &&
-                       !is_incapacitated(effects_, static_cast<int>(&c - combatants_.data()));
-            });
-            if (mods.mode() == RollMode::Advantage || ally_fighting) {
+            if (mods.mode() == RollMode::Advantage || ally_fighting(attacker_index)) {
                 turn_.sneak_attack_used = true;
                 auto extra = dice_.roll(6, attacker.sneak_attack_dice * (result.critical ? 2 : 1));
                 result.damage_total += sum(extra);
@@ -719,6 +779,14 @@ void Encounter::weapon_attack(int attacker_index, int target_index, const Weapon
                               (mods.mode() == RollMode::Advantage ? "advantage" : "an ally is fighting the target") +
                               ")";
             }
+        }
+        // Martial Advantage (Hobgoblin): +2d6 once per turn when an ally is fighting too.
+        if (has_trait(attacker_index, "MartialAdvantage") && !turn_.martial_advantage_used &&
+            ally_fighting(attacker_index)) {
+            turn_.martial_advantage_used = true;
+            auto extra = dice_.roll(6, result.critical ? 4 : 2);
+            result.damage_total += sum(extra);
+            extra_note += " (+" + std::to_string(sum(extra)) + " Martial Advantage)";
         }
         // Divine Smite: a slot for 2d8 radiant, +1d8 per slot level above 1st (max 5d8).
         if (smite_slot > 0) {
@@ -747,7 +815,8 @@ void Encounter::weapon_attack(int attacker_index, int target_index, const Weapon
                                               : 0);
     }
 
-    auto followups = result.hit ? apply_damage(target_index, result.damage_total, result.critical, attacker_index)
+    auto followups = result.hit ? apply_damage(target_index, result.damage_total, result.critical, attacker_index,
+                                               radiant > 0 ? "radiant" : attack.damage_type)
                                 : std::vector<std::string>{};
 
     log(attacker.name + " attacks " + target.name + ": d20(" + std::to_string(result.attack_roll) + ") " +
@@ -757,7 +826,9 @@ void Encounter::weapon_attack(int attacker_index, int target_index, const Weapon
     for (const auto& line : followups) log(line);
 
     // A monster attack's rider (Wolf: DC 11 STR save or knocked prone).
-    if (result.hit && monster_attack && monster_attack->on_hit_save_dc > 0 && target.current_hp > 0) {
+    bool spared = monster_attack && monster_attack->on_hit_condition == Condition::Paralyzed &&
+                  (target.race_name == "Elf" || target.creature_type == "Undead");  // a Ghoul's claws
+    if (result.hit && monster_attack && monster_attack->on_hit_save_dc > 0 && target.current_hp > 0 && !spared) {
         std::string detail;
         bool saved = roll_save(target_index, monster_attack->on_hit_save_ability, monster_attack->on_hit_save_dc,
                                detail);
@@ -772,6 +843,13 @@ void Encounter::weapon_attack(int attacker_index, int target_index, const Weapon
             effect.target = target_index;
             effect.source = attacker_index;
             effect.label = condition_name(monster_attack->on_hit_condition);
+            if (monster_attack->on_hit_rounds > 0) {
+                effect.duration.kind = DurationKind::Rounds;
+                effect.duration.rounds = monster_attack->on_hit_rounds;
+            }
+            if (monster_attack->on_hit_repeat_save) {
+                effect.save_to_end = SaveToEnd{monster_attack->on_hit_save_ability, monster_attack->on_hit_save_dc};
+            }
             add_effect(effect);
         }
     }
@@ -824,10 +902,28 @@ std::vector<std::string> Encounter::apply_spell_effects(const Spell& spell, Spel
     return labels;
 }
 
-std::vector<std::string> Encounter::apply_damage(int target_index, int amount, bool critical, int source) {
+std::vector<std::string> Encounter::apply_damage(int target_index, int amount, bool critical, int source,
+                                                const std::string& damage_type) {
     std::vector<std::string> followups;
     Combatant& target = combatants_[static_cast<size_t>(target_index)];
     if (amount <= 0 || target.death_saves.dead) return followups;
+
+    // Undead Fortitude (Zombie): damage that would drop it to 0 allows a CON
+    // save (DC 5 + the damage) to stay at 1 HP -- not against radiant damage
+    // or a critical hit.
+    if (!target.is_character && target.current_hp > 0 && amount >= target.current_hp &&
+        has_trait(target_index, "UndeadFortitude") && !critical && damage_type != "radiant") {
+        std::string detail;
+        int dc = 5 + amount;
+        if (roll_save(target_index, Ability::Constitution, dc, detail)) {
+            target.current_hp = 1;
+            followups.push_back("    Undead Fortitude: " + target.name + " " + detail + " vs DC " + std::to_string(dc) +
+                                " -> stays up with 1 HP!");
+            return followups;
+        }
+        followups.push_back("    Undead Fortitude: " + target.name + " " + detail + " vs DC " + std::to_string(dc) +
+                            " -> fails.");
+    }
 
     // Any harm from the charmer's side breaks a charm (Charm Person).
     if (source >= 0) {
@@ -1807,7 +1903,7 @@ bool Encounter::cast_spell(int spell_id, int slot_level, const std::vector<int>&
                                  : effect.amount;
         switch (spell.resolution) {
             case SpellResolution::Attack:
-                followups = effect.hit ? apply_damage(target_index, dealt, effect.critical, actor_index)
+                followups = effect.hit ? apply_damage(target_index, dealt, effect.critical, actor_index, spell.damage_type)
                                        : std::vector<std::string>{};
                 if (effect.hit && target.current_hp > 0) {
                     labels = apply_spell_effects(spell, SpellEffectTrigger::OnHit, actor_index, target_index);
@@ -1817,7 +1913,7 @@ bool Encounter::cast_spell(int spell_id, int slot_level, const std::vector<int>&
                           mode_note(mods) + " -> " + attack_outcome(effect.hit, effect.critical, dealt) + damage_note;
                 break;
             case SpellResolution::Save:
-                followups = apply_damage(target_index, dealt, false, actor_index);
+                followups = apply_damage(target_index, dealt, false, actor_index, spell.damage_type);
                 if (!effect.saved && target.current_hp > 0) {
                     labels = apply_spell_effects(spell, SpellEffectTrigger::OnFailedSave, actor_index, target_index);
                 }
@@ -1839,7 +1935,7 @@ bool Encounter::cast_spell(int spell_id, int slot_level, const std::vector<int>&
                 outcome = "stable";
                 break;
             case SpellResolution::AutoHit:
-                followups = apply_damage(target_index, dealt, false, actor_index);
+                followups = apply_damage(target_index, dealt, false, actor_index, spell.damage_type);
                 outcome = "hit for " + std::to_string(dealt) + damage_note;
                 break;
             case SpellResolution::Heal: {

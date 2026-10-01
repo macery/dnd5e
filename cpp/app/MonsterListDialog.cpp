@@ -63,11 +63,20 @@ MonsterListDialog::MonsterListDialog(std::vector<dnd::Monster> monsters, QWidget
                             .arg(dnd::ability_name(attack.on_hit_save_ability))
                             .arg(QString(dnd::condition_name(attack.on_hit_condition)).toLower());
             }
+            // Without Multiattack only the first attack is made; the rest are alternatives.
+            if (monster.multiattack.empty() && !attacks.isEmpty()) text = "or " + text + " (not used yet)";
             attacks << text;
         }
         if (!monster.multiattack.empty()) attacks.prepend("Multiattack: " + QString::fromStdString(monster.multiattack));
 
         QStringList traits;
+        for (const auto& trait : monster.traits) {
+            if (trait == "PackTactics") traits << "Pack Tactics (advantage while an ally fights)";
+            else if (trait == "MartialAdvantage") traits << "Martial Advantage (+2d6 once a turn with an ally)";
+            else if (trait == "UndeadFortitude") traits << "Undead Fortitude (CON save to stay at 1 HP)";
+            else if (trait == "Regeneration") traits << "Regeneration (10 HP a turn; not after fire or acid)";
+            else traits << QString::fromStdString(trait);
+        }
         const auto& damage = monster.damage;
         if (!damage.resistances.empty()) traits << "Resists " + QString::fromStdString(dnd::join_list(damage.resistances));
         if (!damage.vulnerabilities.empty()) {

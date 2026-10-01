@@ -48,7 +48,7 @@ TEST_CASE("run_migrations brings a fresh database to the latest schema", "[migra
 
     dnd::run_migrations(db.handle);
 
-    REQUIRE(dnd::current_schema_version(db.handle) == 18);
+    REQUIRE(dnd::current_schema_version(db.handle) == 19);
     REQUIRE(table_exists(db.handle, "Players"));
     REQUIRE(table_exists(db.handle, "Classes"));
     REQUIRE(table_exists(db.handle, "Characters"));
@@ -64,7 +64,7 @@ TEST_CASE("run_migrations brings a fresh database to the latest schema", "[migra
     REQUIRE(row_count(db.handle, "SELECT COUNT(*) FROM Classes;") == 12);
     REQUIRE(row_count(db.handle, "SELECT COUNT(*) FROM Races;") == 9);
     REQUIRE(row_count(db.handle, "SELECT COUNT(*) FROM Alignments;") == 9);
-    REQUIRE(row_count(db.handle, "SELECT COUNT(*) FROM Monsters;") == 6);
+    REQUIRE(row_count(db.handle, "SELECT COUNT(*) FROM Monsters;") == 19);
     REQUIRE(row_count(db.handle, "SELECT COUNT(*) FROM Weapons;") == 12);
     // Backfilled by migration 7.
     REQUIRE(row_count(db.handle, "SELECT COUNT(*) FROM Monsters WHERE AttackName = 'Scimitar' AND Name = 'Goblin';") ==
@@ -77,10 +77,10 @@ TEST_CASE("run_migrations is a no-op the second time", "[migrations]") {
     dnd::run_migrations(db.handle);
     dnd::run_migrations(db.handle);
 
-    REQUIRE(row_count(db.handle, "SELECT COUNT(*) FROM SchemaMigrations;") == 18);
+    REQUIRE(row_count(db.handle, "SELECT COUNT(*) FROM SchemaMigrations;") == 19);
     REQUIRE(row_count(db.handle, "SELECT COUNT(*) FROM Classes;") == 12);
     REQUIRE(row_count(db.handle, "SELECT COUNT(*) FROM Races;") == 9);
-    REQUIRE(row_count(db.handle, "SELECT COUNT(*) FROM Monsters;") == 6);
+    REQUIRE(row_count(db.handle, "SELECT COUNT(*) FROM Monsters;") == 19);
     REQUIRE(row_count(db.handle, "SELECT COUNT(*) FROM Weapons;") == 12);
 }
 
@@ -117,7 +117,7 @@ TEST_CASE("migration 6 equips existing characters with Unarmed Strike", "[migrat
 
     dnd::run_migrations(db.handle);
 
-    REQUIRE(dnd::current_schema_version(db.handle) == 18);
+    REQUIRE(dnd::current_schema_version(db.handle) == 19);
 
     sqlite3_stmt* stmt = nullptr;
     REQUIRE(sqlite3_prepare_v2(db.handle,
@@ -190,7 +190,7 @@ TEST_CASE("migration 15 turns each character's weapon into an equipped item", "[
     REQUIRE(result == SQLITE_OK);
 
     dnd::run_migrations(db.handle);
-    REQUIRE(dnd::current_schema_version(db.handle) == 18);
+    REQUIRE(dnd::current_schema_version(db.handle) == 19);
     REQUIRE(row_count(db.handle,
         "SELECT COUNT(*) FROM CharacterInventory JOIN Items ON Items.ItemID = CharacterInventory.ItemID "
         "JOIN Characters ON Characters.CharacterId = CharacterInventory.CharacterID "
