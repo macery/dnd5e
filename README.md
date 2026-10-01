@@ -209,7 +209,7 @@ Any pending schema migrations run on launch, so older save files are upgraded in
 - [x] **Equipment design**: see [docs/equipment-system.md](docs/equipment-system.md). Phases 1 (data and rules) and 2 (combat, Inventory, sheet, wizard) are done. It covers the next two items and *Weapon proficiencies*, with its decisions settled: calculated AC, warnings plus combat penalties for armor you aren't proficient with, fixed starting kits per class, weapon proficiency included, and existing weapons converted to inventory items.
 - [x] **Equipping & weapons in the inventory**: weapons are inventory items, and the Inventory dialog equips one armor, one shield, and one weapon at a time. The old `WeaponID` column is retired.
 - [x] **Armor & shields**: the PHB armor table and the shield are seeded. AC is calculated from the worn armor, DEX (capped for medium), a shield, and Unarmored Defense, and is never entered by hand.
-- [ ] **Currency**: track CP/SP/EP/GP/PP and have adventures award gold alongside XP.
+- [ ] **Currency** ([docs/adventures-and-currency.md](docs/adventures-and-currency.md)): track CP/SP/EP/GP/PP and have adventures award gold alongside XP.
 - [ ] **Encumbrance** (optional): item weights compared with carrying capacity (STR × 15).
 - [ ] **Item uses**: a Healer's Kit has 10 uses in the PHB, but they aren't tracked, so stabilizing with one never uses it up. The same applies to other limited-use gear later (torches burning out, rations eaten).
 
@@ -296,7 +296,7 @@ Phases 1 (core and data) and 2 (UI) are done; see [docs/magic-system.md](docs/ma
 
 - [ ] **More monsters**: 19 SRD stat blocks from CR 1/8 to 5 so far. Still to come: higher CRs, monster spellcasters, and the traits that need a map.
 - [ ] **Monster editor**: add and edit custom monsters in the UI.
-- [ ] **Multi-encounter adventures**: several fights in a row, with rests in between.
+- [ ] **Multi-encounter adventures** ([docs/adventures-and-currency.md](docs/adventures-and-currency.md)): several fights in a row, with rests in between.
 - [x] **Encounter difficulty**:
   - Fights are rated Trivial, Easy, Medium, Hard, or Deadly with the 2014 encounter-building rules: XP thresholds by level, plus a multiplier for the number of monsters.
   - Combat Encounter shows the rating live.
