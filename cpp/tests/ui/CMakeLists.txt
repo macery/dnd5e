@@ -10,6 +10,7 @@ add_executable(dnd_ui_tests
     test_dialogs.cpp
     test_combat_ui.cpp
     test_adventure_ui.cpp
+    test_shop_ui.cpp
 )
 target_link_libraries(dnd_ui_tests PRIVATE dnd_ui Catch2::Catch2)
 

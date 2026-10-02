@@ -1,6 +1,16 @@
 # Shops and spending design
 
-Status: **phase 1 (rules) done.** Decisions were settled on 2026-10-02; see [Decisions](#decisions).
+Status: **phases 1 (rules) and 2 (UI) done.** Decisions were settled on 2026-10-02; see [Decisions](#decisions).
+
+**Phase 2 as built:**
+- **`ShopDialog`**, from the main window's **Shop…** button, for the selected character:
+  - **Header:** name and purse, and **Give Coins…** (`GiveCoinsDialog`: a recipient among the player's other characters, and a count per coin, capped at what the giver has).
+  - **Buy:** every item, filterable by category. The button shows the total ("Buy for 4 gp") and is disabled with the shortfall in its tooltip when the purse is short, or for the dead. Proficiency and Strength warnings show for the selected item.
+  - **Sell:** the pack with what each fetches. Equipped items are marked, and Sell is disabled with "Unequip the Longsword in the Inventory before selling it."
+  - **Temple:** the player's dead and who pays (each with their purse). A dead character opens the Shop on this tab.
+- **Inventory:** **Add (free)**, with a tooltip pointing to the Shop.
+- **Character sheet:** a **Raised** row while the penalty lasts, and the dead banner points to the Temple.
+- **UI tests** (`tests/ui/test_shop_ui.cpp`): buying with warnings and prices, refusing equipped gear, pooling coins with Give Coins to raise the dead, and the sheet's penalty row. The Shop and Give Coins are in the small-screen size test.
 
 **Phase 1 as built:**
 - **`dnd/shop`:**

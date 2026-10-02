@@ -13,6 +13,7 @@ add_library(dnd_ui STATIC
     CharacterSheetDialog.cpp
     InitiativeTrackerDialog.cpp
     InventoryDialog.cpp
+    ShopDialog.cpp
     SpellbookDialog.cpp
     LevelUpDialog.cpp
     ImportDialog.cpp

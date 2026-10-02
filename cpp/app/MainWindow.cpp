@@ -36,6 +36,7 @@
 #include "InitiativeTrackerDialog.hpp"
 #include "ImportDialog.hpp"
 #include "InventoryDialog.hpp"
+#include "ShopDialog.hpp"
 #include "LevelUpDialog.hpp"
 #include "MonsterListDialog.hpp"
 #include "SpellbookDialog.hpp"
@@ -108,6 +109,10 @@ MainWindow::MainWindow(dnd::Repository& repository, QWidget* parent)
     inventoryButton_ = new QPushButton("Inventory", central);
     inventoryButton_->setToolTip("View, add, drop, and use the selected character's items.");
     characterRow->addWidget(inventoryButton_);
+    shopButton_ = new QPushButton("Shop…", central);
+    shopButton_->setToolTip("Buy and sell gear for the selected character, give coins to another of the player's "
+                            "characters, or pay a temple to raise the dead.");
+    characterRow->addWidget(shopButton_);
     spellbookButton_ = new QPushButton("Spellbook", central);
     spellbookButton_->setToolTip("The selected character's spells and spell slots: learn spells, and cast healing "
                                  "or utility spells outside combat.");
@@ -166,6 +171,7 @@ MainWindow::MainWindow(dnd::Repository& repository, QWidget* parent)
     connect(editCharacterButton_, &QPushButton::clicked, this, &MainWindow::onEditCharacterClicked);
     connect(deleteCharacterButton_, &QPushButton::clicked, this, &MainWindow::onDeleteCharacterClicked);
     connect(inventoryButton_, &QPushButton::clicked, this, &MainWindow::onInventoryClicked);
+    connect(shopButton_, &QPushButton::clicked, this, &MainWindow::onShopClicked);
     connect(spellbookButton_, &QPushButton::clicked, this, &MainWindow::onSpellbookClicked);
     connect(levelUpButton_, &QPushButton::clicked, this, &MainWindow::onLevelUpClicked);
     connect(exportButton_, &QPushButton::clicked, this, &MainWindow::onExportClicked);
@@ -346,7 +352,7 @@ void MainWindow::adjustCurrentCharacterHp(int delta) {
     dnd::Character character = *selected;
     if (character.dead) {
         QMessageBox::information(this, "Adjust HP",
-            QString("%1 is dead. Only revival magic can bring them back.").arg(QString::fromStdString(character.character_name)));
+            QString("%1 is dead. A temple can raise them: see the Shop's Temple tab.").arg(QString::fromStdString(character.character_name)));
         return;
     }
     character.current_hp = std::clamp(character.current_hp + delta, 0, character.max_hp);
@@ -369,6 +375,15 @@ void MainWindow::onInventoryClicked() {
     InventoryDialog dialog(repository_, *selected, classes_, races_, this);
     dialog.exec();
     reloadCharactersForCurrentPlayer();  // using a potion changes HP
+}
+
+void MainWindow::onShopClicked() {
+    const dnd::Character* selected = selectedCharacter("Shop");
+    if (!selected) return;
+
+    ShopDialog dialog(repository_, *selected, classes_, races_, this);
+    dialog.exec();
+    reloadCharactersForCurrentPlayer();  // coins, and anyone raised
 }
 
 void MainWindow::onSpellbookClicked() {
@@ -566,7 +581,7 @@ std::vector<dnd::Character> MainWindow::charactersWhoCanFight(const QString& act
     }
     if (living.empty() && !characters.empty()) {
         QMessageBox::information(this, action,
-            "Every character is dead. Only revival magic can bring them back, and that isn't available yet.");
+            "Every character is dead. A temple can raise them for 550 gp: see the Shop's Temple tab.");
     }
     return living;
 }

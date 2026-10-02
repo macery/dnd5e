@@ -47,8 +47,7 @@ InventoryDialog::InventoryDialog(dnd::Repository& repository, dnd::Character cha
     coinsLabel_ = new QLabel(this);
     coinsLabel_->setWordWrap(true);
     coinsLabel_->setToolTip("Coins carried: platinum, gold, electrum, silver, copper (1 pp = 10 gp = 20 ep = 100 sp = "
-                            "1,000 cp). Adventures pay coins, split among the survivors. There's nothing to spend "
-                            "them on yet.");
+                            "1,000 cp). Adventures pay coins, split among the survivors. Spend them in the Shop.");
 
     equipmentLabel_ = new QLabel(this);
     equipmentLabel_->setWordWrap(true);
@@ -83,7 +82,9 @@ InventoryDialog::InventoryDialog(dnd::Repository& repository, dnd::Character cha
     }
     quantitySpin_ = new QSpinBox(this);
     quantitySpin_->setRange(1, 99);
-    addButton_ = new QPushButton("Add", this);
+    addButton_ = new QPushButton("Add (free)", this);
+    addButton_->setToolTip("Put items in the pack at no cost: found loot, or a gift from the DM. Use the Shop to "
+                           "buy them.");
     addRow->addWidget(itemCombo_, 1);
     addRow->addWidget(quantitySpin_);
     addRow->addWidget(addButton_);

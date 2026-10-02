@@ -67,8 +67,9 @@ CharacterSheetDialog::CharacterSheetDialog(const dnd::Character& character,
                                this);
     QLabel* deadBanner = nullptr;
     if (character.dead) {
-        deadBanner = new QLabel("This character died in battle. Only revival magic (Revivify, Raise Dead, ...) can "
-                                "bring them back, and it isn't available yet. They can't fight, rest, or cast.",
+        deadBanner = new QLabel("This character died in battle. Only revival magic can bring them back: a temple "
+                                "can cast raise dead (the Shop's Temple tab). Until then they can't fight, rest, or "
+                                "cast.",
                                 this);
         deadBanner->setWordWrap(true);
         deadBanner->setStyleSheet("color: #b00020;");
@@ -129,6 +130,17 @@ CharacterSheetDialog::CharacterSheetDialog(const dnd::Character& character,
     if (dnd::pending_levels(character) > 0) {
         experienceText += QString(" — <b>ready to level up</b> (level %1): use Level Up on the main window")
                               .arg(dnd::level_for_xp(character.experience));
+    }
+    if (character.revival_penalty > 0) {
+        addExplainedRow(summaryForm, "Raised",
+            new QLabel(QString("<span style='color:#b00020'>-%1 to attack rolls, saving throws, and ability checks"
+                               "</span> (%2 more long rest%3)")
+                           .arg(character.revival_penalty)
+                           .arg(character.revival_penalty)
+                           .arg(character.revival_penalty == 1 ? "" : "s"),
+                       summaryGroup),
+            "Returning from the dead with raise dead takes its toll (PHB ch. 11): -4 at first, easing by 1 with "
+            "every long rest. In combat it comes off initiative, attacks, saves, and death saves.");
     }
     addExplainedRow(summaryForm, "Coins",
         new QLabel(QString::fromStdString(dnd::format_coins(character.coins)), summaryGroup),

@@ -22,6 +22,7 @@
 #include "LevelUpDialog.hpp"
 #include "MainWindow.hpp"
 #include "MonsterListDialog.hpp"
+#include "ShopDialog.hpp"
 #include "SpellbookDialog.hpp"
 #include "dnd/character_io.hpp"
 #include "dnd/encounter_difficulty.hpp"
@@ -101,6 +102,12 @@ TEST_CASE("every window fits a small screen", "[ui][sizes]") {
     SECTION("inventory") {
         InventoryDialog inventory(repo, sera, classes, repo.get_races());
         requireFits(inventory, "InventoryDialog");
+    }
+    SECTION("shop and give coins") {
+        ShopDialog shop(repo, sera, classes, repo.get_races());
+        requireFits(shop, "ShopDialog");
+        GiveCoinsDialog give(repo, sera);
+        requireFits(give, "GiveCoinsDialog");
     }
     SECTION("spellbook") {
         SpellbookDialog spellbook(repo, zanna, classes);

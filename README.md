@@ -38,7 +38,7 @@ It manages players and characters, computes a full character sheet from the 5e r
   - Monster turns resolve automatically.
   - On each of your turns you pick Attack, Dash, Dodge, Drink Potion, Cast a Spell, or Stabilize.
   - **Conditions and effects:** all 14 PHB conditions, plus spell effects like *Bless*, *Guiding Bolt*, and *Charm Person*. They change advantage and disadvantage, saves, AC, and who can act. Hover a creature's status for what each one does and how long it lasts.
-  - **Death saving throws:** characters at 0 HP are dying and roll each turn. Stabilize them, heal them, or lose them. The dead stay dead until revival magic exists.
+  - **Death saving throws:** characters at 0 HP are dying and roll each turn. Stabilize them, heal them, or lose them. The dead stay dead until a temple raises them (see *Shop*).
   - **Concentration:** one spell at a time, and damage can break it.
   - **Actions and class features:** one action and one bonus action per turn, plus class features:
     - **Barbarian:** Rage, Reckless Attack.
@@ -54,6 +54,7 @@ It manages players and characters, computes a full character sheet from the 5e r
   - Dodge imposes disadvantage on attacks against you.
   - Drink Potion heals from your inventory.
   - The encounter ends with a victory or a defeat.
+- **Shop** ([docs/shops.md](docs/shops.md)): buy gear at PHB list price (with change made automatically) and sell it for half; equipped gear must be unequipped first. Give coins to another of the player's characters. A temple raises the dead for 550 gp; they return with 1 HP and −4 to attack rolls, saving throws, and ability checks, easing by 1 each long rest.
 - **Solo adventures** ([docs/adventures-and-currency.md](docs/adventures-and-currency.md)): twelve pre-built adventures. Nine are single fights; three are multi-fight runs (The Goblin Warren, Crypt of the Restless, The Hill Giant's Toll).
   - **Party:** you pick who goes.
   - **Fights:** each comes with narration, is scaled for the party (the final fight toward Hard), and pays coins and loot.
@@ -225,7 +226,7 @@ Any pending schema migrations run on launch, so older save files are upgraded in
   - Characters carry cp, sp, ep, gp, and pp, and start with their background's purse.
   - Adventures pay coins scaled to the party's level, split among the survivors.
   - Coins show on the sheet and in the Inventory (with what the items are worth), and travel in exports.
-- [ ] **Shops and spending**: buy and sell gear at list price, and pay for services such as a temple's revival spells. Coins exist; there's nothing to spend them on yet.
+- [x] **Shops and spending** ([docs/shops.md](docs/shops.md)): buy gear at list price and sell it for half, give coins between a player's characters, and pay a temple 550 gp to *raise dead*. The Inventory's **Add (free)** stays for loot and DM gifts.
 - [ ] **Encumbrance** (optional): item weights compared with carrying capacity (STR × 15).
 - [ ] **Item uses**: a Healer's Kit has 10 uses in the PHB, but they aren't tracked, so stabilizing with one never uses it up. The same applies to other limited-use gear later (torches burning out, rations eaten).
 
@@ -288,7 +289,7 @@ Phases 1 (core and data) and 2 (UI) are done; see [docs/magic-system.md](docs/ma
   - **Later:** tracked as their own items. Effects that outlast combat and reactions are under [Magic system](#magic-system); damage types, temporary HP, and creature types are below.
 - [x] **Conditions**: all 14 PHB conditions are wired into advantage, disadvantage, auto-fails, auto-crits, and skipped turns (`dnd/effects`). They're applied in play by *Charm Person*, the Wolf's knock-prone, and dropping to 0 HP. Hovering a status in combat explains each one. More sources will come as monsters and spells are added.
 - [x] **Death saving throws**: characters at 0 HP fall unconscious and roll death saves each turn. A natural 1 counts as two failures, and a natural 20 brings them back with 1 HP. Massive damage kills outright. Healing revives them, and the fight's end stabilizes them. Monsters ignore the dying. A **Stabilize** action (Medicine check, or automatic with a Healer's Kit) and *Spare the Dying* stabilize the dying. Death save pips show in combat, and the dead are marked and kept out of play.
-- [ ] **Revival**: bring dead characters back the 2014 PHB way: *Revivify*, *Raise Dead*, *Reincarnate*, *Resurrection*, *True Resurrection*, or a temple's spellcasting service. It needs the spells, their material components, currency, and time tracking; see the effects design doc's Decisions.
+- [ ] **Revival**: a temple's *raise dead* is done (the Shop's Temple tab, with the −4 penalty that eases each long rest). Still to come: characters casting *Revivify*, *Raise Dead*, *Reincarnate*, *Resurrection*, and *True Resurrection* themselves, which needs the spells, their material components, and time tracking. The penalty doesn't touch skill checks yet; initiative is the only ability check in combat.
 - [ ] **More actions**: Disengage, Help, Hide, and Ready. (Attack, Dash, Dodge, Drink Potion, Cast a Spell, and Stabilize exist.) Most need positions or reactions to mean much without a map; Help (advantage on an ally's next attack) works without one.
 - [x] **Monsters and encounter balance** ([docs/monsters-and-encounters.md](docs/monsters-and-encounters.md)):
   - Damage and creature types.

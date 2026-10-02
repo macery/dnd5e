@@ -67,7 +67,7 @@ QVariant CharacterTableModel::data(const QModelIndex& index, int role) const {
     if (role == Qt::ForegroundRole && character.dead) return QBrush(QColor(128, 128, 128));
     if (role == Qt::ToolTipRole && index.column() == 6) {
         if (character.dead) return "Dead: failed three death saves or took massive damage. Only revival magic "
-                                   "can bring them back, and it isn't available yet. They can't fight or rest.";
+                                   "can bring them back: a temple's raise dead, in the Shop. They can't fight or rest.";
         if (character.current_hp <= 0) return "Unconscious at 0 HP (stable). Any healing wakes them.";
         return {};
     }
