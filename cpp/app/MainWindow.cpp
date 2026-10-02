@@ -57,22 +57,26 @@ MainWindow::MainWindow(dnd::Repository& repository, QWidget* parent)
     auto* central = new QWidget(this);
     auto* rootLayout = new QVBoxLayout(central);
 
-    auto* playerRow = new QHBoxLayout();
+    // Rows of buttons wrap when the window is narrow (FlowLayout), so the
+    // main window fits small screens and wider fonts (Windows).
+    auto* playerRow = new FlowLayout();
     playerCombo_ = new QComboBox(central);
     newPlayerName_ = new QLineEdit(central);
     newPlayerName_->setPlaceholderText("New player name");
     addPlayerButton_ = new QPushButton("Add Player", central);
     editPlayerButton_ = new QPushButton("Edit Player", central);
     deletePlayerButton_ = new QPushButton("Delete Player", central);
-    playerRow->addWidget(playerCombo_, 1);
-    playerRow->addWidget(newPlayerName_, 1);
+    playerCombo_->setMinimumWidth(160);
+    newPlayerName_->setMinimumWidth(160);
+    playerRow->addWidget(playerCombo_);
+    playerRow->addWidget(newPlayerName_);
     playerRow->addWidget(addPlayerButton_);
     playerRow->addWidget(editPlayerButton_);
     playerRow->addWidget(deletePlayerButton_);
     rootLayout->addLayout(playerRow);
 
     // Save files: share or move characters, and back up everything (docs/save-load.md).
-    auto* fileRow = new QHBoxLayout();
+    auto* fileRow = new FlowLayout();
     exportButton_ = new QPushButton("Export…", central);
     exportButton_->setToolTip("Save this player's characters -- or just the selected character -- to a file you "
                               "can back up, share, or import on another machine.");
@@ -84,7 +88,6 @@ MainWindow::MainWindow(dnd::Repository& repository, QWidget* parent)
     fileRow->addWidget(exportButton_);
     fileRow->addWidget(importButton_);
     fileRow->addWidget(backupButton_);
-    fileRow->addStretch(1);
     rootLayout->addLayout(fileRow);
 
     characterModel_ = new CharacterTableModel(central);
@@ -95,7 +98,7 @@ MainWindow::MainWindow(dnd::Repository& repository, QWidget* parent)
     characterTable_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);  // Name
     rootLayout->addWidget(characterTable_, 1);
 
-    auto* characterRow = new QHBoxLayout();
+    auto* characterRow = new FlowLayout();
     addCharacterButton_ = new QPushButton("Add Character", central);
     editCharacterButton_ = new QPushButton("Edit Character", central);
     deleteCharacterButton_ = new QPushButton("Delete Character", central);
@@ -116,7 +119,7 @@ MainWindow::MainWindow(dnd::Repository& repository, QWidget* parent)
     characterRow->addWidget(levelUpButton_);
     rootLayout->addLayout(characterRow);
 
-    auto* combatRow = new QHBoxLayout();
+    auto* combatRow = new FlowLayout();
     hpAmountSpin_ = new QSpinBox(central);
     hpAmountSpin_->setRange(1, 999);
     hpAmountSpin_->setValue(1);
@@ -138,16 +141,14 @@ MainWindow::MainWindow(dnd::Repository& repository, QWidget* parent)
     combatRow->addWidget(healButton_);
     combatRow->addWidget(shortRestButton_);
     combatRow->addWidget(longRestButton_);
-    combatRow->addStretch(1);
     rootLayout->addLayout(combatRow);
 
     // Fights on their own row, so the window stays narrow enough for small screens.
-    auto* playRow = new QHBoxLayout();
+    auto* playRow = new FlowLayout();
     playRow->addWidget(initiativeTrackerButton_);
     playRow->addWidget(monstersButton_);
     playRow->addWidget(combatEncounterButton_);
     playRow->addWidget(soloAdventureButton_);
-    playRow->addStretch(1);
     rootLayout->addLayout(playRow);
 
     diceRoller_ = new DiceRollerWidget(central);

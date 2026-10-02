@@ -48,3 +48,54 @@ private:
     bool built_ = false;
     std::vector<std::pair<int, QWidget*>> widgets_;
 };
+
+#include <QLayout>
+
+// A layout that places widgets left to right and wraps them onto new rows
+// when the width runs out (Qt's "flow layout" example), so a row of buttons
+// never forces its window wider than the widest single button.
+class FlowLayout : public QLayout {
+public:
+    explicit FlowLayout(QWidget* parent = nullptr, int spacing = -1);
+    ~FlowLayout() override;
+
+    void addItem(QLayoutItem* item) override;
+    int count() const override;
+    QLayoutItem* itemAt(int index) const override;
+    QLayoutItem* takeAt(int index) override;
+    Qt::Orientations expandingDirections() const override;
+    bool hasHeightForWidth() const override;
+    int heightForWidth(int width) const override;
+    QSize minimumSize() const override;
+    QSize sizeHint() const override;
+    void setGeometry(const QRect& rect) override;
+
+private:
+    int arrange(const QRect& rect, bool apply) const;  // returns the height used
+    int gap() const;
+
+    QList<QLayoutItem*> items_;
+    int spacing_;
+};
+
+#include <map>
+
+class QGridLayout;
+class QLabel;
+
+// A two-column form (label | field) on a QGridLayout, with QFormLayout's
+// addRow / labelForField. Use it instead of QFormLayout where rows are shown
+// and hidden: Qt 6.4's QFormLayout writes past its own memory when rows are
+// hidden (found by valgrind; it crashed the AppImage build's Qt 6.4).
+class GridForm : public QObject {
+public:
+    explicit GridForm(QWidget* parent);
+    void addRow(const QString& label, QWidget* field);
+    void addRow(QWidget* spanning);  // across both columns
+    QWidget* labelForField(QWidget* field) const;  // nullptr for spanning rows
+
+private:
+    QGridLayout* grid_;
+    std::map<QWidget*, QLabel*> labels_;
+    int rows_ = 0;
+};

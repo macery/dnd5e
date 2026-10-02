@@ -67,6 +67,24 @@ TEST_CASE("every window fits a small screen", "[ui][sizes]") {
         MainWindow window(repo);
         requireFits(window, "MainWindow");
     }
+    SECTION("main window with double-size fonts (Windows' are wider than Linux's)") {
+        // On Windows the button rows once forced the window 924 px wide. They wrap now.
+        QFont original = QApplication::font();
+        QFont bigger = original;
+        if (original.pointSizeF() > 0) {
+            bigger.setPointSizeF(original.pointSizeF() * 2);
+        } else {
+            bigger.setPixelSize(original.pixelSize() * 2);  // some platforms size fonts in pixels
+        }
+        QApplication::setFont(bigger);
+        {
+            MainWindow window(repo);
+            INFO("font " << QApplication::font().pointSizeF() << "pt / " << QApplication::font().pixelSize() << "px, was "
+                         << original.pointSizeF() << "pt / " << original.pixelSize() << "px");
+            requireFits(window, "MainWindow (2x font)");
+        }
+        QApplication::setFont(original);
+    }
     SECTION("character sheet (a caster with a long spell list)") {
         CharacterSheetDialog sheet(zanna, classes, repo.get_races(), repo.get_alignments(),
                                    repo.get_inventory(zanna.character_id), repo.get_character_spells(zanna.character_id));

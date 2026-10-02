@@ -117,7 +117,7 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
     turnRow->addWidget(currentTurnLabel_);
 
     auto* attackGroup = new QGroupBox("Your Turn", this);
-    auto* attackForm = new QFormLayout(attackGroup);
+    auto* attackForm = new GridForm(attackGroup);
     attackFormLayout_ = attackForm;
 
     moveLabel_ = new QLabel("Movement: up to 30 ft. this turn (not tracked -- no map)", attackGroup);
@@ -398,9 +398,19 @@ void CombatEncounterDialog::refreshState() {
     bool anyMonster = std::any_of(encounter_.combatants().begin(), encounter_.combatants().end(),
                                   [](const dnd::Combatant& c) { return !c.is_character; });
     difficultyLabel_->setText(anyMonster ? "Difficulty: " + q(rating.text()) : QString("Add monsters to fight."));
-    difficultyLabel_->setStyleSheet(rating.difficulty == dnd::Difficulty::Deadly ? "color: #b00020; font-weight: bold;"
-                                    : rating.difficulty == dnd::Difficulty::Hard ? "color: #c05000;"
-                                                                                 : "");
+    // Color by palette, and only when the rating changes: re-applying a style
+    // sheet on every refresh re-polishes the label, which crashed Qt 6.4.
+    if (rating.difficulty != shownDifficulty_) {
+        shownDifficulty_ = rating.difficulty;
+        QPalette palette = difficultyLabel_->palette();
+        palette.setColor(QPalette::WindowText, rating.difficulty == dnd::Difficulty::Deadly ? QColor(176, 0, 32)
+                                               : rating.difficulty == dnd::Difficulty::Hard ? QColor(192, 80, 0)
+                                                                                            : palette.color(QPalette::Text));
+        difficultyLabel_->setPalette(palette);
+        QFont font = difficultyLabel_->font();
+        font.setBold(rating.difficulty == dnd::Difficulty::Deadly);
+        difficultyLabel_->setFont(font);
+    }
     takeActionButton_->setEnabled(encounter_.awaiting_action() || encounter_.bonus_action_available());
     refreshBonusControls();
 

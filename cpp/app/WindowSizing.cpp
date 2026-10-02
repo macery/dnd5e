@@ -1,8 +1,11 @@
 #include "WindowSizing.hpp"
 
 #include <QEvent>
+#include <QGridLayout>
+#include <QLabel>
 #include <QHBoxLayout>
 #include <QResizeEvent>
+#include <QStyle>
 #include <QVBoxLayout>
 #include <QGuiApplication>
 #include <QScreen>
@@ -104,4 +107,112 @@ void ReflowColumns::rebuild(bool twoColumns) {
         }
         stack->addStretch(1);
     }
+}
+
+FlowLayout::FlowLayout(QWidget* parent, int spacing) : QLayout(parent), spacing_(spacing) {}
+
+FlowLayout::~FlowLayout() {
+    while (QLayoutItem* item = takeAt(0)) delete item;
+}
+
+void FlowLayout::addItem(QLayoutItem* item) {
+    items_.append(item);
+}
+
+int FlowLayout::count() const {
+    return static_cast<int>(items_.size());
+}
+
+QLayoutItem* FlowLayout::itemAt(int index) const {
+    return index >= 0 && index < items_.size() ? items_.at(index) : nullptr;
+}
+
+QLayoutItem* FlowLayout::takeAt(int index) {
+    return index >= 0 && index < items_.size() ? items_.takeAt(index) : nullptr;
+}
+
+Qt::Orientations FlowLayout::expandingDirections() const {
+    return {};
+}
+
+bool FlowLayout::hasHeightForWidth() const {
+    return true;
+}
+
+int FlowLayout::heightForWidth(int width) const {
+    return arrange(QRect(0, 0, width, 0), false);
+}
+
+QSize FlowLayout::minimumSize() const {
+    QSize size;
+    for (const QLayoutItem* item : items_) size = size.expandedTo(item->minimumSize());
+    const QMargins margins = contentsMargins();
+    return size + QSize(margins.left() + margins.right(), margins.top() + margins.bottom());
+}
+
+QSize FlowLayout::sizeHint() const {
+    // As wide as everything on one row.
+    int width = 0;
+    int height = 0;
+    for (const QLayoutItem* item : items_) {
+        width += item->sizeHint().width() + (width > 0 ? gap() : 0);
+        height = std::max(height, item->sizeHint().height());
+    }
+    const QMargins margins = contentsMargins();
+    return QSize(width + margins.left() + margins.right(), height + margins.top() + margins.bottom());
+}
+
+void FlowLayout::setGeometry(const QRect& rect) {
+    QLayout::setGeometry(rect);
+    arrange(rect, true);
+}
+
+int FlowLayout::gap() const {
+    if (spacing_ >= 0) return spacing_;
+    QWidget* parent = parentWidget();
+    return parent ? parent->style()->pixelMetric(QStyle::PM_LayoutHorizontalSpacing, nullptr, parent) : 6;
+}
+
+int FlowLayout::arrange(const QRect& rect, bool apply) const {
+    const QMargins margins = contentsMargins();
+    QRect area = rect.adjusted(margins.left(), margins.top(), -margins.right(), -margins.bottom());
+    int spacing = std::max(gap(), 4);
+    int x = area.x();
+    int y = area.y();
+    int rowHeight = 0;
+    for (QLayoutItem* item : items_) {
+        QSize size = item->sizeHint();
+        if (x > area.x() && x + size.width() > area.right() + 1) {  // wrap
+            x = area.x();
+            y += rowHeight + spacing;
+            rowHeight = 0;
+        }
+        if (apply) item->setGeometry(QRect(QPoint(x, y), size));
+        x += size.width() + spacing;
+        rowHeight = std::max(rowHeight, size.height());
+    }
+    return y + rowHeight - rect.y() + margins.bottom();
+}
+
+GridForm::GridForm(QWidget* parent) : QObject(parent), grid_(new QGridLayout(parent)) {
+    grid_->setColumnStretch(1, 1);
+}
+
+void GridForm::addRow(const QString& label, QWidget* field) {
+    auto* name = new QLabel(label, field->parentWidget());
+    name->setBuddy(field);
+    grid_->addWidget(name, rows_, 0, Qt::AlignLeft | Qt::AlignVCenter);
+    grid_->addWidget(field, rows_, 1);
+    labels_[field] = name;
+    ++rows_;
+}
+
+void GridForm::addRow(QWidget* spanning) {
+    grid_->addWidget(spanning, rows_, 0, 1, 2);
+    ++rows_;
+}
+
+QWidget* GridForm::labelForField(QWidget* field) const {
+    auto found = labels_.find(field);
+    return found == labels_.end() ? nullptr : found->second;
 }

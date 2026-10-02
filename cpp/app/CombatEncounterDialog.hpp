@@ -14,7 +14,7 @@
 
 class QCheckBox;
 class QComboBox;
-class QFormLayout;
+class GridForm;
 class QLabel;
 class QListWidget;
 class QPlainTextEdit;
@@ -107,6 +107,7 @@ private:
     QLabel* statusLabel_ = nullptr;
     QLabel* objectiveLabel_ = nullptr;  // only created when launched from an adventure
     QLabel* difficultyLabel_ = nullptr;  // the fight's rating for the party
+    dnd::Difficulty shownDifficulty_ = dnd::Difficulty::Trivial;  // what difficultyLabel_ is colored for
     QTableWidget* participantTable_ = nullptr;
     QComboBox* monsterTypeCombo_ = nullptr;
     QSpinBox* monsterCountSpin_ = nullptr;
@@ -143,7 +144,7 @@ private:
     QLabel* layOnHandsInfoLabel_ = nullptr;
     // BonusTarget of each bonusCombo_ entry, by index.
     std::vector<dnd::Encounter::BonusTarget> bonusTargets_;
-    QFormLayout* attackFormLayout_ = nullptr;
+    GridForm* attackFormLayout_ = nullptr;  // not a QFormLayout: rows here are hidden and shown (see GridForm)
 
     QPlainTextEdit* logView_ = nullptr;
     QSplitter* mainSplitter_ = nullptr;  // the fight | "Your Turn"
