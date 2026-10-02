@@ -296,6 +296,7 @@ void MainWindow::onEditCharacterClicked() {
         updated.spell_slots_used = existing.spell_slots_used;
         updated.feature_uses_spent = existing.feature_uses_spent;
         updated.dead = existing.dead;
+        updated.revival_penalty = existing.revival_penalty;
         updated.coins = existing.coins;
         repository_.update_character(updated);
         reloadCharactersForCurrentPlayer();

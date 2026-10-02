@@ -120,6 +120,11 @@ struct EquipResult {
     std::vector<std::string> warnings;      // e.g. not proficient, too weak for heavy armor
 };
 
+// What's wrong with using `item` (a weapon, armor, or shield): not
+// proficient, or too weak for heavy armor. Empty for anything else.
+std::vector<std::string> equipment_warnings(const Character& character, const std::string& class_name,
+                                            const std::string& race_name, const Item& item);
+
 // Equips `item_id` in `inventory`, taking off whatever it replaces: one armor,
 // one shield, and one weapon at a time, and a two-handed weapon can't be
 // wielded with a shield. Items that aren't weapons, armor, or shields can't

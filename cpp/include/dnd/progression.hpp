@@ -57,8 +57,8 @@ int hit_dice_remaining(const Character& character);
 int spend_hit_die(Character& character, const Dice& dice, int hit_die);
 
 // Long rest: restores HP to max, recovers spent hit dice (up to half the
-// character's total, minimum one), and restores every spell slot and class
-// feature use.
+// character's total, minimum one), restores every spell slot and class
+// feature use, and eases a *raise dead* penalty by 1.
 void take_long_rest(Character& character);
 
 // The automatic part of a short rest: a Warlock regains its pact slots, and

@@ -272,7 +272,7 @@ RollModifiers ability_check_modifiers(const std::vector<ActiveEffect>& effects, 
 
 // --- Death saving throws -----------------------------------------------------
 
-DeathSaveResult roll_death_save(const Dice& dice, DeathSaveState& state) {
+DeathSaveResult roll_death_save(const Dice& dice, DeathSaveState& state, int modifier) {
     DeathSaveResult result;
     result.roll = dice.roll(20, 1).front();
 
@@ -283,7 +283,7 @@ DeathSaveResult roll_death_save(const Dice& dice, DeathSaveState& state) {
     }
     if (result.roll == 1) {
         state.failures += 2;
-    } else if (result.roll >= 10) {
+    } else if (result.roll + modifier >= 10) {
         ++state.successes;
     } else {
         ++state.failures;

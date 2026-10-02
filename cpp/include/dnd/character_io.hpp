@@ -39,6 +39,7 @@ struct ExportedCharacter {
     int max_hp = 0;
     int hit_dice_used = 0;
     bool dead = false;
+    int revival_penalty = 0;  // optional in files, like coins
     std::vector<std::string> saving_throws;  // ability names
     std::vector<std::string> skills;         // skill names
     std::string fighting_style;

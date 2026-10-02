@@ -273,6 +273,27 @@ int walking_speed(const Character& character, const std::string& race_name,
 
 // --- Equipping -------------------------------------------------------------------
 
+std::vector<std::string> equipment_warnings(const Character& character, const std::string& class_name,
+                                            const std::string& race_name, const Item& item) {
+    std::vector<std::string> warnings;
+    ItemCategory category = item.category;
+    if (category == ItemCategory::Weapon && !is_proficient_with_weapon(class_name, race_name, item)) {
+        warnings.push_back("Not proficient with " + item.name +
+                           ": attacks with it won't add the proficiency bonus.");
+    }
+    if ((category == ItemCategory::Armor || category == ItemCategory::Shield) &&
+        !is_proficient_with_armor(class_name, item)) {
+        warnings.push_back("Not proficient with " + item.name +
+                           ": while wearing it, attacks, ability checks, and saves using STR or DEX have "
+                           "disadvantage, and no spells can be cast.");
+    }
+    if (item.armor && item.armor->type == ArmorType::Heavy && character.strength < item.armor->strength_requirement) {
+        warnings.push_back(item.name + " needs STR " + std::to_string(item.armor->strength_requirement) +
+                           ": speed drops by 10 ft.");
+    }
+    return warnings;
+}
+
 EquipResult equip(std::vector<InventoryEntry>& inventory, int item_id, const Character& character,
                   const std::string& class_name, const std::string& race_name) {
     EquipResult result;
@@ -309,19 +330,7 @@ EquipResult equip(std::vector<InventoryEntry>& inventory, int item_id, const Cha
     target->equipped = true;
     result.ok = true;
 
-    if (category == ItemCategory::Weapon && !is_proficient_with_weapon(class_name, race_name, item)) {
-        result.warnings.push_back("Not proficient with " + item.name +
-                                  ": attacks with it won't add the proficiency bonus.");
-    }
-    if (category != ItemCategory::Weapon && !is_proficient_with_armor(class_name, item)) {
-        result.warnings.push_back("Not proficient with " + item.name +
-                                  ": while wearing it, attacks, ability checks, and saves using STR or DEX have "
-                                  "disadvantage, and no spells can be cast.");
-    }
-    if (item.armor && item.armor->type == ArmorType::Heavy && character.strength < item.armor->strength_requirement) {
-        result.warnings.push_back(item.name + " needs STR " + std::to_string(item.armor->strength_requirement) +
-                                  ": speed drops by 10 ft.");
-    }
+    result.warnings = equipment_warnings(character, class_name, race_name, item);
     return result;
 }
 

@@ -65,6 +65,7 @@ ExportedCharacter export_one(const Repository& repo, const Character& c, const s
     out.max_hp = c.max_hp;
     out.hit_dice_used = c.hit_dice_used;
     out.dead = c.dead;
+    out.revival_penalty = c.revival_penalty;
     for (int a = 0; a < kAbilityCount; ++a) {
         if (c.save_proficiencies & (1u << a)) out.saving_throws.push_back(ability_name(static_cast<Ability>(a)));
     }
@@ -124,6 +125,7 @@ std::string to_json(const CharacterExport& file) {
             {"hp", {{"current", c.current_hp}, {"max", c.max_hp}}},
             {"hit_dice_used", c.hit_dice_used},
             {"dead", c.dead},
+            {"revival_penalty", c.revival_penalty},
             {"saving_throws", c.saving_throws},
             {"skills", c.skills},
             {"fighting_style", c.fighting_style},
@@ -194,6 +196,7 @@ ParseResult parse_character_file(const std::string& text) {
             }
             out.hit_dice_used = c.value("hit_dice_used", 0);
             out.dead = c.value("dead", false);
+            out.revival_penalty = c.value("revival_penalty", 0);  // optional, like coins
             out.saving_throws = c.value("saving_throws", std::vector<std::string>{});
             out.skills = c.value("skills", std::vector<std::string>{});
             out.fighting_style = c.value("fighting_style", std::string());
@@ -380,6 +383,7 @@ ImportResult apply_import(Repository& repo, const ImportPlan& plan, const Import
             c.max_hp = source.max_hp;
             c.hit_dice_used = source.hit_dice_used;
             c.dead = source.dead;
+            c.revival_penalty = source.revival_penalty;
             for (const auto& ability : source.saving_throws) {
                 for (int a = 0; a < kAbilityCount; ++a) {
                     if (ability == ability_name(static_cast<Ability>(a))) c.save_proficiencies |= 1u << a;

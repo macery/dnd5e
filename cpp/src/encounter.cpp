@@ -45,6 +45,11 @@ std::string join(const std::vector<std::string>& parts, const std::string& separ
 }
 
 // " with advantage (target prone)" etc., or "" for a normal roll.
+// " -4 (raise dead)" for a raised character's rolls; "" otherwise.
+std::string penalty_note(int penalty) {
+    return penalty > 0 ? " " + format_modifier(-penalty) + " (raise dead)" : "";
+}
+
 std::string mode_note(const RollModifiers& m) {
     switch (m.mode()) {
         case RollMode::Advantage: return " with advantage (" + join(m.advantage, ", ") + ")";
@@ -142,6 +147,7 @@ void Encounter::add_character(const Character& character, std::vector<Spell> kno
         combatant.unarmed_strike = strike;
     }
     combatant.death_saves.dead = character.dead;
+    combatant.roll_penalty = character.revival_penalty;
     combatants_.push_back(combatant);
     inventories_[character.character_id] = std::move(inventory);
 
@@ -391,7 +397,7 @@ EncounterRating Encounter::difficulty() const {
 void Encounter::roll_initiative() {
     for (auto& combatant : combatants_) {
         int d20 = dice_.roll(20, 1).front();
-        combatant.initiative = d20 + combatant.dex_modifier;
+        combatant.initiative = d20 + combatant.dex_modifier - combatant.roll_penalty;
     }
 
     turn_order_.resize(combatants_.size());
@@ -568,8 +574,9 @@ void Encounter::end_turn(int index) {
 
 bool Encounter::resolve_death_save(int index) {
     Combatant& combatant = combatants_[static_cast<size_t>(index)];
-    DeathSaveResult result = roll_death_save(dice_, combatant.death_saves);
-    std::string line = combatant.name + " makes a death saving throw: d20(" + std::to_string(result.roll) + ") -> ";
+    DeathSaveResult result = roll_death_save(dice_, combatant.death_saves, -combatant.roll_penalty);
+    std::string line = combatant.name + " makes a death saving throw: d20(" + std::to_string(result.roll) + ")" +
+                       penalty_note(combatant.roll_penalty) + " -> ";
 
     if (result.regained_hp) {
         combatant.current_hp = 1;
@@ -734,7 +741,7 @@ void Encounter::weapon_attack(int attacker_index, int target_index, const Weapon
                               const MonsterAttack* monster_attack) {
     Combatant& attacker = combatants_[static_cast<size_t>(attacker_index)];
     Combatant& target = combatants_[static_cast<size_t>(target_index)];
-    int attack_bonus = attack.attack_bonus;
+    int attack_bonus = attack.attack_bonus - attacker.roll_penalty;
     attacker.rage_kept_up = true;  // attacking a hostile creature keeps a rage going
 
     RollModifiers mods = attack_roll_modifiers(effects_, attacker_index, target_index, attack.melee, alive_flags());
@@ -835,8 +842,8 @@ void Encounter::weapon_attack(int attacker_index, int target_index, const Weapon
                                 : std::vector<std::string>{};
 
     log(attacker.name + " attacks " + target.name + ": d20(" + std::to_string(result.attack_roll) + ") " +
-        format_modifier(attack_bonus) + bonus_note(mods.bonus_dice, bonus_rolls) + mode_note(mods) + " -> " +
-        attack_outcome(result.hit, result.critical, result.damage_total) + extra_note + ". " + target.name +
+        format_modifier(attack.attack_bonus) + penalty_note(attacker.roll_penalty) +
+        bonus_note(mods.bonus_dice, bonus_rolls) + mode_note(mods) + " -> " + attack_outcome(result.hit, result.critical, result.damage_total) + extra_note + ". " + target.name +
         " is now " + hp_text(target) + " HP.");
     for (const auto& line : followups) log(line);
 
@@ -1056,7 +1063,7 @@ int Encounter::save_bonus(int index, Ability ability) const {
     const Combatant& combatant = combatants_.at(static_cast<size_t>(index));
     if (combatant.is_character) {
         if (const Character* character = this->character(combatant.character_id)) {
-            return saving_throw_bonus(*character, ability);
+            return saving_throw_bonus(*character, ability) - combatant.roll_penalty;
         }
     }
     return ability_modifier(combatant.ability_scores[static_cast<size_t>(ability)]);
@@ -1850,6 +1857,7 @@ bool Encounter::cast_spell(int spell_id, int slot_level, const std::vector<int>&
     Character& caster_character = *character_mut(actor.character_id);
     const ClassInfo& info = *find_class_info_by_id(classes_, caster_character.class_id);
     CasterStats caster = caster_stats(caster_character, info);
+    caster.spell_attack_bonus -= actor.roll_penalty;
     int slot = spell.level == 0 ? 0 : slot_level;
 
     bool no_targets = spell_targets_nobody(spell);

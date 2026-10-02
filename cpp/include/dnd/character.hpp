@@ -31,6 +31,9 @@ struct Character {
     // Failed three death saves (or took massive damage). Stays dead until
     // revived by a spell -- see docs/effects-system.md, Decisions.
     bool dead = false;
+    // Raised by *raise dead*: a penalty (4 at first) to attack rolls, saving
+    // throws, and ability checks that drops by 1 each long rest (dnd/shop.hpp).
+    int revival_penalty = 0;
     // Class feature uses spent since they last came back, by feature key
     // ("SecondWind", "Rage", ...). Maximums come from class and level
     // (dnd/class_features.hpp); rests clear them.

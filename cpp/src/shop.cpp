@@ -1,0 +1,173 @@
+#include "dnd/shop.hpp"
+
+#include <algorithm>
+
+#include "dnd/inventory.hpp"
+
+namespace dnd {
+
+namespace {
+
+std::optional<Character> find_character(const Repository& repo, int character_id) {
+    for (const auto& character : repo.get_characters()) {
+        if (character.character_id == character_id) return character;
+    }
+    return std::nullopt;
+}
+
+std::optional<Item> find_item(const Repository& repo, int item_id) {
+    for (const auto& item : repo.get_items()) {
+        if (item.item_id == item_id) return item;
+    }
+    return std::nullopt;
+}
+
+ShopResult refuse(std::string message) {
+    return ShopResult{false, std::move(message)};
+}
+
+std::string stack(int quantity, const std::string& name) {
+    return std::to_string(quantity) + " × " + name;
+}
+
+}  // namespace
+
+std::optional<Coins> pay(const Coins& purse, int cost_cp) {
+    if (cost_cp < 0 || total_cp(purse) < cost_cp) return std::nullopt;
+    Coins left = purse;
+    int remaining = cost_cp;
+    // Smallest first, never overpaying with a coin.
+    for (int i = 0; i < kCoinCount && remaining > 0; ++i) {
+        auto& count = left[static_cast<size_t>(i)];
+        int value = coin_value_cp(static_cast<Coin>(i));
+        int used = std::min(count, remaining / value);
+        count -= used;
+        remaining -= used * value;
+    }
+    // Every coin still held is now worth more than what's owed: break the
+    // smallest one.
+    if (remaining > 0) {
+        for (int i = 0; i < kCoinCount; ++i) {
+            auto& count = left[static_cast<size_t>(i)];
+            if (count == 0) continue;
+            --count;
+            add_coins(left, coins_from_cp(coin_value_cp(static_cast<Coin>(i)) - remaining));
+            break;
+        }
+    }
+    return left;
+}
+
+int sell_price_cp(const Item& item) {
+    return std::max(0, item.cost_cp / 2);
+}
+
+ShopResult buy(Repository& repo, int character_id, int item_id, int quantity) {
+    if (quantity <= 0) return refuse("Choose how many to buy.");
+    auto character = find_character(repo, character_id);
+    auto item = find_item(repo, item_id);
+    if (!character || !item) return refuse("That character or item no longer exists.");
+    if (character->dead) return refuse(character->character_name + " is dead and can't go shopping.");
+
+    int price = item->cost_cp * quantity;
+    auto paid = pay(character->coins, price);
+    if (!paid) {
+        return refuse(stack(quantity, item->name) + " costs " + format_cost(price) + ", but " +
+                      character->character_name + " has " + format_cost(total_cp(character->coins)) + ".");
+    }
+    character->coins = *paid;
+    repo.with_transaction([&] {
+        repo.update_character(*character);
+        repo.add_to_inventory(character_id, item_id, quantity);
+    });
+    return ShopResult{true, character->character_name + " bought " + stack(quantity, item->name) + " for " +
+                                format_cost(price) + "."};
+}
+
+ShopResult sell(Repository& repo, int character_id, int item_id, int quantity) {
+    if (quantity <= 0) return refuse("Choose how many to sell.");
+    auto character = find_character(repo, character_id);
+    if (!character) return refuse("That character no longer exists.");
+    auto inventory = repo.get_inventory(character_id);
+    auto entry = std::find_if(inventory.begin(), inventory.end(),
+                              [item_id](const InventoryEntry& e) { return e.item.item_id == item_id; });
+    if (entry == inventory.end()) return refuse(character->character_name + " doesn't have that item.");
+    const Item& item = entry->item;
+    if (entry->equipped) return refuse("Unequip the " + item.name + " in the Inventory before selling it.");
+    if (quantity > entry->quantity) {
+        return refuse(character->character_name + " has only " + std::to_string(entry->quantity) + " × " + item.name +
+                      ".");
+    }
+    int each = sell_price_cp(item);
+    if (each == 0) return refuse("No one will pay anything for a " + item.name + ".");
+
+    int price = each * quantity;
+    add_coins(character->coins, coins_from_cp(price));
+    repo.with_transaction([&] {
+        repo.remove_from_inventory(character_id, item_id, quantity);
+        repo.update_character(*character);
+    });
+    return ShopResult{true, character->character_name + " sold " + stack(quantity, item.name) + " for " +
+                                format_cost(price) + "."};
+}
+
+ShopResult raise_dead(Repository& repo, int character_id, int payer_id) {
+    auto character = find_character(repo, character_id);
+    auto payer = find_character(repo, payer_id);
+    if (!character || !payer) return refuse("That character no longer exists.");
+    if (!character->dead) return refuse(character->character_name + " isn't dead.");
+    if (payer->player_id != character->player_id) {
+        return refuse(payer->character_name + " belongs to another player.");
+    }
+    bool self_paid = payer_id == character_id;
+    auto paid = pay(payer->coins, kRaiseDeadCostCp);
+    if (!paid) {
+        return refuse("Raise dead costs " + format_cost(kRaiseDeadCostCp) + ", but " + payer->character_name +
+                      " has " + format_cost(total_cp(payer->coins)) + ".");
+    }
+    if (self_paid) {
+        character->coins = *paid;
+    } else {
+        payer->coins = *paid;
+    }
+    character->dead = false;
+    character->current_hp = 1;
+    character->revival_penalty = kRaiseDeadPenalty;
+    repo.with_transaction([&] {
+        repo.update_character(*character);
+        if (!self_paid) repo.update_character(*payer);
+    });
+    std::string name = character->character_name;
+    return ShopResult{true, "The temple's priests raise " + name + " from the dead, for " +
+                                format_cost(kRaiseDeadCostCp) + " from " + (self_paid ? name + "'s own purse" : payer->character_name) +
+                                ". " + name + " returns with 1 HP and -" + std::to_string(kRaiseDeadPenalty) +
+                                " to attack rolls, saving throws, and ability checks, easing by 1 each long rest."};
+}
+
+ShopResult give_coins(Repository& repo, int from_id, int to_id, const Coins& coins) {
+    if (from_id == to_id) return refuse("Choose someone else to give the coins to.");
+    auto from = find_character(repo, from_id);
+    auto to = find_character(repo, to_id);
+    if (!from || !to) return refuse("That character no longer exists.");
+    if (from->player_id != to->player_id) return refuse(to->character_name + " belongs to another player.");
+    if (total_cp(coins) <= 0) return refuse("Choose some coins to give.");
+    for (int i = 0; i < kCoinCount; ++i) {
+        size_t slot = static_cast<size_t>(i);
+        if (coins[slot] < 0) return refuse("Coin counts can't be negative.");
+        if (coins[slot] > from->coins[slot]) {
+            return refuse(from->character_name + " has only " + std::to_string(from->coins[slot]) + " " +
+                          coin_abbreviation(static_cast<Coin>(i)) + ".");
+        }
+    }
+    for (size_t i = 0; i < coins.size(); ++i) {
+        from->coins[i] -= coins[i];
+        to->coins[i] += coins[i];
+    }
+    repo.with_transaction([&] {
+        repo.update_character(*from);
+        repo.update_character(*to);
+    });
+    return ShopResult{true, from->character_name + " gave " + to->character_name + " " + format_coins(coins) + "."};
+}
+
+}  // namespace dnd

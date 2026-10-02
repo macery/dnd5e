@@ -151,8 +151,9 @@ struct DeathSaveResult {
 
 // Rolls one death save and applies it: 10+ is a success, below is a failure,
 // a natural 1 counts as two failures, a natural 20 regains 1 HP (and resets
-// the state). Three successes: stable. Three failures: dead.
-DeathSaveResult roll_death_save(const Dice& dice, DeathSaveState& state);
+// the state). Three successes: stable. Three failures: dead. `modifier`
+// (a *raise dead* penalty) applies to the 10+ test, not to natural 1s and 20s.
+DeathSaveResult roll_death_save(const Dice& dice, DeathSaveState& state, int modifier = 0);
 
 // Damage while at 0 HP: one failure, two for a critical hit. Damage of at
 // least `max_hp` kills outright. Returns true if this killed the character.

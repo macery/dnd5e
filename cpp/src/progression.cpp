@@ -101,6 +101,7 @@ void take_long_rest(Character& character) {
     character.hit_dice_used = std::max(0, character.hit_dice_used - recovered);
     character.spell_slots_used.fill(0);
     restore_all_features(character);
+    character.revival_penalty = std::max(0, character.revival_penalty - 1);
 }
 
 void take_short_rest(Character& character, const ClassInfo& class_info) {

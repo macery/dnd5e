@@ -54,6 +54,9 @@ struct Combatant {
     // Characters only: wearing armor they aren't proficient with, which also
     // rules out spellcasting (PHB ch. 5).
     bool armor_not_proficient = false;
+    // Characters only: the *raise dead* penalty (Character::revival_penalty),
+    // taken off attack rolls, saving throws, and initiative.
+    int roll_penalty = 0;
     int xp = 0;  // monsters only: awarded to the party on victory
     // Monsters only: STR..CHA, for saving throws. (Characters use their sheet.)
     std::array<int, 6> ability_scores{10, 10, 10, 10, 10, 10};
