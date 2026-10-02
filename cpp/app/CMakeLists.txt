@@ -2,8 +2,9 @@ find_package(Qt6 REQUIRED COMPONENTS Widgets)
 
 set(CMAKE_AUTOMOC ON)
 
-add_executable(dnd_app
-    main.cpp
+# Every window and dialog, as a library: the app links it, and so do the
+# offscreen UI tests (tests/ui).
+add_library(dnd_ui STATIC
     MainWindow.cpp
     CharacterTableModel.cpp
     DiceRollerWidget.cpp
@@ -21,4 +22,8 @@ add_executable(dnd_app
     CombatEncounterDialog.cpp
     AdventurePickerDialog.cpp
 )
-target_link_libraries(dnd_app PRIVATE dndcore Qt6::Widgets)
+target_include_directories(dnd_ui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(dnd_ui PUBLIC dndcore Qt6::Widgets)
+
+add_executable(dnd_app main.cpp)
+target_link_libraries(dnd_app PRIVATE dnd_ui)

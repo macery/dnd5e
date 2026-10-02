@@ -5,6 +5,12 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# Sources are UTF-8 (UI text uses "—", "→", "▶", "×"); MSVC otherwise reads
+# them in the system code page and garbles those strings on Windows.
+if(MSVC)
+    add_compile_options(/utf-8)
+endif()
+
 find_package(SQLite3 REQUIRED)
 
 # CMake renamed the imported target from SQLite::SQLite3 to SQLite3::SQLite3
@@ -64,6 +70,7 @@ add_subdirectory(tests)
 find_package(Qt6 QUIET COMPONENTS Widgets)
 if(TARGET Qt6::Widgets)
     add_subdirectory(app)
+    add_subdirectory(tests/ui)  # offscreen UI tests (needs the app's dnd_ui library)
 else()
     message(STATUS "Qt6 Widgets not found - skipping native UI target (dndcore and its tests still build)")
 endif()
