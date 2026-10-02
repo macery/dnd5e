@@ -2,11 +2,14 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
+
 #include <QSpinBox>
 #include <QTableWidget>
 #include <QTabWidget>
 
 #include "CharacterSheetDialog.hpp"
+#include "InventoryDialog.hpp"
 #include "ShopDialog.hpp"
 #include "dnd/shop.hpp"
 #include "ui_helpers.hpp"
@@ -148,4 +151,38 @@ TEST_CASE("shop: pooling coins to raise the dead", "[ui][shop]") {
     sheet.show();
     settle();
     REQUIRE(visibleText(sheet).contains("-4 to attack rolls, saving throws, and ability checks"));
+}
+
+TEST_CASE("inventory: giving an item to another player's character", "[ui][shop]") {
+    World world;
+    auto clark = world.add("Clark", "Fighter", 1, {"Longsword"});
+    world.repo.add_to_inventory(clark.character_id, world.itemId("Potion of Healing"), 2);
+    world.player = world.repo.add_player("you");  // phi belongs to another player
+    dnd::Character phi = world.add("phi", "Rogue", 1);
+
+    {
+        InventoryDialog inventory(world.repo, world.get(clark.character_id), world.repo.get_classes(),
+                                  world.repo.get_races());
+        inventory.show();
+        settle();
+        REQUIRE(selectRow(inventory, "Longsword"));
+        REQUIRE_FALSE(button(inventory, "Give")->isEnabled());  // equipped
+        REQUIRE(selectRow(inventory, "Potion of Healing"));
+        REQUIRE(button(inventory, "Give")->isEnabled());
+    }
+
+    auto potion = world.repo.get_inventory(clark.character_id);
+    auto entry = std::find_if(potion.begin(), potion.end(),
+                              [](const dnd::InventoryEntry& e) { return e.item.name == "Potion of Healing"; });
+    GiveItemDialog give(world.repo, world.get(clark.character_id), *entry);
+    give.show();
+    settle();
+    REQUIRE(comboWith(give, "phi (you)") != nullptr);
+    give.findChild<QSpinBox*>()->setValue(2);
+    button(give, "Give")->click();
+    settle();
+    REQUIRE(give.result() == QDialog::Accepted);
+    REQUIRE(give.message() == "Clark gave phi 2 × Potion of Healing.");
+    REQUIRE(count(world, clark.character_id, "Potion of Healing") == 0);
+    REQUIRE(count(world, phi.character_id, "Potion of Healing") == 2);
 }

@@ -10,7 +10,10 @@
 
 namespace dnd {
 
-// Buying, selling, raising the dead, and handing coins over (docs/shops.md).
+// Buying, selling, raising the dead, and handing coins and items over
+// (docs/shops.md). Until campaigns exist, any character can pay for or trade
+// with any other, whoever's player they are.
+//
 // Prices are the PHB ch. 5 list prices (Item::cost_cp).
 
 // The purse after paying `cost_cp`, or nothing if it holds less. The
@@ -45,13 +48,17 @@ ShopResult buy(Repository& repo, int character_id, int item_id, int quantity = 1
 // items can't be sold, and neither can items worth nothing.
 ShopResult sell(Repository& repo, int character_id, int item_id, int quantity = 1);
 
-// Charges `payer_id` (any character of the same player, the dead one
-// included) kRaiseDeadCostCp and brings `character_id` back with 1 HP and
+// Charges `payer_id` (any character, the dead one included)
+// kRaiseDeadCostCp and brings `character_id` back with 1 HP and
 // the *raise dead* penalty.
 ShopResult raise_dead(Repository& repo, int character_id, int payer_id);
 
-// Moves `coins` from one character's purse to another's, coin for coin.
-// Both must belong to the same player.
+// Moves `coins` from one character's purse to another's, coin for coin. The
+// giver may be dead (looting a fallen friend); the receiver may not.
 ShopResult give_coins(Repository& repo, int from_id, int to_id, const Coins& coins);
+
+// Moves `quantity` (> 0) of an item from one character's pack to another's.
+// Equipped items must be unequipped first. Living receivers only, as above.
+ShopResult give_item(Repository& repo, int from_id, int to_id, int item_id, int quantity = 1);
 
 }  // namespace dnd

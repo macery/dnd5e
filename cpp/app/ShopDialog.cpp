@@ -51,6 +51,26 @@ QTableWidget* makeTable(const QStringList& headers, QWidget* parent) {
     return table;
 }
 
+// "Phi (Beth)": a character and their player, for choosing between
+// characters of different players.
+QString withPlayer(const dnd::Character& character, const std::vector<dnd::Player>& players) {
+    for (const auto& player : players) {
+        if (player.player_id == character.player_id) {
+            return QString("%1 (%2)").arg(text(character.character_name), text(player.player_name));
+        }
+    }
+    return text(character.character_name);
+}
+
+// Every living character except `giver`, labeled with their player.
+void fillRecipients(QComboBox* combo, dnd::Repository& repository, const dnd::Character& giver) {
+    auto players = repository.get_players();
+    for (const auto& character : repository.get_characters()) {
+        if (character.character_id == giver.character_id || character.dead) continue;
+        combo->addItem(withPlayer(character, players), character.character_id);
+    }
+}
+
 constexpr dnd::ItemCategory kCategories[] = {dnd::ItemCategory::Gear, dnd::ItemCategory::Consumable,
                                              dnd::ItemCategory::Weapon, dnd::ItemCategory::Armor,
                                              dnd::ItemCategory::Shield};
@@ -69,8 +89,8 @@ ShopDialog::ShopDialog(dnd::Repository& repository, dnd::Character character,
     purseLabel_ = new QLabel(this);
     purseLabel_->setWordWrap(true);
     auto* giveButton = new QPushButton("Give Coins…", this);
-    giveButton->setToolTip("Hand coins to another of this player's characters: to pool money for a raising, or "
-                           "to outfit a new character.");
+    giveButton->setToolTip("Hand coins to another character: to pool money for a raising, or to outfit a new "
+                           "character.");
     auto* header = new QHBoxLayout();
     header->addWidget(purseLabel_, 1);
     header->addWidget(giveButton);
@@ -132,8 +152,7 @@ ShopDialog::ShopDialog(dnd::Repository& repository, dnd::Character character,
     templeIntro_->setWordWrap(true);
     deadCombo_ = new QComboBox(templePage);
     payerCombo_ = new QComboBox(templePage);
-    payerCombo_->setToolTip("Any of this player's characters can pay, the dead one included: their purse "
-                            "survives them.");
+    payerCombo_->setToolTip("Any character can pay, the dead one included: their purse survives them.");
     raiseButton_ = new QPushButton(QString("Raise Dead (%1)").arg(cost(dnd::kRaiseDeadCostCp)), templePage);
     raiseButton_->setToolTip("The 500 gp diamond the spell consumes, plus a 50 gp fee. The character returns with "
                              "1 HP and -4 to attack rolls, saving throws, and ability checks, easing by 1 each "
@@ -181,8 +200,9 @@ ShopDialog::ShopDialog(dnd::Repository& repository, dnd::Character character,
 }
 
 void ShopDialog::reload() {
-    party_ = repository_.get_characters_by_player(character_.player_id);
-    for (const auto& member : party_) {
+    everyone_ = repository_.get_characters();
+    auto players = repository_.get_players();
+    for (const auto& member : everyone_) {
         if (member.character_id == character_.character_id) character_ = member;
     }
     purseLabel_->setText(QString("<b>%1</b>%2 · <b>Coins:</b> %3")
@@ -205,7 +225,7 @@ void ShopDialog::reload() {
     }
     if (sellRow >= 0 && sellRow < sellTable_->rowCount()) sellTable_->selectRow(sellRow);
 
-    // Temple: the player's dead, and everyone who could pay.
+    // Temple: the dead, and everyone who could pay.
     int deadId = deadCombo_->currentData().toInt();
     int payerId = payerCombo_->count() > 0 ? payerCombo_->currentData().toInt() : character_.character_id;
     {
@@ -213,10 +233,10 @@ void ShopDialog::reload() {
         QSignalBlocker blockPayer(payerCombo_);
         deadCombo_->clear();
         payerCombo_->clear();
-        for (const auto& member : party_) {
-            QString name = text(member.character_name);
+        for (const auto& member : everyone_) {
+            QString name = withPlayer(member, players);
             if (member.dead) deadCombo_->addItem(name, member.character_id);
-            payerCombo_->addItem(QString("%1 (%2)").arg(name, text(dnd::format_coins(member.coins))),
+            payerCombo_->addItem(QString("%1: %2").arg(name, text(dnd::format_coins(member.coins))),
                                  member.character_id);
         }
         int dead = deadCombo_->findData(character_.dead && deadId == 0 ? character_.character_id : deadId);
@@ -328,7 +348,7 @@ void ShopDialog::refreshTemple() {
     }
     int payerId = payerCombo_->currentData().toInt();
     int purse = 0;
-    for (const auto& member : party_) {
+    for (const auto& member : everyone_) {
         if (member.character_id == payerId) purse = dnd::total_cp(member.coins);
     }
     bool affordable = purse >= dnd::kRaiseDeadCostCp;
@@ -380,10 +400,7 @@ GiveCoinsDialog::GiveCoinsDialog(dnd::Repository& repository, dnd::Character giv
     setWindowTitle(QString("Give Coins — %1").arg(text(giver_.character_name)));
 
     recipientCombo_ = new QComboBox(this);
-    for (const auto& member : repository_.get_characters_by_player(giver_.player_id)) {
-        if (member.character_id == giver_.character_id) continue;
-        recipientCombo_->addItem(text(member.character_name), member.character_id);
-    }
+    fillRecipients(recipientCombo_, repository_, giver_);
 
     auto* form = new QFormLayout();
     form->addRow("Give to:", recipientCombo_);
@@ -402,7 +419,7 @@ GiveCoinsDialog::GiveCoinsDialog(dnd::Repository& repository, dnd::Character giv
     errorLabel_ = new QLabel(this);
     errorLabel_->setWordWrap(true);
     errorLabel_->setStyleSheet("color: #b00020;");
-    if (recipientCombo_->count() == 0) errorLabel_->setText("This player has no other characters to give coins to.");
+    if (recipientCombo_->count() == 0) errorLabel_->setText("There's no one else alive to give coins to.");
 
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
     buttons->button(QDialogButtonBox::Ok)->setText("Give");
@@ -422,6 +439,53 @@ void GiveCoinsDialog::give() {
     dnd::Coins coins{};
     for (size_t i = 0; i < coins.size(); ++i) coins[i] = coinSpins_[i]->value();
     auto result = dnd::give_coins(repository_, giver_.character_id, recipientCombo_->currentData().toInt(), coins);
+    if (!result.ok) {
+        errorLabel_->setText(text(result.message));
+        return;
+    }
+    message_ = result.message;
+    accept();
+}
+
+// --- Give Item -----------------------------------------------------------------
+
+GiveItemDialog::GiveItemDialog(dnd::Repository& repository, dnd::Character giver, dnd::InventoryEntry entry,
+                               QWidget* parent)
+    : QDialog(parent), repository_(repository), giver_(std::move(giver)), entry_(std::move(entry)) {
+    setWindowTitle(QString("Give %1 — %2").arg(text(entry_.item.name), text(giver_.character_name)));
+
+    recipientCombo_ = new QComboBox(this);
+    fillRecipients(recipientCombo_, repository_, giver_);
+    quantitySpin_ = new QSpinBox(this);
+    quantitySpin_->setRange(1, std::max(1, entry_.quantity));
+    quantitySpin_->setSuffix(QString(" of %1").arg(entry_.quantity));
+
+    auto* form = new QFormLayout();
+    form->addRow("Give to:", recipientCombo_);
+    form->addRow("How many:", quantitySpin_);
+
+    errorLabel_ = new QLabel(this);
+    errorLabel_->setWordWrap(true);
+    errorLabel_->setStyleSheet("color: #b00020;");
+    if (recipientCombo_->count() == 0) errorLabel_->setText("There's no one else alive to give it to.");
+
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
+    buttons->button(QDialogButtonBox::Ok)->setText("Give");
+    buttons->button(QDialogButtonBox::Ok)->setEnabled(recipientCombo_->count() > 0);
+    connect(buttons, &QDialogButtonBox::accepted, this, &GiveItemDialog::give);
+    connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
+
+    auto* layout = new QVBoxLayout(this);
+    layout->addLayout(form);
+    layout->addWidget(errorLabel_);
+    layout->addStretch(1);
+    layout->addWidget(buttons);
+}
+
+void GiveItemDialog::give() {
+    if (recipientCombo_->count() == 0) return;
+    auto result = dnd::give_item(repository_, giver_.character_id, recipientCombo_->currentData().toInt(),
+                                 entry_.item.item_id, quantitySpin_->value());
     if (!result.ok) {
         errorLabel_->setText(text(result.message));
         return;

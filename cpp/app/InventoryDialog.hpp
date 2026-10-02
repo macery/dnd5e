@@ -15,7 +15,8 @@ class QPushButton;
 class QSpinBox;
 class QTableWidget;
 
-// A character's carried items: add from the seeded item list, drop, equip
+// A character's carried items: add from the seeded item list, drop, give to
+// another character, equip
 // weapons, armor, and shields (which set AC and the wielded weapon), and use
 // healing consumables outside combat (in combat that's Drink Potion). Every
 // change is persisted immediately via Repository.
@@ -32,6 +33,7 @@ private slots:
     void onDropClicked();
     void onUseClicked();
     void onEquipClicked();
+    void onGiveClicked();
     void onSelectionChanged();
 
 private:
@@ -58,6 +60,7 @@ private:
     QSpinBox* quantitySpin_ = nullptr;
     QPushButton* addButton_ = nullptr;
     QPushButton* dropButton_ = nullptr;
+    QPushButton* giveButton_ = nullptr;
     QPushButton* useButton_ = nullptr;
     QLabel* messageLabel_ = nullptr;
 };

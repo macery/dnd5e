@@ -95,8 +95,7 @@ ShopResult sell(Repository& repo, int character_id, int item_id, int quantity) {
     const Item& item = entry->item;
     if (entry->equipped) return refuse("Unequip the " + item.name + " in the Inventory before selling it.");
     if (quantity > entry->quantity) {
-        return refuse(character->character_name + " has only " + std::to_string(entry->quantity) + " × " + item.name +
-                      ".");
+        return refuse(character->character_name + " has only " + stack(entry->quantity, item.name) + ".");
     }
     int each = sell_price_cp(item);
     if (each == 0) return refuse("No one will pay anything for a " + item.name + ".");
@@ -116,9 +115,6 @@ ShopResult raise_dead(Repository& repo, int character_id, int payer_id) {
     auto payer = find_character(repo, payer_id);
     if (!character || !payer) return refuse("That character no longer exists.");
     if (!character->dead) return refuse(character->character_name + " isn't dead.");
-    if (payer->player_id != character->player_id) {
-        return refuse(payer->character_name + " belongs to another player.");
-    }
     bool self_paid = payer_id == character_id;
     auto paid = pay(payer->coins, kRaiseDeadCostCp);
     if (!paid) {
@@ -149,7 +145,7 @@ ShopResult give_coins(Repository& repo, int from_id, int to_id, const Coins& coi
     auto from = find_character(repo, from_id);
     auto to = find_character(repo, to_id);
     if (!from || !to) return refuse("That character no longer exists.");
-    if (from->player_id != to->player_id) return refuse(to->character_name + " belongs to another player.");
+    if (to->dead) return refuse(to->character_name + " is dead.");
     if (total_cp(coins) <= 0) return refuse("Choose some coins to give.");
     for (int i = 0; i < kCoinCount; ++i) {
         size_t slot = static_cast<size_t>(i);
@@ -168,6 +164,29 @@ ShopResult give_coins(Repository& repo, int from_id, int to_id, const Coins& coi
         repo.update_character(*to);
     });
     return ShopResult{true, from->character_name + " gave " + to->character_name + " " + format_coins(coins) + "."};
+}
+
+ShopResult give_item(Repository& repo, int from_id, int to_id, int item_id, int quantity) {
+    if (quantity <= 0) return refuse("Choose how many to give.");
+    if (from_id == to_id) return refuse("Choose someone else to give it to.");
+    auto from = find_character(repo, from_id);
+    auto to = find_character(repo, to_id);
+    if (!from || !to) return refuse("That character no longer exists.");
+    if (to->dead) return refuse(to->character_name + " is dead.");
+    auto inventory = repo.get_inventory(from_id);
+    auto entry = std::find_if(inventory.begin(), inventory.end(),
+                              [item_id](const InventoryEntry& e) { return e.item.item_id == item_id; });
+    if (entry == inventory.end()) return refuse(from->character_name + " doesn't have that item.");
+    const Item& item = entry->item;
+    if (entry->equipped) return refuse("Unequip the " + item.name + " before giving it away.");
+    if (quantity > entry->quantity) {
+        return refuse(from->character_name + " has only " + stack(entry->quantity, item.name) + ".");
+    }
+    repo.with_transaction([&] {
+        repo.remove_from_inventory(from_id, item_id, quantity);
+        repo.add_to_inventory(to_id, item_id, quantity);
+    });
+    return ShopResult{true, from->character_name + " gave " + to->character_name + " " + stack(quantity, item.name) + "."};
 }
 
 }  // namespace dnd

@@ -10,6 +10,9 @@ Status: **phases 1 (rules) and 2 (UI) done.** Decisions were settled on 2026-10-
   - **Temple:** the player's dead and who pays (each with their purse). A dead character opens the Shop on this tab.
 - **Inventory:** **Add (free)**, with a tooltip pointing to the Shop.
 - **Character sheet:** a **Raised** row while the penalty lasts, and the dead banner points to the Temple.
+- **Give Items and trading across players** (added 2026-10-02, after playing with one character per player):
+  - `give_item` moves items between packs (equipped items refused), and the Inventory has a **Give…** button (`GiveItemDialog`: a recipient and a count).
+  - Give Coins, Give Items, and the Temple's payers now cover every character, labeled with their player ("phi (you)"). The giver may be dead; the receiver may not. Campaigns (README TODO) will narrow this to a campaign's party.
 - **UI tests** (`tests/ui/test_shop_ui.cpp`): buying with warnings and prices, refusing equipped gear, pooling coins with Give Coins to raise the dead, and the sheet's penalty row. The Shop and Give Coins are in the small-screen size test.
 
 **Phase 1 as built:**
@@ -109,11 +112,11 @@ Clean starts are fine. If migration 22 is needed, it defaults the penalty to 0, 
 Settled 2026-10-02. Every recommendation was taken except question 5:
 
 1. **The Inventory keeps its free Add button,** renamed **Add (free)**. The Shop is the way to buy.
-2. **Any character of the same player can pay for raising the dead,** the dead one included.
+2. **Any character of the same player can pay for raising the dead,** the dead one included. (Later widened to any character; see Phase 2.)
 3. **The −4 *raise dead* penalty is implemented,** easing by 1 per long rest.
 4. **Raising the dead costs 550 gp:** the 500 gp diamond plus a 50 gp fee.
 5. **Equipped gear can't be sold** until it's unequipped in the Inventory.
-6. **Give coins…** moves coins between the same player's characters.
+6. **Give coins…** moves coins between the same player's characters. (Later widened to any character, with Give Items alongside.)
 
 ## Open questions (settled)
 

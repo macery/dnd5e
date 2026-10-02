@@ -108,6 +108,8 @@ TEST_CASE("every window fits a small screen", "[ui][sizes]") {
         requireFits(shop, "ShopDialog");
         GiveCoinsDialog give(repo, sera);
         requireFits(give, "GiveCoinsDialog");
+        GiveItemDialog giveItem(repo, sera, repo.get_inventory(sera.character_id).front());
+        requireFits(giveItem, "GiveItemDialog");
     }
     SECTION("spellbook") {
         SpellbookDialog spellbook(repo, zanna, classes);

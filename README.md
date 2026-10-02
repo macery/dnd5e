@@ -54,7 +54,7 @@ It manages players and characters, computes a full character sheet from the 5e r
   - Dodge imposes disadvantage on attacks against you.
   - Drink Potion heals from your inventory.
   - The encounter ends with a victory or a defeat.
-- **Shop** ([docs/shops.md](docs/shops.md)): buy gear at PHB list price (with change made automatically) and sell it for half; equipped gear must be unequipped first. Give coins to another of the player's characters. A temple raises the dead for 550 gp; they return with 1 HP and −4 to attack rolls, saving throws, and ability checks, easing by 1 each long rest.
+- **Shop** ([docs/shops.md](docs/shops.md)): buy gear at PHB list price (with change made automatically) and sell it for half; equipped gear must be unequipped first. Give coins, or items from the Inventory, to any other living character. A temple raises the dead for 550 gp; they return with 1 HP and −4 to attack rolls, saving throws, and ability checks, easing by 1 each long rest.
 - **Solo adventures** ([docs/adventures-and-currency.md](docs/adventures-and-currency.md)): twelve pre-built adventures. Nine are single fights; three are multi-fight runs (The Goblin Warren, Crypt of the Restless, The Hill Giant's Toll).
   - **Party:** you pick who goes.
   - **Fights:** each comes with narration, is scaled for the party (the final fight toward Hard), and pays coins and loot.
@@ -227,6 +227,8 @@ Any pending schema migrations run on launch, so older save files are upgraded in
   - Adventures pay coins scaled to the party's level, split among the survivors.
   - Coins show on the sheet and in the Inventory (with what the items are worth), and travel in exports.
 - [x] **Shops and spending** ([docs/shops.md](docs/shops.md)): buy gear at list price and sell it for half, give coins between a player's characters, and pay a temple 550 gp to *raise dead*. The Inventory's **Add (free)** stays for loot and DM gifts.
+- [ ] **Coins from Combat Encounter fights** (open question): fights built with the main window's **Combat Encounter** award XP only; coins and loot come only from Solo Adventure fights. One option is the 2014 DMG's *Individual Treasure* table: each defeated monster rolls coins by challenge rating (CR 0–4: d100 for 5d6 cp, 4d6 sp, 3d6 ep, 3d6 gp, or 1d6 pp), logged and split among the survivors. Undecided: whether free-form fights should pay at all, and whether to use the DMG tables or a simpler scale.
+- [ ] **Divide loot after a victory** (where it fits is still open: the victory screen, between adventure scenes, or both): today every item goes to the first character still standing, while coins are split evenly. A small dialog could list each item with a "goes to" choice per surviving character, spread around by default (potions to whoever is most hurt).
 - [ ] **Encumbrance** (optional): item weights compared with carrying capacity (STR × 15).
 - [ ] **Item uses**: a Healer's Kit has 10 uses in the PHB, but they aren't tracked, so stabilizing with one never uses it up. The same applies to other limited-use gear later (torches burning out, rations eaten).
 
@@ -252,6 +254,7 @@ Phases 1 (core and data) and 2 (UI) are done; see [docs/magic-system.md](docs/ma
 
 ### Characters
 
+- [ ] **Campaigns** (an idea to design): a level above players, so the structure becomes *campaign → players → characters*. Players build characters on their own, then import them into a campaign and choose who plays in each session. Party choice, Give Coins, Give Items, and the Temple's payers would then work within the campaign. Until then, any character can trade with or pay for any other, across players.
 - [x] **Character creation wizard**: a step-by-step `QWizard` that builds a complete, rules-valid level-1 character, instead of the current single form where everything is typed by hand. Several items below are steps of it.
   1. **Class:** sets the hit die and saving-throw proficiencies, and which skills you can choose from and how many (e.g. a Rogue picks 4).
   2. **Race:** ability score increases, speed, and traits.

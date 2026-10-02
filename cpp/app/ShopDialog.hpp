@@ -16,8 +16,9 @@ class QTabWidget;
 class QTableWidget;
 
 // Buying and selling gear for one character, a temple that raises the
-// player's dead, and handing coins to another of the player's characters
-// (docs/shops.md). Every change is saved at once through dnd/shop.
+// dead, and handing coins to another character (docs/shops.md). Until
+// campaigns exist, every character in the database can pay and trade.
+// Every change is saved at once through dnd/shop.
 class ShopDialog : public QDialog {
     Q_OBJECT
 
@@ -51,7 +52,7 @@ private:
     std::vector<dnd::Item> items_;            // every item, in the shop's order
     std::vector<int> shownItems_;             // indexes into items_ for the Buy table's rows
     std::vector<dnd::InventoryEntry> pack_;   // the Sell table's rows
-    std::vector<dnd::Character> party_;       // the player's characters, for the Temple
+    std::vector<dnd::Character> everyone_;    // every character, for the Temple
 
     QLabel* purseLabel_ = nullptr;
     QTabWidget* tabs_ = nullptr;
@@ -75,8 +76,8 @@ private:
     QLabel* messageLabel_ = nullptr;
 };
 
-// Moves coins from one character to another of the same player: who gets
-// them, and how many of each coin (capped at what the giver has).
+// Moves coins from one character to another: who gets them, and how many of
+// each coin (capped at what the giver has).
 class GiveCoinsDialog : public QDialog {
     Q_OBJECT
 
@@ -93,6 +94,28 @@ private:
     dnd::Character giver_;
     QComboBox* recipientCombo_ = nullptr;
     std::vector<QSpinBox*> coinSpins_;  // cp, sp, ep, gp, pp
+    QLabel* errorLabel_ = nullptr;
+    std::string message_;
+};
+
+// Hands `quantity` of one inventory item to another living character.
+class GiveItemDialog : public QDialog {
+    Q_OBJECT
+
+public:
+    GiveItemDialog(dnd::Repository& repository, dnd::Character giver, dnd::InventoryEntry entry,
+                   QWidget* parent = nullptr);
+
+    const std::string& message() const { return message_; }
+
+private:
+    void give();
+
+    dnd::Repository& repository_;
+    dnd::Character giver_;
+    dnd::InventoryEntry entry_;
+    QComboBox* recipientCombo_ = nullptr;
+    QSpinBox* quantitySpin_ = nullptr;
     QLabel* errorLabel_ = nullptr;
     std::string message_;
 };

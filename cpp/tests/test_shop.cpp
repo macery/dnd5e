@@ -206,13 +206,13 @@ TEST_CASE("raising the dead", "[shop]") {
         REQUIRE(refused.message == "Raise dead costs 550 gp, but Bram has 0 cp.");
         REQUIRE(shop.get(bram).dead);
     }
-    SECTION("only the same player's characters can pay") {
+    SECTION("another player's character can pay") {
         int other_player = shop.repo.add_player("Beth");
         dnd::Character rich = shop.get(cleo);
         rich.player_id = other_player;
         rich.character_name = "Rich";
         int rich_id = shop.repo.add_character(rich);
-        REQUIRE_FALSE(dnd::raise_dead(shop.repo, bram, rich_id).ok);
+        REQUIRE(dnd::raise_dead(shop.repo, bram, rich_id).ok);
     }
     SECTION("the penalty eases by 1 per long rest") {
         REQUIRE(dnd::raise_dead(shop.repo, bram, cleo).ok);
@@ -239,6 +239,53 @@ TEST_CASE("giving coins", "[shop]") {
     REQUIRE_FALSE(dnd::give_coins(shop.repo, aria, bram, coins(0, 0, 0, 0, 0)).ok);
     REQUIRE_FALSE(dnd::give_coins(shop.repo, aria, aria, coins(1, 0, 0, 0, 0)).ok);
     REQUIRE(shop.get(aria).coins == coins(10, 0, 0, 5, 0));
+
+    SECTION("from the dead, but not to them") {
+        int ghost = shop.add("Ghost", coins(0, 0, 0, 7, 0), true);
+        REQUIRE(dnd::give_coins(shop.repo, ghost, aria, coins(0, 0, 0, 7, 0)).ok);
+        auto refused = dnd::give_coins(shop.repo, aria, ghost, coins(0, 0, 0, 1, 0));
+        REQUIRE_FALSE(refused.ok);
+        REQUIRE(refused.message == "Ghost is dead.");
+    }
+    SECTION("across players") {
+        dnd::Character other = shop.get(bram);
+        other.player_id = shop.repo.add_player("Beth");
+        other.character_name = "Phi";
+        int phi = shop.repo.add_character(other);
+        REQUIRE(dnd::give_coins(shop.repo, aria, phi, coins(10, 0, 0, 0, 0)).ok);
+    }
+}
+
+TEST_CASE("giving items", "[shop]") {
+    Shop shop;
+    int clark = shop.add("Clark", {});
+    shop.player_id = shop.repo.add_player("Beth");  // Phi belongs to another player
+    int phi = shop.add("Phi", {});
+    int potion = shop.item("Potion of Healing").item_id;
+    int longsword = shop.item("Longsword").item_id;
+    shop.repo.add_to_inventory(clark, potion, 2);
+    shop.repo.add_to_inventory(clark, longsword);
+    shop.repo.set_equipped(clark, longsword, true);
+
+    auto given = dnd::give_item(shop.repo, clark, phi, potion);
+    REQUIRE(given.ok);
+    REQUIRE(given.message == "Clark gave Phi 1 × Potion of Healing.");
+    REQUIRE(shop.count(clark, "Potion of Healing") == 1);
+    REQUIRE(shop.count(phi, "Potion of Healing") == 1);
+
+    REQUIRE(dnd::give_item(shop.repo, clark, phi, potion).ok);  // the last one; it stacks
+    REQUIRE(shop.count(clark, "Potion of Healing") == 0);
+    REQUIRE(shop.count(phi, "Potion of Healing") == 2);
+
+    auto equipped = dnd::give_item(shop.repo, clark, phi, longsword);
+    REQUIRE_FALSE(equipped.ok);
+    REQUIRE(equipped.message == "Unequip the Longsword before giving it away.");
+    REQUIRE(shop.count(clark, "Longsword") == 1);
+
+    REQUIRE_FALSE(dnd::give_item(shop.repo, clark, phi, potion).ok);         // none left
+    REQUIRE_FALSE(dnd::give_item(shop.repo, phi, phi, potion).ok);           // to themselves
+    REQUIRE_FALSE(dnd::give_item(shop.repo, phi, clark, potion, 3).ok);      // more than they have
+    REQUIRE_FALSE(dnd::give_item(shop.repo, phi, clark, potion, 0).ok);
 }
 
 TEST_CASE("the raise dead penalty in combat", "[shop][encounter]") {

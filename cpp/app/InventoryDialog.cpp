@@ -12,6 +12,7 @@
 #include <QTableWidget>
 #include <QVBoxLayout>
 
+#include "ShopDialog.hpp"
 #include "WindowSizing.hpp"
 #include "dnd/currency.hpp"
 #include "dnd/equipment.hpp"
@@ -69,10 +70,12 @@ InventoryDialog::InventoryDialog(dnd::Repository& repository, dnd::Character cha
     useButton_ = new QPushButton("Use", this);
     useButton_->setToolTip("Use the selected consumable, e.g. drink a Potion of Healing to regain HP.");
     dropButton_ = new QPushButton("Drop One", this);
+    giveButton_ = new QPushButton("Give…", this);  // tooltip set in onSelectionChanged
     rowButtons->addStretch(1);
     rowButtons->addWidget(equipButton_);
     rowButtons->addWidget(useButton_);
     rowButtons->addWidget(dropButton_);
+    rowButtons->addWidget(giveButton_);
 
     auto* addRow = new QHBoxLayout();
     itemCombo_ = new QComboBox(this);
@@ -110,6 +113,7 @@ InventoryDialog::InventoryDialog(dnd::Repository& repository, dnd::Character cha
     connect(dropButton_, &QPushButton::clicked, this, &InventoryDialog::onDropClicked);
     connect(useButton_, &QPushButton::clicked, this, &InventoryDialog::onUseClicked);
     connect(equipButton_, &QPushButton::clicked, this, &InventoryDialog::onEquipClicked);
+    connect(giveButton_, &QPushButton::clicked, this, &InventoryDialog::onGiveClicked);
     connect(table_, &QTableWidget::itemSelectionChanged, this, &InventoryDialog::onSelectionChanged);
 
     reload();
@@ -161,6 +165,11 @@ const dnd::InventoryEntry* InventoryDialog::selectedEntry() const {
 void InventoryDialog::onSelectionChanged() {
     const dnd::InventoryEntry* entry = selectedEntry();
     dropButton_->setEnabled(entry != nullptr);
+    giveButton_->setEnabled(entry != nullptr && !entry->equipped);
+    giveButton_->setToolTip(entry && entry->equipped
+                                ? "Unequip it first."
+                                : "Hand the selected item to another character: share out loot, or pass a potion "
+                                  "to whoever needs it.");
     bool equippable = entry && (entry->item.weapon || entry->item.armor);
     equipButton_->setEnabled(equippable);
     equipButton_->setText(entry && entry->equipped ? "Unequip" : "Equip");
@@ -171,6 +180,14 @@ void InventoryDialog::onAddClicked() {
     if (itemCombo_->count() == 0) return;
     repository_.add_to_inventory(character_.character_id, itemCombo_->currentData().toInt(), quantitySpin_->value());
     messageLabel_->setText(QString("Added %1 × %2.").arg(quantitySpin_->value()).arg(itemCombo_->currentText()));
+    reload();
+}
+
+void InventoryDialog::onGiveClicked() {
+    const dnd::InventoryEntry* entry = selectedEntry();
+    if (!entry || entry->equipped) return;
+    GiveItemDialog dialog(repository_, character_, *entry, this);
+    if (dialog.exec() == QDialog::Accepted) messageLabel_->setText(QString::fromStdString(dialog.message()));
     reload();
 }
 
