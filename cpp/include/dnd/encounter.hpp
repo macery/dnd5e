@@ -103,6 +103,28 @@ struct LootGrant {
     int quantity = 1;
 };
 
+// Part of the loot going to one character: `quantity` of `item`.
+struct LootShare {
+    Item item;
+    int quantity = 1;
+    int character_id = 0;
+};
+
+// A character standing at the end of a fight, for dividing the loot.
+struct LootRecipient {
+    int character_id = 0;
+    int current_hp = 0;
+    int max_hp = 1;
+};
+
+// The suggested split of `loot` among `recipients` (in party order), one
+// item at a time: healing potions to the most hurt first (lowest HP
+// fraction; each one goes to the next most hurt), then everything else to
+// whoever has received the fewest items so far (ties: party order). Shares
+// for the same item and character are merged, in the loot's order.
+std::vector<LootShare> suggest_loot_shares(const std::vector<LootGrant>& loot,
+                                           const std::vector<LootRecipient>& recipients);
+
 // Choices made with a character's attack (Encounter::attack).
 struct AttackOptions {
     // Reckless Attack; ignored unless Encounter::can_attack_recklessly().
@@ -138,7 +160,24 @@ public:
     void add_monsters(const Monster& monster, int count);
     // Shown after "Victory!" and handed out on victory, for adventures.
     // `coins_cp` is split evenly among the surviving characters (dnd/currency.hpp).
+    // Items go to the only character standing at once; with more, they wait
+    // for divide_loot (see loot_pending).
     void set_victory_reward(std::string victory_text, std::vector<LootGrant> loot, int coins_cp = 0);
+
+    // --- Loot ----------------------------------------------------------------
+    // After a victory with two or more characters standing, the loot waits
+    // here until it's divided ("Loot found: ..." is logged meanwhile).
+    bool loot_pending() const { return !pending_loot_.empty(); }
+    const std::vector<LootGrant>& pending_loot() const { return pending_loot_; }
+    // The characters standing, in party order: who can take loot.
+    std::vector<LootRecipient> loot_recipients() const;
+    // suggest_loot_shares for the pending loot and loot_recipients().
+    std::vector<LootShare> suggested_loot_shares() const;
+    // Hands out the pending loot: logs "Loot! Clark takes: ..." per
+    // character and reports ItemGained events. Refused (false, nothing
+    // changes) unless the shares cover exactly the pending loot, item by
+    // item, and go only to loot_recipients().
+    bool divide_loot(const std::vector<LootShare>& shares);
 
     // --- Turns ---------------------------------------------------------------
     // (Re)rolls initiative for everyone and runs monster turns until a living
@@ -358,6 +397,8 @@ private:
     void check_for_victory_or_defeat();
     void award_victory_experience();
     void award_loot();
+    // Adds the shares to the inventories, logs them, and reports ItemGained.
+    void hand_out(const std::vector<LootShare>& shares);
     void award_coins();
     // Copies a character combatant's HP onto its Character and reports it.
     void sync_character_hp(const Combatant& combatant);
@@ -380,6 +421,7 @@ private:
     std::string result_message_;
     std::string victory_text_;
     std::vector<LootGrant> loot_;
+    std::vector<LootGrant> pending_loot_;  // won, waiting for divide_loot
     int coins_cp_ = 0;
     std::vector<EncounterEvent> events_;
     std::vector<ActiveEffect> effects_;

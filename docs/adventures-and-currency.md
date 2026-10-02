@@ -37,7 +37,7 @@ Status: **all phases done:** currency, multi-scene adventures, and progress that
 ## Where things stand
 
 - **An adventure is one fight:**
-  - A hook, monster groups (scaled toward Medium–Hard for the party), victory text, and item loot for the first character still standing.
+  - A hook, monster groups (scaled toward Medium–Hard for the party), victory text, and item loot for the first character still standing. (Since replaced by the Divide the Loot panel; see the README.)
   - XP is split across the survivors.
   - Then you're back at the main window.
 - **Resting is a main-window chore:**

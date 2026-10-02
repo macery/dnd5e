@@ -216,6 +216,96 @@ TEST_CASE("dodge gives monsters disadvantage until the dodger's next turn", "[en
     REQUIRE_FALSE(dnd::has_effect(encounter.effects(), 0, dnd::EffectKind::Dodging));  // cleared at the start of Aria's turn
 }
 
+TEST_CASE("suggesting how to divide loot", "[encounter][loot]") {
+    Fixture f;
+    dnd::Item potion = f.item("Potion of Healing");
+    dnd::Item rations = f.item("Rations (1 day)");
+    dnd::Item torch = f.item("Torch");
+    auto shares_of = [](const std::vector<dnd::LootShare>& shares, int character_id) {
+        std::vector<std::pair<std::string, int>> mine;
+        for (const auto& share : shares) {
+            if (share.character_id == character_id) mine.push_back({share.item.name, share.quantity});
+        }
+        return mine;
+    };
+
+    SECTION("potions to the most hurt; the rest to whoever has least") {
+        // Clark 3/10 HP, phi 8/8: the potion to Clark, then the rations even out.
+        auto shares = dnd::suggest_loot_shares({{potion, 1}, {rations, 2}}, {{1, 3, 10}, {2, 8, 8}});
+        REQUIRE(shares_of(shares, 1) == std::vector<std::pair<std::string, int>>{{"Potion of Healing", 1},
+                                                                                  {"Rations (1 day)", 1}});
+        REQUIRE(shares_of(shares, 2) == std::vector<std::pair<std::string, int>>{{"Rations (1 day)", 1}});
+        REQUIRE(shares.front().item.name == "Potion of Healing");  // in the loot's order
+    }
+    SECTION("several potions go down the most-hurt list") {
+        auto shares = dnd::suggest_loot_shares({{potion, 3}}, {{1, 10, 10}, {2, 2, 8}, {3, 5, 10}});
+        REQUIRE(shares_of(shares, 2) == std::vector<std::pair<std::string, int>>{{"Potion of Healing", 1}});
+        REQUIRE(shares_of(shares, 3) == std::vector<std::pair<std::string, int>>{{"Potion of Healing", 1}});
+        REQUIRE(shares_of(shares, 1) == std::vector<std::pair<std::string, int>>{{"Potion of Healing", 1}});
+    }
+    SECTION("ties go in party order") {
+        auto shares = dnd::suggest_loot_shares({{torch, 3}}, {{1, 5, 5}, {2, 5, 5}});
+        REQUIRE(shares_of(shares, 1) == std::vector<std::pair<std::string, int>>{{"Torch", 2}});
+        REQUIRE(shares_of(shares, 2) == std::vector<std::pair<std::string, int>>{{"Torch", 1}});
+    }
+    SECTION("no one to give it to") {
+        REQUIRE(dnd::suggest_loot_shares({{torch, 1}}, {}).empty());
+    }
+}
+
+TEST_CASE("with two characters standing, loot waits to be divided", "[encounter][loot]") {
+    Fixture f;
+    // Init: Aria 20, Zanna 19, Goblin 1. Aria's attack: d20 15, 1d8 = 8: the goblin falls.
+    ScriptedRandomSource rolls({20, 19, 1, 15, 8});
+    dnd::Dice dice(rolls);
+    auto encounter = f.encounter(dice);
+    auto zanna = f.wizard();
+    zanna.current_hp = 4;
+    encounter.add_character(f.fighter(), {}, f.fighter_gear());
+    encounter.add_character(zanna, {}, {});
+    encounter.add_monsters(f.monster("Goblin"), 1);
+    encounter.set_victory_reward("", {{f.item("Potion of Healing"), 1}, {f.item("Rations (1 day)"), 2}}, 800);
+    encounter.roll_initiative();
+    encounter.take_events();
+
+    REQUIRE(encounter.attack(2, 5, 1, 8, 3));
+    auto events = encounter.take_events();
+    auto lines = logs(events);
+    REQUIRE(contains(lines, "Loot found: 1 × Potion of Healing, 2 × Rations (1 day). Divide it among the party."));
+    REQUIRE(contains(lines, "The party finds 8 gp (4 gp each)."));  // coins don't wait
+    REQUIRE_FALSE(has_event(events, EncounterEvent::Kind::ItemGained, 1));
+    REQUIRE(encounter.loot_pending());
+    REQUIRE(encounter.loot_recipients().size() == 2);
+
+    auto suggested = encounter.suggested_loot_shares();
+    REQUIRE(suggested.size() == 2);
+    REQUIRE(suggested[0].item.name == "Potion of Healing");
+    REQUIRE(suggested[0].character_id == 2);  // Zanna is hurt
+    REQUIRE(suggested[1].character_id == 1);
+    REQUIRE(suggested[1].quantity == 2);
+
+    SECTION("shares must match the loot exactly") {
+        auto short_one = suggested;
+        short_one[1].quantity = 1;
+        REQUIRE_FALSE(encounter.divide_loot(short_one));
+        auto stranger = suggested;
+        stranger[0].character_id = 99;
+        REQUIRE_FALSE(encounter.divide_loot(stranger));
+        REQUIRE(encounter.loot_pending());
+    }
+    SECTION("dividing hands it out and logs it") {
+        auto shares = suggested;
+        shares[1].character_id = 2;  // Zanna takes everything after all
+        REQUIRE(encounter.divide_loot(shares));
+        REQUIRE_FALSE(encounter.loot_pending());
+        auto after = encounter.take_events();
+        REQUIRE(logs(after) == std::vector<std::string>{
+                                   "Loot! Zanna takes: 1 × Potion of Healing, 2 × Rations (1 day)."});
+        REQUIRE(has_event(after, EncounterEvent::Kind::ItemGained, 2, f.item("Rations (1 day)").item_id));
+        REQUIRE_FALSE(encounter.divide_loot(shares));  // only once
+    }
+}
+
 TEST_CASE("attacking to victory awards XP and loot", "[encounter]") {
     Fixture f;
     // Init: Aria 20, Goblin 1. Aria's attack: d20 15 (+5 = 20 hit), 1d8 = 8 (+3 = 11 >= 7 HP).

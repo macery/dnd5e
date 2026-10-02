@@ -58,6 +58,7 @@ It manages players and characters, computes a full character sheet from the 5e r
 - **Solo adventures** ([docs/adventures-and-currency.md](docs/adventures-and-currency.md)): twelve pre-built adventures. Nine are single fights; three are multi-fight runs (The Goblin Warren, Crypt of the Restless, The Hill Giant's Toll).
   - **Party:** you pick who goes.
   - **Fights:** each comes with narration, is scaled for the party (the final fight toward Hard), and pays coins and loot.
+  - **Loot:** coins are split evenly. With two or more characters standing, a **Divide the Loot** panel on the victory screen picks who takes each item: healing potions start with the most hurt, and the rest is spread around. Closing the window hands it out as shown.
   - **Between fights:**
     - press on;
     - take a short rest, with hit dice chosen per character;
@@ -228,7 +229,7 @@ Any pending schema migrations run on launch, so older save files are upgraded in
   - Coins show on the sheet and in the Inventory (with what the items are worth), and travel in exports.
 - [x] **Shops and spending** ([docs/shops.md](docs/shops.md)): buy gear at list price and sell it for half, give coins between a player's characters, and pay a temple 550 gp to *raise dead*. The Inventory's **Add (free)** stays for loot and DM gifts.
 - [ ] **Coins from Combat Encounter fights** (open question): fights built with the main window's **Combat Encounter** award XP only; coins and loot come only from Solo Adventure fights. One option is the 2014 DMG's *Individual Treasure* table: each defeated monster rolls coins by challenge rating (CR 0–4: d100 for 5d6 cp, 4d6 sp, 3d6 ep, 3d6 gp, or 1d6 pp), logged and split among the survivors. Undecided: whether free-form fights should pay at all, and whether to use the DMG tables or a simpler scale.
-- [ ] **Divide loot after a victory** (where it fits is still open: the victory screen, between adventure scenes, or both): today every item goes to the first character still standing, while coins are split evenly. A small dialog could list each item with a "goes to" choice per surviving character, spread around by default (potions to whoever is most hurt).
+- [x] **Divide loot after a victory**: a **Divide the Loot** panel on the combat screen's victory, with a "goes to" choice per item (per unit for small stacks). Potions start with the most hurt, and everything else goes to whoever has received least. A lone survivor takes it all at once. Later moves use the Inventory's **Give…**.
 - [ ] **Encumbrance** (optional): item weights compared with carrying capacity (STR × 15).
 - [ ] **Item uses**: a Healer's Kit has 10 uses in the PHB, but they aren't tracked, so stabilizing with one never uses it up. The same applies to other limited-use gear later (torches burning out, rations eaten).
 

@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cctype>
+#include <map>
+#include <set>
 
 #include "dnd/character_creation.hpp"
 #include "dnd/class_features.hpp"
@@ -1150,44 +1152,143 @@ void Encounter::award_victory_experience() {
     }
 }
 
-void Encounter::award_loot() {
-    if (loot_.empty() || characters_.empty()) return;
+std::vector<LootShare> suggest_loot_shares(const std::vector<LootGrant>& loot,
+                                           const std::vector<LootRecipient>& recipients) {
+    std::vector<LootShare> shares;
+    if (recipients.empty()) return shares;
+    auto give = [&shares](const Item& item, int character_id) {
+        for (auto& share : shares) {
+            if (share.item.item_id == item.item_id && share.character_id == character_id) {
+                ++share.quantity;
+                return;
+            }
+        }
+        shares.push_back({item, 1, character_id});
+    };
 
-    // First character still standing; everyone's down can't be a victory,
-    // but fall back to the first character rather than dropping the loot.
-    const Character* recipient = &characters_.front();
-    for (const auto& character : characters_) {
-        bool standing = std::any_of(combatants_.begin(), combatants_.end(), [&](const Combatant& c) {
-            return c.is_character && c.character_id == character.character_id && c.current_hp > 0;
-        });
-        if (standing) {
-            recipient = &character;
-            break;
+    // Most hurt first (lowest HP fraction; ties in party order).
+    std::vector<size_t> most_hurt(recipients.size());
+    for (size_t i = 0; i < most_hurt.size(); ++i) most_hurt[i] = i;
+    std::stable_sort(most_hurt.begin(), most_hurt.end(), [&](size_t a, size_t b) {
+        const auto& x = recipients[a];
+        const auto& y = recipients[b];
+        return static_cast<long long>(x.current_hp) * std::max(1, y.max_hp) <
+               static_cast<long long>(y.current_hp) * std::max(1, x.max_hp);
+    });
+
+    std::vector<int> received(recipients.size(), 0);
+    size_t next_potion = 0;
+    for (const auto& grant : loot) {
+        if (!is_healing_item(grant.item)) continue;
+        for (int i = 0; i < grant.quantity; ++i) {
+            size_t who = most_hurt[next_potion++ % most_hurt.size()];
+            ++received[who];
+            give(grant.item, recipients[who].character_id);
         }
     }
-
-    std::string found;
-    auto& inventory = inventories_[recipient->character_id];
-    for (const auto& grant : loot_) {
-        EncounterEvent event;
-        event.kind = EncounterEvent::Kind::ItemGained;
-        event.character_id = recipient->character_id;
-        event.item_id = grant.item.item_id;
-        event.quantity = grant.quantity;
-        events_.push_back(event);
-
-        auto held = std::find_if(inventory.begin(), inventory.end(),
-                                 [&](const InventoryEntry& e) { return e.item.item_id == grant.item.item_id; });
-        if (held != inventory.end()) {
-            held->quantity += grant.quantity;
-        } else {
-            inventory.push_back({grant.item, grant.quantity});
+    for (const auto& grant : loot) {
+        if (is_healing_item(grant.item)) continue;
+        for (int i = 0; i < grant.quantity; ++i) {
+            size_t who = static_cast<size_t>(std::min_element(received.begin(), received.end()) - received.begin());
+            ++received[who];
+            give(grant.item, recipients[who].character_id);
         }
+    }
+    // Back in the loot's order, so the log and the UI read like the find.
+    std::vector<LootShare> ordered;
+    std::set<int> seen;
+    for (const auto& grant : loot) {
+        if (!seen.insert(grant.item.item_id).second) continue;  // the same item listed twice
+        for (const auto& share : shares) {
+            if (share.item.item_id == grant.item.item_id) ordered.push_back(share);
+        }
+    }
+    return ordered;
+}
 
+std::vector<LootRecipient> Encounter::loot_recipients() const {
+    std::vector<LootRecipient> recipients;
+    for (const auto& character : characters_) {
+        for (const auto& c : combatants_) {
+            if (c.is_character && c.character_id == character.character_id && c.current_hp > 0) {
+                recipients.push_back({character.character_id, c.current_hp, c.max_hp});
+                break;
+            }
+        }
+    }
+    return recipients;
+}
+
+std::vector<LootShare> Encounter::suggested_loot_shares() const {
+    return suggest_loot_shares(pending_loot_, loot_recipients());
+}
+
+void Encounter::award_loot() {
+    if (loot_.empty() || characters_.empty()) return;
+    auto recipients = loot_recipients();
+    if (recipients.size() <= 1) {
+        // One character standing takes it all. (Everyone down can't be a
+        // victory, but fall back to the first character rather than drop it.)
+        int only = recipients.empty() ? characters_.front().character_id : recipients.front().character_id;
+        std::vector<LootShare> shares;
+        for (const auto& grant : loot_) shares.push_back({grant.item, grant.quantity, only});
+        hand_out(shares);
+        return;
+    }
+    pending_loot_ = loot_;
+    std::string found;
+    for (const auto& grant : loot_) {
         if (!found.empty()) found += ", ";
         found += std::to_string(grant.quantity) + " × " + grant.item.name;
     }
-    log("Loot! " + recipient->character_name + " takes: " + found + ".");
+    log("Loot found: " + found + ". Divide it among the party.");
+}
+
+bool Encounter::divide_loot(const std::vector<LootShare>& shares) {
+    if (pending_loot_.empty()) return false;
+    auto recipients = loot_recipients();
+    std::map<int, int> owed;  // item id -> quantity still to hand out
+    for (const auto& grant : pending_loot_) owed[grant.item.item_id] += grant.quantity;
+    for (const auto& share : shares) {
+        bool standing = std::any_of(recipients.begin(), recipients.end(),
+                                    [&](const LootRecipient& r) { return r.character_id == share.character_id; });
+        if (!standing || share.quantity <= 0 || !owed.count(share.item.item_id)) return false;
+        owed[share.item.item_id] -= share.quantity;
+    }
+    if (std::any_of(owed.begin(), owed.end(), [](const auto& entry) { return entry.second != 0; })) return false;
+
+    pending_loot_.clear();
+    hand_out(shares);
+    return true;
+}
+
+void Encounter::hand_out(const std::vector<LootShare>& shares) {
+    // One log line per character, in party order.
+    for (const auto& character : characters_) {
+        std::string found;
+        auto& inventory = inventories_[character.character_id];
+        for (const auto& share : shares) {
+            if (share.character_id != character.character_id) continue;
+            EncounterEvent event;
+            event.kind = EncounterEvent::Kind::ItemGained;
+            event.character_id = character.character_id;
+            event.item_id = share.item.item_id;
+            event.quantity = share.quantity;
+            events_.push_back(event);
+
+            auto held = std::find_if(inventory.begin(), inventory.end(),
+                                     [&](const InventoryEntry& e) { return e.item.item_id == share.item.item_id; });
+            if (held != inventory.end()) {
+                held->quantity += share.quantity;
+            } else {
+                inventory.push_back({share.item, share.quantity});
+            }
+
+            if (!found.empty()) found += ", ";
+            found += std::to_string(share.quantity) + " × " + share.item.name;
+        }
+        if (!found.empty()) log("Loot! " + character.character_name + " takes: " + found + ".");
+    }
 }
 
 void Encounter::award_coins() {

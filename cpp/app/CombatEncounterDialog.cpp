@@ -6,6 +6,7 @@
 #include <QColor>
 #include <QComboBox>
 #include <QFormLayout>
+#include <QGridLayout>
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -20,6 +21,7 @@
 #include <QVBoxLayout>
 
 #include <algorithm>
+#include <map>
 
 #include "WindowSizing.hpp"
 #include "dnd/character_creation.hpp"
@@ -259,6 +261,20 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
     auto* turnPanel = new QWidget(this);
     auto* turnLayout = new QVBoxLayout(turnPanel);
     turnLayout->setContentsMargins(0, 0, 0, 0);
+    lootGroup_ = new QGroupBox("Divide the Loot", this);
+    lootGroup_->setToolTip("Choose who takes each item. Healing potions start with whoever is most hurt, and the "
+                           "rest is spread around. Closing the window hands it out as shown.");
+    auto* lootLayout = new QVBoxLayout(lootGroup_);
+    lootGrid_ = new QGridLayout();
+    lootLayout->addLayout(lootGrid_);
+    auto* handOutButton = new QPushButton("Hand Out Loot", lootGroup_);
+    auto* handOutRow = new QHBoxLayout();
+    handOutRow->addStretch(1);
+    handOutRow->addWidget(handOutButton);
+    lootLayout->addLayout(handOutRow);
+    lootGroup_->setVisible(false);
+    connect(handOutButton, &QPushButton::clicked, this, &CombatEncounterDialog::handOutLoot);
+    turnLayout->addWidget(lootGroup_);
     turnLayout->addWidget(attackGroup);
     turnLayout->addStretch(1);
 
@@ -355,6 +371,71 @@ void CombatEncounterDialog::processEvents() {
     }
 }
 
+// --- Loot --------------------------------------------------------------------
+
+void CombatEncounterDialog::refreshLootPanel() {
+    if (!encounter_.loot_pending()) {
+        lootGroup_->setVisible(false);
+        return;
+    }
+    if (!lootRows_.empty()) return;  // already built for this loot
+
+    auto recipients = encounter_.loot_recipients();
+    auto suggested = encounter_.suggested_loot_shares();
+    // Small stacks get a row per item so they can be split; big ones (a
+    // bundle of arrows) one row per suggested share.
+    std::map<int, int> totals;
+    for (const auto& grant : encounter_.pending_loot()) totals[grant.item.item_id] += grant.quantity;
+    for (const auto& share : suggested) {
+        int rows = totals[share.item.item_id] <= 10 ? share.quantity : 1;
+        int each = share.quantity / rows;
+        for (int i = 0; i < rows; ++i) {
+            int row = static_cast<int>(lootRows_.size());
+            auto* label = new QLabel(QString("%1 × %2").arg(each).arg(q(share.item.name)), lootGroup_);
+            label->setToolTip(q(share.item.description));
+            auto* combo = new QComboBox(lootGroup_);
+            for (const auto& recipient : recipients) {
+                const dnd::Character* character = encounter_.character(recipient.character_id);
+                combo->addItem(QString("%1 (%2/%3 HP)")
+                                   .arg(character ? q(character->character_name) : QString("?"))
+                                   .arg(recipient.current_hp)
+                                   .arg(recipient.max_hp),
+                               recipient.character_id);
+            }
+            combo->setCurrentIndex(std::max(0, combo->findData(share.character_id)));
+            lootGrid_->addWidget(label, row, 0);
+            lootGrid_->addWidget(combo, row, 1);
+            lootRows_.push_back({share.item, each, combo});
+        }
+    }
+    lootGrid_->setColumnStretch(1, 1);
+    lootGroup_->setVisible(true);
+}
+
+void CombatEncounterDialog::handOutLoot() {
+    if (!encounter_.loot_pending()) return;
+    std::vector<dnd::LootShare> shares;
+    for (const auto& row : lootRows_) {
+        int who = row.recipient->currentData().toInt();
+        auto same = std::find_if(shares.begin(), shares.end(), [&](const dnd::LootShare& s) {
+            return s.item.item_id == row.item.item_id && s.character_id == who;
+        });
+        if (same != shares.end()) {
+            same->quantity += row.quantity;
+        } else {
+            shares.push_back({row.item, row.quantity, who});
+        }
+    }
+    if (!encounter_.divide_loot(shares)) encounter_.divide_loot(encounter_.suggested_loot_shares());
+    processEvents();
+    refreshState();
+}
+
+void CombatEncounterDialog::done(int result) {
+    handOutLoot();  // never lose the loot by closing the window
+    QDialog::done(result);
+}
+
 void CombatEncounterDialog::onTurnStarted() {
     const dnd::Combatant* current = encounter_.current();
     if (current && encounter_.awaiting_action()) {
@@ -413,6 +494,7 @@ void CombatEncounterDialog::refreshState() {
     }
     takeActionButton_->setEnabled(encounter_.awaiting_action() || encounter_.bonus_action_available());
     refreshBonusControls();
+    refreshLootPanel();
 
     // "Action: available · Bonus action: used", plus attacks left in an Attack action.
     if (!encounter_.awaiting_action() && !encounter_.bonus_action_available()) {

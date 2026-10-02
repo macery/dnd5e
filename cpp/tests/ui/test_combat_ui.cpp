@@ -4,6 +4,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <QCheckBox>
+#include <QGroupBox>
 #include <QPlainTextEdit>
 #include <QSplitter>
 
@@ -147,4 +148,86 @@ TEST_CASE("combat: an adventure fight ends with Continue or End Adventure", "[ui
     REQUIRE(button(combat, "Continue") != nullptr);
     REQUIRE(log(combat).contains("The party finds 3 gp."));
     REQUIRE(world.get(aria.character_id).coins[3] == 3);
+}
+
+TEST_CASE("combat: dividing the loot between two survivors", "[ui][combat][loot]") {
+    World world;
+    auto clark = tough(world, "Clark", "Fighter", 5, {"Chain Mail", "Longsword"});
+    auto phi = tough(world, "phi", "Fighter", 5, {"Chain Mail", "Longsword"});
+    AdventureFight fight;
+    fight.title = "Ambush on the Trail";
+    fight.scene.title = "Ambush on the Trail";
+    fight.scene.narration = "Goblins burst from the underbrush.";
+    fight.scene.monsters = {{"Goblin", 1}};
+    fight.scene.loot = {{"Potion of Healing", 1}, {"Rations (1 day)", 2}};
+    CombatEncounterDialog combat(world.repo, {clark, phi}, world.repo.get_monsters(), nullptr, &fight);
+    combat.show();
+
+    QGroupBox* loot = nullptr;
+    for (auto* group : combat.findChildren<QGroupBox*>()) {
+        if (group->title() == "Divide the Loot") loot = group;
+    }
+    REQUIRE(loot != nullptr);
+    REQUIRE_FALSE(loot->isVisible());
+
+    button(combat, "Roll Initiative")->click();
+    for (int i = 0; i < 200 && combat.outcome() == dnd::EncounterStatus::InProgress; ++i) {
+        if (auto* attack = button(combat, "Roll Attack"); attack && attack->isEnabled()) attack->click();
+        if (auto* next = button(combat, "Next Turn")) next->click();
+        settle();
+    }
+    REQUIRE(combat.outcome() == dnd::EncounterStatus::Victory);
+    REQUIRE(log(combat).contains("Loot found: 1 × Potion of Healing, 2 × Rations (1 day)."));
+    REQUIRE(loot->isVisible());
+
+    // One row per item: the potion and each ration. Everything to phi.
+    auto combos = loot->findChildren<QComboBox*>();
+    REQUIRE(combos.size() == 3);
+    for (auto* combo : combos) {
+        REQUIRE(combo->count() == 2);
+        combo->setCurrentIndex(combo->findText("phi", Qt::MatchStartsWith));
+    }
+    button(combat, "Hand Out Loot")->click();
+    settle();
+    REQUIRE_FALSE(loot->isVisible());
+    REQUIRE(log(combat).contains("Loot! phi takes: 1 × Potion of Healing, 2 × Rations (1 day)."));
+
+    auto count = [&](int id, const std::string& name) {
+        for (const auto& entry : world.repo.get_inventory(id)) {
+            if (entry.item.name == name) return entry.quantity;
+        }
+        return 0;
+    };
+    REQUIRE(count(phi.character_id, "Rations (1 day)") == 2);
+    REQUIRE(count(clark.character_id, "Potion of Healing") == 0);
+}
+
+TEST_CASE("combat: closing the window hands out undivided loot", "[ui][combat][loot]") {
+    World world;
+    auto clark = tough(world, "Clark", "Fighter", 5, {"Chain Mail", "Longsword"});
+    auto phi = tough(world, "phi", "Fighter", 5, {"Chain Mail", "Longsword"});
+    AdventureFight fight;
+    fight.title = "Test";
+    fight.scene.title = "Test";
+    fight.scene.narration = "Goblins.";
+    fight.scene.monsters = {{"Goblin", 1}};
+    fight.scene.loot = {{"Torch", 2}};
+    CombatEncounterDialog combat(world.repo, {clark, phi}, world.repo.get_monsters(), nullptr, &fight);
+    combat.show();
+    button(combat, "Roll Initiative")->click();
+    for (int i = 0; i < 200 && combat.outcome() == dnd::EncounterStatus::InProgress; ++i) {
+        if (auto* attack = button(combat, "Roll Attack"); attack && attack->isEnabled()) attack->click();
+        if (auto* next = button(combat, "Next Turn")) next->click();
+        settle();
+    }
+    REQUIRE(combat.outcome() == dnd::EncounterStatus::Victory);
+    button(combat, "Continue")->click();
+    settle();
+    int torches = 0;
+    for (int id : {clark.character_id, phi.character_id}) {
+        for (const auto& entry : world.repo.get_inventory(id)) {
+            if (entry.item.name == "Torch") torches += entry.quantity;
+        }
+    }
+    REQUIRE(torches == 2);  // none lost
 }

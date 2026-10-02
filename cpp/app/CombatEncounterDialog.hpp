@@ -15,6 +15,8 @@
 class QCheckBox;
 class QComboBox;
 class GridForm;
+class QGridLayout;
+class QGroupBox;
 class QLabel;
 class QListWidget;
 class QPlainTextEdit;
@@ -49,6 +51,9 @@ public:
 
     // How the fight ended: InProgress if the window was closed mid-fight.
     dnd::EncounterStatus outcome() const { return encounter_.status(); }
+
+    // Closing (or Continue) hands out undivided loot as the panel shows it.
+    void done(int result) override;
 
 protected:
     void resizeEvent(QResizeEvent* event) override;
@@ -93,6 +98,10 @@ private:
     void refreshSpellInfo();
     const dnd::Spell* selectedSpell() const;
     void log(const QString& line);
+    // The Divide the Loot panel: shown after a victory with loot to share,
+    // one row per item (per unit for small stacks) with who takes it.
+    void refreshLootPanel();
+    void handOutLoot();
 
     dnd::Repository& repository_;
     std::vector<dnd::Monster> monsters_;
@@ -115,6 +124,14 @@ private:
     QPushButton* rollInitiativeButton_ = nullptr;
     QPushButton* nextTurnButton_ = nullptr;
     QPushButton* continueButton_ = nullptr;  // adventures: shown once the fight is over
+    QGroupBox* lootGroup_ = nullptr;
+    QGridLayout* lootGrid_ = nullptr;
+    struct LootRow {
+        dnd::Item item;
+        int quantity = 1;
+        QComboBox* recipient = nullptr;
+    };
+    std::vector<LootRow> lootRows_;
 
     QLabel* currentTurnLabel_ = nullptr;
     QLabel* moveLabel_ = nullptr;
