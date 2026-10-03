@@ -414,7 +414,8 @@ TEST_CASE("spell_allowance and validate_spell_selection", "[spellcasting]") {
     wizard.intelligence = 16;  // +3
     auto allowance = dnd::spell_allowance(wizard, cls("Wizard"));
     REQUIRE(allowance.cantrips == 3);
-    REQUIRE(allowance.spells == 4);  // prepared: +3 + level 1
+    REQUIRE(allowance.spells == 6);  // the spellbook: 6 at level 1 (4 of them prepared: +3 + 1)
+    REQUIRE(dnd::prepared_spell_count(wizard, cls("Wizard")) == 4);
     REQUIRE(allowance.max_spell_level == 1);
 
     dnd::Character bard;
@@ -439,7 +440,8 @@ TEST_CASE("spell_allowance and validate_spell_selection", "[spellcasting]") {
     std::vector<dnd::Spell> picks = {spell_named(spells, "Fire Bolt"), spell_named(spells, "Light"),
                                      spell_named(spells, "Mage Hand"), spell_named(spells, "Magic Missile"),
                                      spell_named(spells, "Mage Armor"), spell_named(spells, "Detect Magic"),
-                                     spell_named(spells, "Burning Hands")};
+                                     spell_named(spells, "Burning Hands"), spell_named(spells, "Thunderwave"),
+                                     spell_named(spells, "Feather Fall")};
     REQUIRE_FALSE(dnd::validate_spell_selection(wizard, cls("Wizard"), picks, true));
 
     auto fewer = picks;

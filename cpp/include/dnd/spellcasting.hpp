@@ -57,9 +57,10 @@ int spellbook_size(int level);
 int prepared_spell_count(const Character& character, const ClassInfo& class_info);
 
 // How many spells a character may have, and of what level. For Known
-// classes `spells` is spells known; for Prepared and Spellbook classes it's
-// spells prepared (a Wizard's picks are its prepared list until spellbooks
-// are modeled -- see docs/magic-system.md, Decisions).
+// classes `spells` is spells known; for Prepared classes it's spells
+// prepared; for a Wizard it's the spellbook's size (6 + 2 per level), and
+// prepared_spell_count says how many of those are prepared
+// (docs/preparing-spells.md).
 struct SpellAllowance {
     int cantrips = 0;
     int spells = 0;
@@ -67,6 +68,21 @@ struct SpellAllowance {
 };
 
 SpellAllowance spell_allowance(const Character& character, const ClassInfo& class_info);
+
+// --- Preparing (docs/preparing-spells.md) -------------------------------------
+
+// Clerics, Druids, Paladins, and Wizards choose prepared spells.
+bool prepares_spells(const ClassInfo& class_info);
+// Why the character can't change prepared spells now, or "" if they can:
+// only after a long rest, until their next fight.
+std::string preparation_refusal(const Character& character, const ClassInfo& class_info);
+// Leveled spells marked prepared in a character's list (cantrips aside).
+int prepared_leveled_count(const std::vector<Spell>& known);
+// Whether a spell newly added to a Wizard's spellbook should start prepared:
+// a leveled spell while there's room under prepared_spell_count. Always true
+// for cantrips and for every other class (their list is what's ready).
+bool starts_prepared(const Character& character, const ClassInfo& class_info, const std::vector<Spell>& known,
+                     const Spell& spell);
 
 // Checks a set of chosen spells against the class list and the allowance:
 // every spell on the class's list, no duplicates, no spell above

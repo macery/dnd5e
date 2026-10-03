@@ -398,6 +398,13 @@ EncounterRating Encounter::difficulty() const {
 // --- Turns -------------------------------------------------------------------
 
 void Encounter::roll_initiative() {
+    // The day's fighting has begun: prepared spells are fixed until a long rest.
+    for (auto& character : characters_) {
+        if (character.may_prepare) {
+            character.may_prepare = false;
+            changed(character.character_id);
+        }
+    }
     for (auto& combatant : combatants_) {
         int d20 = dice_.roll(20, 1).front();
         combatant.initiative = d20 + combatant.dex_modifier - combatant.roll_penalty;
@@ -1427,6 +1434,7 @@ std::vector<Spell> Encounter::castable_spells() const {
     if (!caster || !info) return spells;
 
     for (const auto& spell : known_spells_.at(caster->character_id)) {
+        if (!spell.prepared) continue;  // a Wizard's spellbook spell it didn't prepare
         if (spell_casting_blocked(turn_, spell)) continue;
         bool castable = spell.level == 0;
         for (int level = std::max(1, spell.level); !castable && level <= kMaxSpellLevel; ++level) {

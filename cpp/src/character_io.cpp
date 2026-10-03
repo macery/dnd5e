@@ -78,7 +78,10 @@ ExportedCharacter export_one(const Repository& repo, const Character& c, const s
     for (const auto& entry : repo.get_inventory(c.character_id)) {
         out.inventory.push_back({entry.item.name, entry.quantity, entry.equipped, entry.attuned});
     }
-    for (const auto& spell : repo.get_character_spells(c.character_id)) out.spells.push_back(spell.name);
+    for (const auto& spell : repo.get_character_spells(c.character_id)) {
+        out.spells.push_back(spell.name);
+        if (!spell.prepared) out.unprepared_spells.push_back(spell.name);
+    }
     out.coins = c.coins;
     return out;
 }
@@ -135,6 +138,7 @@ std::string to_json(const CharacterExport& file) {
             {"feature_uses_spent", c.feature_uses_spent},
             {"inventory", inventory},
             {"spells", c.spells},
+            {"unprepared_spells", c.unprepared_spells},
             {"coins", coins_json(c.coins)},
         });
     }
@@ -217,6 +221,7 @@ ParseResult parse_character_file(const std::string& text) {
                 }
             }
             out.spells = c.value("spells", std::vector<std::string>{});
+            out.unprepared_spells = c.value("unprepared_spells", std::vector<std::string>{});
             if (c.contains("coins")) {  // optional: files from before currency have none
                 for (int i = 0; i < kCoinCount; ++i) {
                     out.coins[static_cast<size_t>(i)] = c.at("coins").value(coin_abbreviation(static_cast<Coin>(i)), 0);
@@ -417,7 +422,9 @@ ImportResult apply_import(Repository& repo, const ImportPlan& plan, const Import
             }
             for (const auto& spell_name : source.spells) {
                 auto spell = std::find_if(spells.begin(), spells.end(), [&](const Spell& s) { return s.name == spell_name; });
-                if (spell != spells.end()) repo.add_character_spell(id, spell->spell_id);
+                bool prepared = std::find(source.unprepared_spells.begin(), source.unprepared_spells.end(),
+                                          spell_name) == source.unprepared_spells.end();
+                if (spell != spells.end()) repo.add_character_spell(id, spell->spell_id, prepared);
             }
             result.imported_character_ids.push_back(id);
             std::string how = planned.existing_character_id == 0          ? "imported"

@@ -106,6 +106,10 @@ struct Spell {
     std::vector<SpellEffectSpec> effects;  // SpellEffects rows
 
     std::vector<std::string> class_names;  // classes whose list includes it (ClassSpells)
+
+    // From Repository::get_character_spells only: ready to cast. Always true
+    // except for a Wizard's spellbook spells it hasn't prepared.
+    bool prepared = true;
 };
 
 }  // namespace dnd

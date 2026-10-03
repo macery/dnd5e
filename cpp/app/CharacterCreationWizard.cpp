@@ -28,6 +28,7 @@
 #include "dnd/currency.hpp"
 #include "dnd/equipment.hpp"
 #include "dnd/rules.hpp"
+#include "dnd/spellbook.hpp"
 #include "dnd/spellcasting.hpp"
 
 namespace {
@@ -1101,7 +1102,12 @@ void CharacterCreationWizard::accept() {
         if (entry.equipped) repository_.set_equipped(character_id, entry.item.item_id, true);
     }
     if (picksSpellsAtCreation(*context_)) {
-        for (int spell_id : context_->chosen_spell_ids) repository_.add_character_spell(character_id, spell_id);
+        // A Wizard's six go in its spellbook, the first INT + 1 of them prepared.
+        dnd::Character created = character;
+        created.character_id = character_id;
+        if (const dnd::ClassInfo* info = dnd::find_class_info_by_id(context_->classes, character.class_id)) {
+            for (int spell_id : context_->chosen_spell_ids) dnd::add_known_spell(repository_, created, *info, spell_id);
+        }
     }
     if (context_->take_explorers_pack) {
         auto items = repository_.get_items();

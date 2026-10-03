@@ -264,7 +264,10 @@ Phases 1 (core and data) and 2 (UI) are done; see [docs/magic-system.md](docs/ma
 - [x] **Scaling**: cantrips get extra dice (or extra beams, for Eldritch Blast) at levels 5, 11, and 17, and casting with a higher-level slot adds dice or darts.
 - [ ] **Reactions**: *Shield*, *Hellish Rebuke*, *Feather Fall*, and opportunity attacks. They need a way to interrupt another creature's turn.
 - [x] **Bonus actions**: each turn has one action and one bonus action, shown live in combat. *Healing Word*, *Shield of Faith*, *Divine Favor*, and *Sanctuary* use the bonus action, and the PHB rule applies: after a bonus-action spell, only an action cantrip can follow. Extra Attack gives two attacks per Attack action from level 5. Class-feature bonus actions are next; see [docs/class-features.md](docs/class-features.md).
-- [ ] **Re-preparing spells**: Clerics, Druids, and Wizards choose new prepared spells after a long rest, and Wizards get a real spellbook (6 spells at level 1, plus 2 per level) to prepare from. Today, the spells picked at creation or learned later are the prepared list.
+- [x] **Re-preparing spells** ([docs/preparing-spells.md](docs/preparing-spells.md)):
+  - Clerics, Druids, Paladins, and Wizards change prepared spells after a long rest, until their next fight. The Spellbook says when it's open.
+  - Wizards keep a real spellbook (6 spells at level 1, plus 2 per level) and prepare INT + level spells from it. Combat offers only prepared spells.
+- [ ] **Copying spells into a spellbook**: from scrolls or another wizard's book (PHB: 50 gp and 2 hours per spell level).
 - [ ] **Effects that outlast combat**: *Mage Armor* (8 hours; AC 13 + DEX while unarmored, which also needs [armor & shields](#inventory--items)) and exhaustion levels. They need effects saved on the character; today every effect ends with the fight.
 - [ ] **More utility spells with real effects**: 18 utility spells (*Light*, *Detect Magic*, *Command*, *Sanctuary*, ...) still have no automated effect.
 - [x] **Magic items** ([docs/magic-items.md](docs/magic-items.md)): +1/+2/+3 weapons, armor, and shields; four healing potions; five wondrous items with attunement; spell scrolls with the DMG's reading rules; boss loot and the Shop.

@@ -18,7 +18,7 @@ using detail::Statement;
 // for future schema changes -- never edit an existing one, since a
 // migration's sql is exactly what already ran on every database that has it
 // recorded in SchemaMigrations.
-constexpr std::array<Migration, 25> kMigrations = {{
+constexpr std::array<Migration, 26> kMigrations = {{
     {1, "initial schema: Players, Classes, Characters", R"sql(
         CREATE TABLE IF NOT EXISTS Players (
             PlayerID INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -945,6 +945,12 @@ constexpr std::array<Migration, 25> kMigrations = {{
                    ', attack +' || (CASE WHEN Level <= 2 THEN 5 ELSE 7 END) || '.',
                    0, CASE Level WHEN 2 THEN 15000 ELSE 30000 END, 'Uncommon', SpellID
             FROM Spells WHERE Level IN (2, 3) AND Resolution <> 'Utility';
+    )sql"},
+    // Preparing spells (docs/preparing-spells.md): a Wizard's spellbook vs
+    // its prepared spells, and the window after a long rest for changing them.
+    {26, "add CharacterSpells.Prepared and Characters.MayPrepare", R"sql(
+        ALTER TABLE CharacterSpells ADD COLUMN Prepared INTEGER NOT NULL DEFAULT 1;
+        ALTER TABLE Characters ADD COLUMN MayPrepare INTEGER NOT NULL DEFAULT 1;
     )sql"},
 }};
 

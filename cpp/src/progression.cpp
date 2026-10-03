@@ -102,6 +102,7 @@ void take_long_rest(Character& character) {
     character.spell_slots_used.fill(0);
     restore_all_features(character);
     character.revival_penalty = std::max(0, character.revival_penalty - 1);
+    character.may_prepare = true;  // prepared spells can change now (docs/preparing-spells.md)
 }
 
 void take_short_rest(Character& character, const ClassInfo& class_info) {

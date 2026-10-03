@@ -61,7 +61,9 @@ public:
     std::vector<Spell> get_character_spells(int character_id) const;
     // Adding a spell the character already knows is a no-op. Spells are
     // deleted with their character.
-    void add_character_spell(int character_id, int spell_id);
+    void add_character_spell(int character_id, int spell_id, bool prepared = true);
+    // A Wizard's spellbook spell, prepared or not (docs/preparing-spells.md).
+    void set_spell_prepared(int character_id, int spell_id, bool prepared);
     void remove_character_spell(int character_id, int spell_id);
 
     int add_player(const std::string& player_name);

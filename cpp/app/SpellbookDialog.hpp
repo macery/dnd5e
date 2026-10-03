@@ -32,6 +32,7 @@ private slots:
     void onCastClicked();
     void onForgetClicked();
     void onLearnClicked();
+    void onPrepareClicked();
 
 private:
     void reload();
@@ -55,7 +56,11 @@ private:
     QComboBox* slotCombo_ = nullptr;
     QPushButton* castButton_ = nullptr;
     QPushButton* forgetButton_ = nullptr;
+    QPushButton* prepareButton_ = nullptr;  // Wizards: prepare or unprepare a spellbook spell
+    QLabel* prepareLabel_ = nullptr;        // when prepared spells can change
     QComboBox* learnCombo_ = nullptr;
     QPushButton* learnButton_ = nullptr;
+    bool isWizard() const;
+    bool preparesFromList() const;  // Cleric, Druid, Paladin: the list is what's prepared
     QLabel* messageLabel_ = nullptr;
 };

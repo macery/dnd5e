@@ -48,6 +48,7 @@ struct ExportedCharacter {
     std::map<std::string, int> feature_uses_spent;
     std::vector<ExportedItem> inventory;
     std::vector<std::string> spells;
+    std::vector<std::string> unprepared_spells;  // a Wizard's spellbook spells not prepared; optional in files
     std::array<int, 5> coins{};  // cp, sp, ep, gp, pp; optional in files (added after version 1 shipped)
 };
 

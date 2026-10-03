@@ -37,6 +37,9 @@ struct Character {
     // Raised by *raise dead*: a penalty (4 at first) to attack rolls, saving
     // throws, and ability checks that drops by 1 each long rest (dnd/shop.hpp).
     int revival_penalty = 0;
+    // Prepared casters may change their prepared spells: after a long rest,
+    // until their next fight (docs/preparing-spells.md).
+    bool may_prepare = true;
     // Class feature uses spent since they last came back, by feature key
     // ("SecondWind", "Rage", ...). Maximums come from class and level
     // (dnd/class_features.hpp); rests clear them.

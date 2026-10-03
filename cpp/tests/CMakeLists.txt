@@ -19,6 +19,7 @@ add_executable(dnd_tests
     test_magic_items.cpp
     test_campaign.cpp
     test_spells_2_3.cpp
+    test_preparing.cpp
     test_damage.cpp
     test_dice.cpp
     test_effects.cpp

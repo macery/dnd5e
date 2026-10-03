@@ -14,6 +14,7 @@
 #include <algorithm>
 
 #include "WindowSizing.hpp"
+#include "dnd/spellbook.hpp"
 #include "dnd/spellcasting.hpp"
 
 namespace {
@@ -56,8 +57,11 @@ SpellbookDialog::SpellbookDialog(dnd::Repository& repository, dnd::Character cha
                             "theirs on a short rest.");
     countsLabel_ = new QLabel(this);
 
-    table_ = new QTableWidget(0, 4, this);
-    table_->setHorizontalHeaderLabels({"Spell", "Level", "Effect", "Casting Time"});
+    table_ = new QTableWidget(0, 5, this);
+    table_->setHorizontalHeaderLabels({"Spell", "Level", "Effect", "Casting Time", "Prepared"});
+    table_->horizontalHeaderItem(4)->setToolTip(
+        "A Wizard prepares INT modifier + level spells from the spellbook each day; only those can be cast. "
+        "Cantrips are always ready.");
     table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
     table_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);
     table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -70,10 +74,14 @@ SpellbookDialog::SpellbookDialog(dnd::Repository& repository, dnd::Character cha
     slotCombo_->setToolTip("Which spell slot to use. A higher slot makes many spells stronger.");
     castButton_ = new QPushButton("Cast on Self", this);
     forgetButton_ = new QPushButton("Forget", this);
+    prepareButton_ = new QPushButton("Prepare", this);
     castRow->addStretch(1);
     castRow->addWidget(slotCombo_);
     castRow->addWidget(castButton_);
+    castRow->addWidget(prepareButton_);
     castRow->addWidget(forgetButton_);
+    prepareLabel_ = new QLabel(this);
+    prepareLabel_->setWordWrap(true);
 
     auto* learnRow = new QHBoxLayout();
     learnCombo_ = new QComboBox(this);
@@ -92,6 +100,7 @@ SpellbookDialog::SpellbookDialog(dnd::Repository& repository, dnd::Character cha
     layout->addWidget(statsLabel_);
     layout->addWidget(slotsLabel_);
     layout->addWidget(countsLabel_);
+    layout->addWidget(prepareLabel_);
     layout->addWidget(table_, 1);
     layout->addLayout(castRow);
     layout->addWidget(messageLabel_);
@@ -103,12 +112,13 @@ SpellbookDialog::SpellbookDialog(dnd::Repository& repository, dnd::Character cha
     connect(castButton_, &QPushButton::clicked, this, &SpellbookDialog::onCastClicked);
     connect(forgetButton_, &QPushButton::clicked, this, &SpellbookDialog::onForgetClicked);
     connect(learnButton_, &QPushButton::clicked, this, &SpellbookDialog::onLearnClicked);
+    connect(prepareButton_, &QPushButton::clicked, this, &SpellbookDialog::onPrepareClicked);
 
     if (!classInfo_ || !dnd::is_spellcaster(*classInfo_)) {
         statsLabel_->setText(QString("%1's class doesn't cast spells.").arg(q(character_.character_name)));
         for (QWidget* widget : std::initializer_list<QWidget*>{slotsLabel_, countsLabel_, table_, slotCombo_,
                                                                castButton_, forgetButton_, learnCombo_,
-                                                               learnButton_}) {
+                                                               learnButton_, prepareButton_}) {
             widget->setEnabled(false);
         }
         return;
@@ -141,14 +151,31 @@ void SpellbookDialog::reload() {
     int cantrips = 0;
     int spells = 0;
     for (const auto& spell : known_) (spell.level == 0 ? cantrips : spells) += 1;
-    QString spellsWord =
-        info.spellcasting.preparation == dnd::SpellPreparation::Known ? "Spells known" : "Spells prepared";
-    countsLabel_->setText(QString("Cantrips: %1 / %2 · %3: %4 / %5")
-                              .arg(cantrips)
-                              .arg(allowance.cantrips)
-                              .arg(spellsWord)
-                              .arg(spells)
-                              .arg(allowance.spells));
+    QString spellsWord = info.spellcasting.preparation == dnd::SpellPreparation::Known ? "Spells known"
+                         : isWizard()                                                  ? "Spellbook"
+                                                                                       : "Spells prepared";
+    QString counts = QString("Cantrips: %1 / %2 · %3: %4 / %5")
+                         .arg(cantrips)
+                         .arg(allowance.cantrips)
+                         .arg(spellsWord)
+                         .arg(spells)
+                         .arg(allowance.spells);
+    if (isWizard()) {
+        counts += QString(" · Prepared: %1 / %2")
+                      .arg(dnd::prepared_leveled_count(known_))
+                      .arg(dnd::prepared_spell_count(character_, info));
+    }
+    countsLabel_->setText(counts);
+
+    // When prepared spells can change: after a long rest, until the next fight.
+    std::string refusal = dnd::preparation_refusal(character_, info);
+    prepareLabel_->setVisible(dnd::prepares_spells(info));
+    prepareLabel_->setText(refusal.empty()
+                               ? "You can change prepared spells now (after a long rest, until your next fight)."
+                               : q(refusal));
+    table_->setColumnHidden(4, !isWizard());
+    forgetButton_->setText(preparesFromList() ? "Unprepare" : isWizard() ? "Remove from Book" : "Forget");
+    learnButton_->setText(preparesFromList() ? "Prepare" : isWizard() ? "Add to Spellbook" : "Learn");
 
     int selectedRow = table_->currentRow();
     table_->setRowCount(static_cast<int>(known_.size()));
@@ -163,6 +190,7 @@ void SpellbookDialog::reload() {
                        : spell.casting_time == dnd::CastingTime::BonusAction ? "Bonus Action"
                                                                               : "Reaction";
         table_->setItem(row, 3, new QTableWidgetItem(time));
+        table_->setItem(row, 4, new QTableWidgetItem(spell.level == 0 ? "always" : spell.prepared ? "✓" : ""));
     }
     if (selectedRow >= 0 && selectedRow < table_->rowCount()) table_->selectRow(selectedRow);
 
@@ -180,7 +208,10 @@ void SpellbookDialog::reload() {
                              spell.spell_id);
         learnCombo_->setItemData(learnCombo_->count() - 1, tooltipFor(spell), Qt::ToolTipRole);
     }
-    learnButton_->setEnabled(learnCombo_->count() > 0);
+    // A Cleric's, Druid's, or Paladin's list is what's prepared: it changes only in the window.
+    bool listLocked = preparesFromList() && !refusal.empty();
+    learnButton_->setEnabled(learnCombo_->count() > 0 && !listLocked);
+    learnButton_->setToolTip(listLocked ? q(refusal) : QString());
     onSelectionChanged();
 }
 
@@ -198,11 +229,19 @@ std::vector<dnd::Spell> SpellbookDialog::knownPlus(const dnd::Spell& extra) cons
 
 void SpellbookDialog::onSelectionChanged() {
     const dnd::Spell* spell = selectedSpell();
-    forgetButton_->setEnabled(spell != nullptr);
+    std::string refusal = dnd::preparation_refusal(character_, *classInfo_);
+    bool listLocked = preparesFromList() && !refusal.empty();
+    forgetButton_->setEnabled(spell != nullptr && !listLocked);
+    forgetButton_->setToolTip(listLocked ? q(refusal) : QString());
+    prepareButton_->setVisible(isWizard());
+    prepareButton_->setText(spell && spell->prepared && spell->level > 0 ? "Unprepare" : "Prepare");
+    prepareButton_->setEnabled(spell && spell->level > 0 && refusal.empty());
+    prepareButton_->setToolTip(!refusal.empty() ? q(refusal) : QString());
 
     slotCombo_->clear();
-    bool castable = spell && (spell->resolution == dnd::SpellResolution::Heal ||
-                              spell->resolution == dnd::SpellResolution::Utility);
+    bool castable = spell && spell->prepared &&
+                    (spell->resolution == dnd::SpellResolution::Heal ||
+                     spell->resolution == dnd::SpellResolution::Utility);
     if (spell && spell->level > 0) {
         for (int level = spell->level; level <= dnd::kMaxSpellLevel; ++level) {
             int remaining = dnd::slots_remaining(character_, *classInfo_, level);
@@ -256,6 +295,22 @@ void SpellbookDialog::onCastClicked() {
     reload();
 }
 
+bool SpellbookDialog::isWizard() const {
+    return classInfo_ && classInfo_->spellcasting.preparation == dnd::SpellPreparation::Spellbook;
+}
+
+bool SpellbookDialog::preparesFromList() const {
+    return classInfo_ && classInfo_->spellcasting.preparation == dnd::SpellPreparation::Prepared;
+}
+
+void SpellbookDialog::onPrepareClicked() {
+    const dnd::Spell* spell = selectedSpell();
+    if (!spell) return;
+    auto result = dnd::set_prepared(repository_, character_, *classInfo_, spell->spell_id, !spell->prepared);
+    messageLabel_->setText(q(result.message));
+    reload();
+}
+
 void SpellbookDialog::onForgetClicked() {
     const dnd::Spell* spell = selectedSpell();
     if (!spell) return;
@@ -275,7 +330,7 @@ void SpellbookDialog::onLearnClicked() {
         messageLabel_->setText(q(*error) + " Forget one first to swap it out.");
         return;
     }
-    repository_.add_character_spell(character_.character_id, spellId);
+    dnd::add_known_spell(repository_, character_, *classInfo_, spellId);
     messageLabel_->setText(QString("Learned %1.").arg(q(match->name)));
     reload();
 }

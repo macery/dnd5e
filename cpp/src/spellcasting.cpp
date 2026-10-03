@@ -222,9 +222,12 @@ int prepared_spell_count(const Character& character, const ClassInfo& class_info
 SpellAllowance spell_allowance(const Character& character, const ClassInfo& class_info) {
     SpellAllowance allowance;
     allowance.cantrips = cantrips_known(class_info, character.level);
-    allowance.spells = class_info.spellcasting.preparation == SpellPreparation::Known
-        ? spells_known(class_info, character.level)
-        : prepared_spell_count(character, class_info);
+    switch (class_info.spellcasting.preparation) {
+        case SpellPreparation::Known: allowance.spells = spells_known(class_info, character.level); break;
+        case SpellPreparation::Spellbook: allowance.spells = spellbook_size(character.level); break;
+        case SpellPreparation::Prepared: allowance.spells = prepared_spell_count(character, class_info); break;
+        case SpellPreparation::None: break;
+    }
 
     auto slots = spell_slots(class_info, character.level);
     for (int level = kMaxSpellLevel; level >= 1; --level) {
@@ -235,6 +238,30 @@ SpellAllowance spell_allowance(const Character& character, const ClassInfo& clas
     }
     if (allowance.max_spell_level == 0) allowance.spells = 0;
     return allowance;
+}
+
+bool prepares_spells(const ClassInfo& class_info) {
+    return class_info.spellcasting.preparation == SpellPreparation::Prepared ||
+           class_info.spellcasting.preparation == SpellPreparation::Spellbook;
+}
+
+std::string preparation_refusal(const Character& character, const ClassInfo& class_info) {
+    if (!prepares_spells(class_info)) return class_info.name + "s don't prepare spells.";
+    if (!character.may_prepare) {
+        return "Prepared spells change only after a long rest (and before the next fight).";
+    }
+    return "";
+}
+
+int prepared_leveled_count(const std::vector<Spell>& known) {
+    return static_cast<int>(
+        std::count_if(known.begin(), known.end(), [](const Spell& s) { return s.level > 0 && s.prepared; }));
+}
+
+bool starts_prepared(const Character& character, const ClassInfo& class_info, const std::vector<Spell>& known,
+                     const Spell& spell) {
+    if (class_info.spellcasting.preparation != SpellPreparation::Spellbook || spell.level == 0) return true;
+    return prepared_leveled_count(known) < prepared_spell_count(character, class_info);
 }
 
 std::optional<std::string> validate_spell_selection(const Character& character, const ClassInfo& class_info,

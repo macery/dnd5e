@@ -23,6 +23,7 @@
 #include "dnd/magic_items.hpp"
 #include "dnd/progression.hpp"
 #include "dnd/rules.hpp"
+#include "dnd/spellbook.hpp"
 #include "dnd/spellcasting.hpp"
 
 using dnd::Ability;
@@ -560,7 +561,9 @@ void LevelUpDialog::accept() {
         return;
     }
     repository_.update_character(leveled);
-    for (int spell_id : context_->chosenSpellIds) repository_.add_character_spell(leveled.character_id, spell_id);
+    for (int spell_id : context_->chosenSpellIds) {
+        dnd::add_known_spell(repository_, leveled, *context_->classInfo, spell_id);
+    }
     context_->after = leveled;
     QWizard::accept();
 }
