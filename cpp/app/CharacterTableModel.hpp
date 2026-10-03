@@ -5,6 +5,7 @@
 
 #include "dnd/character.hpp"
 #include "dnd/lookup_entry.hpp"
+#include "dnd/player.hpp"
 
 class CharacterTableModel : public QAbstractTableModel {
     Q_OBJECT
@@ -16,6 +17,7 @@ public:
     void setClasses(std::vector<dnd::LookupEntry> classes);
     void setRaces(std::vector<dnd::LookupEntry> races);
     void setAlignments(std::vector<dnd::LookupEntry> alignments);
+    void setCampaigns(std::vector<dnd::Campaign> campaigns);
     const dnd::Character& characterAt(int row) const;
 
     int rowCount(const QModelIndex& parent = QModelIndex()) const override;
@@ -28,4 +30,5 @@ private:
     std::vector<dnd::LookupEntry> classes_;
     std::vector<dnd::LookupEntry> races_;
     std::vector<dnd::LookupEntry> alignments_;
+    std::vector<dnd::Campaign> campaigns_;
 };

@@ -34,4 +34,5 @@ private:
     std::vector<QComboBox*> conflictCombos_;     // per plan character; nullptr if no conflict
     QTableWidget* table_ = nullptr;
     QLabel* summaryLabel_ = nullptr;
+    class QCheckBox* joinCampaign_ = nullptr;  // shown when a campaign is active
 };

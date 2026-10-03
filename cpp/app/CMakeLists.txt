@@ -22,6 +22,7 @@ add_library(dnd_ui STATIC
     MonsterListDialog.cpp
     CombatEncounterDialog.cpp
     AdventurePickerDialog.cpp
+    CampaignDialog.cpp
 )
 target_include_directories(dnd_ui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(dnd_ui PUBLIC dndcore Qt6::Widgets)

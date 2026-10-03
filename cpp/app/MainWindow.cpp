@@ -15,7 +15,9 @@
 #include <QLineEdit>
 #include <QMessageBox>
 #include <QModelIndex>
+#include <QLabel>
 #include <QPushButton>
+#include <QSignalBlocker>
 #include <QRegularExpression>
 #include <QSpinBox>
 #include <QStandardPaths>
@@ -27,6 +29,7 @@
 
 #include "AdventureDialogs.hpp"
 #include "AdventurePickerDialog.hpp"
+#include "CampaignDialog.hpp"
 #include "CharacterCreationWizard.hpp"
 #include "CharacterEditorDialog.hpp"
 #include "CharacterSheetDialog.hpp"
@@ -44,6 +47,7 @@
 
 #include "dnd/adventure.hpp"
 #include "dnd/adventure_run.hpp"
+#include "dnd/campaign.hpp"
 #include "dnd/encounter_difficulty.hpp"
 #include "dnd/character_io.hpp"
 #include "dnd/class_features.hpp"
@@ -60,6 +64,22 @@ MainWindow::MainWindow(dnd::Repository& repository, QWidget* parent)
 
     // Rows of buttons wrap when the window is narrow (FlowLayout), so the
     // main window fits small screens and wider fonts (Windows).
+    // The active campaign scopes play (docs/campaigns.md).
+    auto* campaignRow = new FlowLayout();
+    auto* campaignLabel = new QLabel("Campaign:", central);
+    campaignCombo_ = new QComboBox(central);
+    campaignCombo_->setMinimumWidth(200);
+    campaignCombo_->setToolTip("The table you're playing at. Fights, adventure parties, trading, and the Temple use "
+                               "only its characters, and its adventures resume separately. \"No campaign\" opens "
+                               "everything to every character.");
+    auto* campaignsButton = new QPushButton("Campaigns…", central);
+    campaignsButton->setToolTip("Create campaigns and choose who plays in each: characters from any players.");
+    campaignRow->addWidget(campaignLabel);
+    campaignRow->addWidget(campaignCombo_);
+    campaignRow->addWidget(campaignsButton);
+    rootLayout->addLayout(campaignRow);
+    connect(campaignsButton, &QPushButton::clicked, this, &MainWindow::onCampaignsClicked);
+
     auto* playerRow = new FlowLayout();
     playerCombo_ = new QComboBox(central);
     newPlayerName_ = new QLineEdit(central);
@@ -188,6 +208,9 @@ MainWindow::MainWindow(dnd::Repository& repository, QWidget* parent)
     connect(soloAdventureButton_, &QPushButton::clicked, this, &MainWindow::onSoloAdventureClicked);
 
     reloadLookupTables();
+    reloadCampaigns();
+    connect(campaignCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            &MainWindow::onCampaignSelected);
     reloadPlayers();
 }
 
@@ -216,6 +239,33 @@ void MainWindow::reloadLookupTables() {
     characterModel_->setClasses(classes_);
     characterModel_->setRaces(races_);
     characterModel_->setAlignments(alignments_);
+}
+
+void MainWindow::reloadCampaigns() {
+    auto campaigns = repository_.get_campaigns();
+    int active = repository_.active_campaign_id();
+    QSignalBlocker block(campaignCombo_);
+    campaignCombo_->clear();
+    campaignCombo_->addItem("No campaign (everyone plays)", 0);
+    for (const auto& campaign : campaigns) {
+        campaignCombo_->addItem(QString::fromStdString(campaign.name), campaign.campaign_id);
+    }
+    campaignCombo_->setCurrentIndex(std::max(0, campaignCombo_->findData(active)));
+    characterModel_->setCampaigns(campaigns);
+    std::string name = dnd::active_campaign_name(repository_);
+    setWindowTitle(name.empty() ? QString("DnD Engine") : QString("DnD Engine — %1").arg(QString::fromStdString(name)));
+}
+
+void MainWindow::onCampaignSelected(int /*index*/) {
+    repository_.set_active_campaign(campaignCombo_->currentData().toInt());
+    reloadCampaigns();
+}
+
+void MainWindow::onCampaignsClicked() {
+    CampaignDialog dialog(repository_, this);
+    dialog.exec();
+    reloadCampaigns();
+    reloadCharactersForCurrentPlayer();
 }
 
 void MainWindow::reloadCharactersForCurrentPlayer() {
@@ -574,7 +624,12 @@ void MainWindow::onLongRestClicked() {
 }
 
 std::vector<dnd::Character> MainWindow::charactersWhoCanFight(const QString& action) {
-    auto characters = repository_.get_characters();
+    auto characters = dnd::characters_in_play(repository_);  // the active campaign's, or everyone
+    if (characters.empty() && repository_.active_campaign_id() != 0) {
+        QMessageBox::information(this, action,
+            "No one plays in this campaign yet. Add characters with Campaigns… (or choose \"No campaign\").");
+        return {};
+    }
     std::vector<dnd::Character> living;
     for (const auto& character : characters) {
         if (!character.dead) living.push_back(character);
@@ -615,15 +670,17 @@ void MainWindow::onSoloAdventureClicked() {
         return;
     }
 
-    // Ratings are for the current player's characters (or everyone, if they have none).
+    // Ratings are for the current player's characters (or everyone, if they have none) --
+    // in a campaign, for the whole roster.
+    bool campaign = repository_.active_campaign_id() != 0;
     std::vector<int> partyLevels;
     for (const auto& character : living) {
-        if (character.player_id == currentPlayerId()) partyLevels.push_back(character.level);
+        if (campaign || character.player_id == currentPlayerId()) partyLevels.push_back(character.level);
     }
     if (partyLevels.empty()) {
         for (const auto& character : living) partyLevels.push_back(character.level);
     }
-    AdventurePickerDialog picker(partyLevels, repository_.get_monsters(), repository_.get_adventure_runs(true), this);
+    AdventurePickerDialog picker(partyLevels, repository_.get_monsters(), dnd::runs_in_play(repository_, true), this);
     if (picker.exec() != QDialog::Accepted) return;
     if (picker.isResume()) {
         playAdventure(picker.selectedRun());
@@ -631,7 +688,7 @@ void MainWindow::onSoloAdventureClicked() {
     }
 
     const dnd::AdventureTemplate& adventure = picker.selectedAdventure();
-    PartyDialog partyDialog(living, repository_.get_players(), classes_, currentPlayerId(),
+    PartyDialog partyDialog(living, repository_.get_players(), classes_, campaign ? 0 : currentPlayerId(),
                             QString::fromStdString(adventure.title), this);
     if (partyDialog.exec() != QDialog::Accepted) return;
 
@@ -639,6 +696,7 @@ void MainWindow::onSoloAdventureClicked() {
     run.title = adventure.title;
     run.party = partyDialog.partyIds();
     run.started_at = QDateTime::currentDateTimeUtc().toString(Qt::ISODate).toStdString();
+    run.campaign_id = repository_.active_campaign_id();
     run.run_id = repository_.add_adventure_run(run);
     playAdventure(run);
 }

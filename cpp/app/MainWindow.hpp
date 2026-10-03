@@ -47,12 +47,16 @@ private slots:
     void onMonstersClicked();
     void onCombatEncounterClicked();
     void onSoloAdventureClicked();
+    void onCampaignSelected(int index);
+    void onCampaignsClicked();
 
 private:
     // Plays a multi-scene adventure from wherever `run` is, saving it after each step.
     void playAdventure(dnd::AdventureRun run);
     void reloadPlayers();
     void reloadLookupTables();
+    // The campaign selector (and window title) from the database.
+    void reloadCampaigns();
     void reloadCharactersForCurrentPlayer();
     void adjustCurrentCharacterHp(int delta);
     // The selected character, or nullptr (after telling the user to pick
@@ -71,6 +75,7 @@ private:
     std::vector<dnd::LookupEntry> alignments_;
 
     QComboBox* playerCombo_ = nullptr;
+    QComboBox* campaignCombo_ = nullptr;
     QLineEdit* newPlayerName_ = nullptr;
     QPushButton* addPlayerButton_ = nullptr;
     QPushButton* editPlayerButton_ = nullptr;

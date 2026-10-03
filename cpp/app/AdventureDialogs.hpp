@@ -20,7 +20,8 @@ class QTableWidget;
 // Dialogs for multi-scene adventures (docs/adventures-and-currency.md).
 
 // Choose who goes on an adventure: every living character, checked by
-// default if they belong to `default_player_id`.
+// default if they belong to `default_player_id` (0: everyone, as in a
+// campaign).
 class PartyDialog : public QDialog {
     Q_OBJECT
 

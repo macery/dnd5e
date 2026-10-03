@@ -1,5 +1,6 @@
 #include "ImportDialog.hpp"
 
+#include <QCheckBox>
 #include <QComboBox>
 #include <QDateTime>
 #include <QDialogButtonBox>
@@ -16,6 +17,7 @@
 #include <stdexcept>
 
 #include "WindowSizing.hpp"
+#include "dnd/campaign.hpp"
 
 namespace {
 
@@ -126,11 +128,21 @@ ImportDialog::ImportDialog(dnd::Repository& repository, dnd::CharacterExport fil
     connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
 
+    std::string campaign = dnd::active_campaign_name(repository_);
+    if (!campaign.empty()) {
+        joinCampaign_ = new QCheckBox(
+            QString("Add the imported characters to the campaign \"%1\"").arg(QString::fromStdString(campaign)), this);
+        joinCampaign_->setChecked(true);
+        joinCampaign_->setToolTip("Build characters anywhere, then bring them to the table: they join the active "
+                                  "campaign and can play in it right away.");
+    }
+
     auto* layout = new QVBoxLayout(this);
     layout->addWidget(intro);
     layout->addLayout(form);
     layout->addWidget(table_, 1);
     layout->addWidget(summaryLabel_);
+    if (joinCampaign_) layout->addWidget(joinCampaign_);
     layout->addWidget(buttons);
     fitToScreen(this, QSize(640, 420), "Import");
 }
@@ -144,6 +156,10 @@ void ImportDialog::accept() {
     }
     try {
         result_ = dnd::apply_import(repository_, plan_, choices);
+        if (joinCampaign_ && joinCampaign_->isChecked()) {
+            int campaign = repository_.active_campaign_id();
+            for (int id : result_.imported_character_ids) repository_.set_character_campaign(id, campaign);
+        }
     } catch (const std::exception& error) {
         QMessageBox::warning(this, "Import Characters",
                              QString("The import failed, and nothing was changed:\n\n%1").arg(error.what()));

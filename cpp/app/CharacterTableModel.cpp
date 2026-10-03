@@ -9,7 +9,7 @@
 
 namespace {
 
-constexpr int kColumnCount = 7;
+constexpr int kColumnCount = 8;
 
 QString nameFor(const std::vector<dnd::LookupEntry>& entries, int id) {
     for (const auto& entry : entries) {
@@ -21,6 +21,12 @@ QString nameFor(const std::vector<dnd::LookupEntry>& entries, int id) {
 }  // namespace
 
 CharacterTableModel::CharacterTableModel(QObject* parent) : QAbstractTableModel(parent) {}
+
+void CharacterTableModel::setCampaigns(std::vector<dnd::Campaign> campaigns) {
+    beginResetModel();
+    campaigns_ = std::move(campaigns);
+    endResetModel();
+}
 
 void CharacterTableModel::setCharacters(std::vector<dnd::Character> characters) {
     beginResetModel();
@@ -96,6 +102,11 @@ QVariant CharacterTableModel::data(const QModelIndex& index, int role) const {
             if (character.dead) return "Dead";
             if (character.current_hp <= 0) return "Unconscious";
             return "";
+        case 7:
+            for (const auto& campaign : campaigns_) {
+                if (campaign.campaign_id == character.campaign_id) return QString::fromStdString(campaign.name);
+            }
+            return "";
         default: return {};
     }
 }
@@ -111,6 +122,7 @@ QVariant CharacterTableModel::headerData(int section, Qt::Orientation orientatio
         case 4: return "Level";
         case 5: return "HP";
         case 6: return "Status";
+        case 7: return "Campaign";
         default: return {};
     }
 }

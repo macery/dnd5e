@@ -88,7 +88,8 @@ PartyDialog::PartyDialog(const std::vector<dnd::Character>& living, const std::v
                                          list_);
         item->setData(Qt::UserRole, character.character_id);
         item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
-        item->setCheckState(character.player_id == default_player_id ? Qt::Checked : Qt::Unchecked);
+        bool chosen = default_player_id == 0 || character.player_id == default_player_id;
+        item->setCheckState(chosen ? Qt::Checked : Qt::Unchecked);
     }
 
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Cancel, this);

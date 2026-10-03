@@ -17,6 +17,7 @@
 #include <QVBoxLayout>
 
 #include "WindowSizing.hpp"
+#include "dnd/campaign.hpp"
 #include "dnd/currency.hpp"
 #include "dnd/equipment.hpp"
 #include "dnd/inventory.hpp"
@@ -62,10 +63,10 @@ QString withPlayer(const dnd::Character& character, const std::vector<dnd::Playe
     return text(character.character_name);
 }
 
-// Every living character except `giver`, labeled with their player.
+// Every living character in play except `giver`, labeled with their player.
 void fillRecipients(QComboBox* combo, dnd::Repository& repository, const dnd::Character& giver) {
     auto players = repository.get_players();
-    for (const auto& character : repository.get_characters()) {
+    for (const auto& character : dnd::characters_in_play(repository)) {
         if (character.character_id == giver.character_id || character.dead) continue;
         combo->addItem(withPlayer(character, players), character.character_id);
     }
@@ -208,7 +209,7 @@ ShopDialog::ShopDialog(dnd::Repository& repository, dnd::Character character,
 }
 
 void ShopDialog::reload() {
-    everyone_ = repository_.get_characters();
+    everyone_ = dnd::characters_in_play(repository_);  // the active campaign's, or everyone
     auto players = repository_.get_players();
     for (const auto& member : everyone_) {
         if (member.character_id == character_.character_id) character_ = member;

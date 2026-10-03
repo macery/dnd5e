@@ -54,6 +54,10 @@ It manages players and characters, computes a full character sheet from the 5e r
   - Dodge imposes disadvantage on attacks against you.
   - Drink Potion heals from your inventory.
   - The encounter ends with a victory or a defeat.
+- **Campaigns** ([docs/campaigns.md](docs/campaigns.md)): a table that plays together, with characters from any players.
+  - Choose the active campaign at the top of the main window, and build rosters with **Campaigns…**.
+  - While one is active, fights, adventure parties, trading, and the Temple use only its characters, and its adventures resume separately.
+  - Imports can join the active campaign. "No campaign" opens everything, as before.
 - **Magic items** ([docs/magic-items.md](docs/magic-items.md), 2014 DMG):
   - **+1/+2/+3 weapons, armor, and shields:** bonuses to attack and damage, or to AC.
   - **Healing potions** from Healing to Supreme.
@@ -264,7 +268,7 @@ Phases 1 (core and data) and 2 (UI) are done; see [docs/magic-system.md](docs/ma
 
 ### Characters
 
-- [ ] **Campaigns** (an idea to design): a level above players, so the structure becomes *campaign → players → characters*. Players build characters on their own, then import them into a campaign and choose who plays in each session. Party choice, Give Coins, Give Items, and the Temple's payers would then work within the campaign. Until then, any character can trade with or pay for any other, across players.
+- [x] **Campaigns** ([docs/campaigns.md](docs/campaigns.md)): rosters from any players, one active campaign that scopes fights, parties, trading, the Temple, and adventure runs, and imports that join it. The original idea: a level above players, so the structure becomes *campaign → players → characters*. Players build characters on their own, then import them into a campaign and choose who plays in each session. Party choice, Give Coins, Give Items, and the Temple's payers would then work within the campaign. Until then, any character can trade with or pay for any other, across players.
 - [x] **Character creation wizard**: a step-by-step `QWizard` that builds a complete, rules-valid level-1 character, instead of the current single form where everything is typed by hand. Several items below are steps of it.
   1. **Class:** sets the hit die and saving-throw proficiencies, and which skills you can choose from and how many (e.g. a Rogue picks 4).
   2. **Race:** ability score increases, speed, and traits.

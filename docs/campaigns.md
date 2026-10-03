@@ -1,6 +1,21 @@
 # Campaigns design
 
-Status: **in progress.** You asked me to go ahead within a limited budget, so I settled the questions below with the recommended answers myself (2026-10-02). Any of them can be revisited.
+Status: **phases 1 (core) and 2 (UI) done.** You asked me to go ahead within a limited budget, so I settled the questions below with the recommended answers myself (2026-10-02). Any of them can be revisited.
+
+**As built:**
+- **Core:**
+  - Migration 24 adds `Campaigns`, `Characters.CampaignID`, and `AdventureRuns.CampaignID`.
+  - The repository gains campaign CRUD, `active_campaign_id`, `set_active_campaign`, and `set_character_campaign`. `update_character` never changes a character's campaign.
+  - `dnd/campaign` provides `characters_in_play`, `in_play`, `runs_in_play`, and `active_campaign_name`.
+  - `give_coins`, `give_item`, and `raise_dead` refuse characters outside the active campaign.
+- **Main window:** a **Campaign** selector at the top ("No campaign (everyone plays)" or a campaign), a **Campaigns…** button, a Campaign column in the character table, and the campaign's name in the window title.
+- **`CampaignDialog`:** a list of campaigns (New and Delete), and for the selected one its name, notes, and a roster checklist of every player's characters. Characters in another campaign are marked "— in Dragon Heist", and checking them moves them.
+- **Scoped play:**
+  - Combat Encounter, the Initiative Tracker, and Solo Adventure use the campaign's living characters. The party is all of them by default, and difficulty ratings use the whole roster.
+  - New runs belong to the campaign, and Resume shows only its runs.
+  - Give Coins, Give Items, and the Temple list only its characters.
+- **Import:** "Add the imported characters to the campaign …", checked by default when one is active.
+- **Tests:** `tests/test_campaign.cpp` and `tests/ui/test_campaign_ui.cpp`. The Campaigns dialog is in the small-screen size test.
 
 ## Where things stand
 
