@@ -11,6 +11,7 @@
 #include "dnd/currency.hpp"
 #include "dnd/equipment.hpp"
 #include "dnd/inventory.hpp"
+#include "dnd/magic_items.hpp"
 #include "dnd/progression.hpp"
 #include "dnd/rules.hpp"
 #include "dnd/spellcasting.hpp"
@@ -1065,7 +1066,10 @@ int Encounter::save_bonus(int index, Ability ability) const {
     const Combatant& combatant = combatants_.at(static_cast<size_t>(index));
     if (combatant.is_character) {
         if (const Character* character = this->character(combatant.character_id)) {
-            return saving_throw_bonus(*character, ability) - combatant.roll_penalty;
+            auto inventory = inventories_.find(combatant.character_id);
+            int bonus = inventory != inventories_.end() ? saving_throw_bonus(*character, ability, inventory->second)
+                                                        : saving_throw_bonus(*character, ability);
+            return bonus - combatant.roll_penalty;
         }
     }
     return ability_modifier(combatant.ability_scores[static_cast<size_t>(ability)]);

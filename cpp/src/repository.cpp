@@ -123,8 +123,10 @@ constexpr const char* kItemColumns =
     "WeaponStats.Heavy, WeaponStats.TwoHanded, WeaponStats.Ranged, WeaponStats.Thrown, WeaponStats.Reach, "
     "WeaponStats.Loading, WeaponStats.Ammunition, "
     "ArmorStats.ItemID, ArmorStats.ArmorType, ArmorStats.BaseAC, ArmorStats.MaxDexBonus, "
-    "ArmorStats.StrengthRequirement, ArmorStats.StealthDisadvantage";
-constexpr int kItemColumnCount = 30;
+    "ArmorStats.StrengthRequirement, ArmorStats.StealthDisadvantage, "
+    "Items.Rarity, Items.BaseItem, Items.MagicBonus, Items.RequiresAttunement, Items.AcBonus, Items.SaveBonus, "
+    "Items.UnarmoredAcBonus, Items.SetsAbility, Items.SetsAbilityTo, Items.ScrollSpellID";
+constexpr int kItemColumnCount = 40;
 constexpr const char* kItemJoins =
     " LEFT JOIN WeaponStats ON WeaponStats.ItemID = Items.ItemID"
     " LEFT JOIN ArmorStats ON ArmorStats.ItemID = Items.ItemID";
@@ -169,6 +171,16 @@ Item read_item_row(sqlite3_stmt* stmt) {
         armor.stealth_disadvantage = sqlite3_column_int(stmt, 29) != 0;
         item.armor = armor;
     }
+    item.rarity = rarity_from_name(column_text(stmt, 30));
+    item.base_item = column_text(stmt, 31);
+    item.magic_bonus = sqlite3_column_int(stmt, 32);
+    item.requires_attunement = sqlite3_column_int(stmt, 33) != 0;
+    item.ac_bonus = sqlite3_column_int(stmt, 34);
+    item.save_bonus = sqlite3_column_int(stmt, 35);
+    item.unarmored_ac_bonus = sqlite3_column_int(stmt, 36);
+    item.sets_ability = column_text(stmt, 37);
+    item.sets_ability_to = sqlite3_column_int(stmt, 38);
+    item.scroll_spell_id = sqlite3_column_int(stmt, 39);
     return item;
 }
 
@@ -423,7 +435,8 @@ std::vector<Item> Repository::get_items() const {
 
 std::vector<InventoryEntry> Repository::get_inventory(int character_id) const {
     std::string sql = std::string("SELECT ") + kItemColumns +
-                       ", CharacterInventory.Quantity, CharacterInventory.Equipped FROM CharacterInventory "
+                       ", CharacterInventory.Quantity, CharacterInventory.Equipped, CharacterInventory.Attuned "
+                       "FROM CharacterInventory "
                        "JOIN Items ON Items.ItemID = CharacterInventory.ItemID" + kItemJoins +
                        " WHERE CharacterInventory.CharacterID = ? ORDER BY Items.Name;";
     Statement stmt(db_, sql.c_str());
@@ -434,6 +447,7 @@ std::vector<InventoryEntry> Repository::get_inventory(int character_id) const {
         entry.item = read_item_row(stmt.get());
         entry.quantity = sqlite3_column_int(stmt.get(), kItemColumnCount);
         entry.equipped = sqlite3_column_int(stmt.get(), kItemColumnCount + 1) != 0;
+        entry.attuned = sqlite3_column_int(stmt.get(), kItemColumnCount + 2) != 0;
         inventory.push_back(std::move(entry));
     }
     return inventory;
@@ -445,6 +459,14 @@ void Repository::set_equipped(int character_id, int item_id, bool equipped) {
     sqlite3_bind_int(stmt.get(), 2, character_id);
     sqlite3_bind_int(stmt.get(), 3, item_id);
     detail::run_and_expect_done(stmt, "set equipped");
+}
+
+void Repository::set_attuned(int character_id, int item_id, bool attuned) {
+    Statement stmt(db_, "UPDATE CharacterInventory SET Attuned = ? WHERE CharacterID = ? AND ItemID = ?;");
+    sqlite3_bind_int(stmt.get(), 1, attuned ? 1 : 0);
+    sqlite3_bind_int(stmt.get(), 2, character_id);
+    sqlite3_bind_int(stmt.get(), 3, item_id);
+    detail::run_and_expect_done(stmt, "set attuned");
 }
 
 void Repository::add_to_inventory(int character_id, int item_id, int quantity) {

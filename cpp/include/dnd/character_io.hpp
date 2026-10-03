@@ -23,6 +23,7 @@ struct ExportedItem {
     std::string item;
     int quantity = 1;
     bool equipped = false;
+    bool attuned = false;  // optional in files (added after version 1 shipped)
 };
 
 // One character, entirely by name.

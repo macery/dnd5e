@@ -7,7 +7,12 @@ namespace dnd {
 
 // Stored as text in Items.Category. Weapons, armor, and shields carry their
 // rules data in `weapon` / `armor` (the WeaponStats / ArmorStats tables).
-enum class ItemCategory { Gear, Consumable, Weapon, Armor, Shield };
+// Wondrous items are worn magic items (a Cloak of Protection); scrolls cast
+// a spell (docs/magic-items.md).
+enum class ItemCategory { Gear, Consumable, Weapon, Armor, Shield, Wondrous, Scroll };
+
+// A magic item's rarity (DMG ch. 7); None for mundane items.
+enum class Rarity { None, Common, Uncommon, Rare, VeryRare, Legendary };
 
 enum class WeaponCategory { Simple, Martial };
 
@@ -56,6 +61,20 @@ struct Item {
     int heal_bonus = 0;
     std::optional<WeaponStats> weapon;  // category Weapon
     std::optional<ArmorStats> armor;    // category Armor or Shield
+
+    // Magic items (docs/magic-items.md). All zero/empty for mundane items.
+    Rarity rarity = Rarity::None;
+    std::string base_item;        // a +N weapon's or armor's mundane item ("Longsword" for "Longsword +1")
+    int magic_bonus = 0;          // +N to attack and damage (weapon) or to AC (armor, shield)
+    bool requires_attunement = false;
+    int ac_bonus = 0;             // while attuned (Cloak and Ring of Protection)
+    int save_bonus = 0;           // to every saving throw, while attuned
+    int unarmored_ac_bonus = 0;   // while attuned, with no armor and no shield (Bracers of Defense)
+    std::string sets_ability;     // "Strength" or "Constitution": raised to sets_ability_to while attuned
+    int sets_ability_to = 0;
+    int scroll_spell_id = 0;      // category Scroll: the spell it casts
+
+    bool magical() const { return rarity != Rarity::None; }
 };
 
 // One stack of an item a character carries.
@@ -63,6 +82,9 @@ struct InventoryEntry {
     Item item;
     int quantity = 0;
     bool equipped = false;  // worn armor/shield, or the wielded weapon
+    // Attuned to (DMG): needed for items that require attunement to work. An
+    // attuned wondrous item counts as worn (docs/magic-items.md).
+    bool attuned = false;
 };
 
 }  // namespace dnd

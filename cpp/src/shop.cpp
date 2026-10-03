@@ -58,6 +58,10 @@ std::optional<Coins> pay(const Coins& purse, int cost_cp) {
     return left;
 }
 
+bool sold_in_shops(const Item& item) {
+    return item.rarity == Rarity::None || item.rarity == Rarity::Common || item.rarity == Rarity::Uncommon;
+}
+
 int sell_price_cp(const Item& item) {
     return std::max(0, item.cost_cp / 2);
 }
@@ -68,6 +72,7 @@ ShopResult buy(Repository& repo, int character_id, int item_id, int quantity) {
     auto item = find_item(repo, item_id);
     if (!character || !item) return refuse("That character or item no longer exists.");
     if (character->dead) return refuse(character->character_name + " is dead and can't go shopping.");
+    if (!sold_in_shops(*item)) return refuse("No shop sells the " + item->name + ": rare magic is found, not bought.");
 
     int price = item->cost_cp * quantity;
     auto paid = pay(character->coins, price);
@@ -94,6 +99,7 @@ ShopResult sell(Repository& repo, int character_id, int item_id, int quantity) {
     if (entry == inventory.end()) return refuse(character->character_name + " doesn't have that item.");
     const Item& item = entry->item;
     if (entry->equipped) return refuse("Unequip the " + item.name + " in the Inventory before selling it.");
+    if (entry->attuned) return refuse("End attunement to the " + item.name + " (a short rest) before selling it.");
     if (quantity > entry->quantity) {
         return refuse(character->character_name + " has only " + stack(entry->quantity, item.name) + ".");
     }
@@ -179,6 +185,7 @@ ShopResult give_item(Repository& repo, int from_id, int to_id, int item_id, int 
     if (entry == inventory.end()) return refuse(from->character_name + " doesn't have that item.");
     const Item& item = entry->item;
     if (entry->equipped) return refuse("Unequip the " + item.name + " before giving it away.");
+    if (entry->attuned) return refuse("End attunement to the " + item.name + " (a short rest) before giving it away.");
     if (quantity > entry->quantity) {
         return refuse(from->character_name + " has only " + stack(entry->quantity, item.name) + ".");
     }

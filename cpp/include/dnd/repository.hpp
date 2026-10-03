@@ -50,6 +50,9 @@ public:
     // Marks an inventory entry worn/wielded or not. Which combinations are
     // allowed (one armor, one shield, ...) is dnd::equip's job (dnd/equipment.hpp).
     void set_equipped(int character_id, int item_id, bool equipped);
+    // Marks an inventory entry attuned or not. The rules (one per short rest,
+    // at most three) are dnd/magic_items.hpp's.
+    void set_attuned(int character_id, int item_id, bool attuned);
 
     // Every seeded spell, ordered by level then name, with class_names
     // filled from ClassSpells.

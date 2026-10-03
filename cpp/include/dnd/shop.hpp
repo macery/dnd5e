@@ -22,6 +22,10 @@ namespace dnd {
 // leaves 8 sp. Coins that aren't needed are left alone.
 std::optional<Coins> pay(const Coins& purse, int cost_cp);
 
+// Whether shops sell it: mundane gear, and common and uncommon magic
+// items. Rarer magic comes only as loot (docs/magic-items.md).
+bool sold_in_shops(const Item& item);
+
 // What a shop pays for one: half the list price, rounded down (PHB ch. 5,
 // "Selling Treasure"). 0 means it can't be sold.
 int sell_price_cp(const Item& item);
@@ -44,8 +48,8 @@ struct ShopResult {
 // Pays for `quantity` (> 0) of the item and adds them to the inventory.
 ShopResult buy(Repository& repo, int character_id, int item_id, int quantity = 1);
 
-// Removes `quantity` (> 0) of the item and pays the sale price. Equipped
-// items can't be sold, and neither can items worth nothing.
+// Removes `quantity` (> 0) of the item and pays the sale price. Equipped or
+// attuned items can't be sold, and neither can items worth nothing.
 ShopResult sell(Repository& repo, int character_id, int item_id, int quantity = 1);
 
 // Charges `payer_id` (any character, the dead one included)
@@ -58,7 +62,7 @@ ShopResult raise_dead(Repository& repo, int character_id, int payer_id);
 ShopResult give_coins(Repository& repo, int from_id, int to_id, const Coins& coins);
 
 // Moves `quantity` (> 0) of an item from one character's pack to another's.
-// Equipped items must be unequipped first. Living receivers only, as above.
+// Equipped or attuned items can't be given. Living receivers only, as above.
 ShopResult give_item(Repository& repo, int from_id, int to_id, int item_id, int quantity = 1);
 
 }  // namespace dnd

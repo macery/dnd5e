@@ -5,6 +5,7 @@
 #include <map>
 
 #include "dnd/class_features.hpp"
+#include "dnd/magic_items.hpp"
 #include "dnd/rules.hpp"
 
 namespace dnd {
@@ -74,12 +75,14 @@ std::vector<std::string> race_weapon_proficiencies(const std::string& race_name)
 
 bool is_proficient_with_weapon(const std::string& class_name, const std::string& race_name, const Item& weapon) {
     if (!weapon.weapon) return false;
-    if (contains(race_weapon_proficiencies(race_name), weapon.name)) return true;
+    // A +1 rapier is still a rapier.
+    const std::string& name = weapon.base_item.empty() ? weapon.name : weapon.base_item;
+    if (contains(race_weapon_proficiencies(race_name), name)) return true;
     const ClassEquipment* info = class_equipment(class_name);
     if (!info) return false;
     if (weapon.weapon->category == WeaponCategory::Simple && info->weapons.simple) return true;
     if (weapon.weapon->category == WeaponCategory::Martial && info->weapons.martial) return true;
-    return contains(info->weapons.weapons, weapon.name);
+    return contains(info->weapons.weapons, name);
 }
 
 bool is_proficient_with_armor(const std::string& class_name, const Item& armor) {
@@ -121,8 +124,9 @@ std::string ArmorClassBreakdown::text() const {
     return result + " = " + std::to_string(total);
 }
 
-ArmorClassBreakdown calculate_armor_class(const Character& character, const std::string& class_name,
+ArmorClassBreakdown calculate_armor_class(const Character& stored, const std::string& class_name,
                                           const std::vector<InventoryEntry>& inventory) {
+    const Character character = with_item_scores(stored, inventory);  // an Amulet of Health's CON
     ArmorClassBreakdown ac;
     int dex = ability_modifier(character.dexterity);
     const InventoryEntry* armor = equipped_armor(inventory);
@@ -130,7 +134,7 @@ ArmorClassBreakdown calculate_armor_class(const Character& character, const std:
 
     if (armor && armor->item.armor) {
         const ArmorStats& stats = *armor->item.armor;
-        ac.parts.push_back({armor->item.name, stats.base_ac});
+        ac.parts.push_back({armor->item.name, stats.base_ac + armor->item.magic_bonus});
         switch (stats.type) {
             case ArmorType::Light:
                 ac.parts.push_back({"DEX", dex});
@@ -164,7 +168,18 @@ ArmorClassBreakdown calculate_armor_class(const Character& character, const std:
         }
         ac.parts = best;
     }
-    if (shield && shield->item.armor) ac.parts.push_back({"Shield", shield->item.armor->base_ac});
+    if (shield && shield->item.armor) {
+        ac.parts.push_back({shield->item.name, shield->item.armor->base_ac + shield->item.magic_bonus});
+    }
+    // Worn wondrous items: Cloak and Ring of Protection always; Bracers of
+    // Defense only with no armor and no shield.
+    for (const auto& entry : inventory) {
+        if (!item_active(entry)) continue;
+        if (entry.item.ac_bonus != 0) ac.parts.push_back({entry.item.name, entry.item.ac_bonus});
+        if (entry.item.unarmored_ac_bonus != 0 && !armor && !shield) {
+            ac.parts.push_back({entry.item.name, entry.item.unarmored_ac_bonus});
+        }
+    }
     if (armor && armor->item.armor && fighting_style(character, class_name) == FightingStyle::Defense) {
         ac.parts.push_back({"Defense", 1});
     }
@@ -176,8 +191,9 @@ ArmorClassBreakdown calculate_armor_class(const Character& character, const std:
 
 // --- Weapon attacks ------------------------------------------------------------
 
-WeaponAttack weapon_attack(const Character& character, const std::string& class_name, const std::string& race_name,
+WeaponAttack weapon_attack(const Character& stored, const std::string& class_name, const std::string& race_name,
                            const std::vector<InventoryEntry>& inventory) {
+    const Character character = with_item_scores(stored, inventory);  // Gauntlets of Ogre Power's STR
     WeaponAttack attack;
     int str = ability_modifier(character.strength);
     int dex = ability_modifier(character.dexterity);
@@ -210,7 +226,8 @@ WeaponAttack weapon_attack(const Character& character, const std::string& class_
 
     const WeaponStats& stats = *wielded->item.weapon;
     bool monk_weapon = monk_unarmored && !stats.ranged && !stats.two_handed && !stats.heavy &&
-                       (stats.category == WeaponCategory::Simple || wielded->item.name == "Shortsword");
+                       (stats.category == WeaponCategory::Simple || wielded->item.name == "Shortsword" ||
+                        wielded->item.base_item == "Shortsword");
     int ability = stats.ranged ? dex : (stats.finesse || monk_weapon) ? std::max(str, dex) : str;
     attack.uses_strength = !stats.ranged && ability == str;
     attack.finesse_or_ranged = stats.finesse || stats.ranged;
@@ -247,6 +264,10 @@ WeaponAttack weapon_attack(const Character& character, const std::string& class_
         case FightingStyle::None:
             break;
     }
+    if (item_active(*wielded)) {  // a +N weapon
+        attack.attack_bonus += wielded->item.magic_bonus;
+        attack.damage_bonus += wielded->item.magic_bonus;
+    }
     return attack;
 }
 
@@ -265,7 +286,7 @@ int walking_speed(const Character& character, const std::string& race_name,
     int speed = race ? race->speed : 30;
     const InventoryEntry* armor = equipped_armor(inventory);
     if (armor && armor->item.armor && armor->item.armor->type == ArmorType::Heavy &&
-        character.strength < armor->item.armor->strength_requirement) {
+        with_item_scores(character, inventory).strength < armor->item.armor->strength_requirement) {
         speed -= 10;
     }
     return speed;
@@ -305,6 +326,10 @@ EquipResult equip(std::vector<InventoryEntry>& inventory, int item_id, const Cha
     }
     const Item& item = target->item;
     ItemCategory category = item.category;
+    if (category == ItemCategory::Wondrous) {
+        result.error = item.name + " is worn by attuning to it, which takes a short rest.";
+        return result;
+    }
     if (category != ItemCategory::Weapon && category != ItemCategory::Armor && category != ItemCategory::Shield) {
         result.error = item.name + " can't be equipped.";
         return result;

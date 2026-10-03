@@ -12,6 +12,8 @@ const char* item_category_name(ItemCategory category) {
         case ItemCategory::Weapon: return "Weapon";
         case ItemCategory::Armor: return "Armor";
         case ItemCategory::Shield: return "Shield";
+        case ItemCategory::Wondrous: return "Wondrous";
+        case ItemCategory::Scroll: return "Scroll";
     }
     throw std::invalid_argument("unknown item category");
 }
@@ -22,7 +24,31 @@ ItemCategory item_category_from_name(const std::string& name) {
     if (name == "Weapon") return ItemCategory::Weapon;
     if (name == "Armor") return ItemCategory::Armor;
     if (name == "Shield") return ItemCategory::Shield;
+    if (name == "Wondrous") return ItemCategory::Wondrous;
+    if (name == "Scroll") return ItemCategory::Scroll;
     throw std::invalid_argument("unknown item category: " + name);
+}
+
+const char* rarity_name(Rarity rarity) {
+    switch (rarity) {
+        case Rarity::None: return "";
+        case Rarity::Common: return "Common";
+        case Rarity::Uncommon: return "Uncommon";
+        case Rarity::Rare: return "Rare";
+        case Rarity::VeryRare: return "Very Rare";
+        case Rarity::Legendary: return "Legendary";
+    }
+    throw std::invalid_argument("unknown rarity");
+}
+
+Rarity rarity_from_name(const std::string& name) {
+    if (name.empty()) return Rarity::None;
+    if (name == "Common") return Rarity::Common;
+    if (name == "Uncommon") return Rarity::Uncommon;
+    if (name == "Rare") return Rarity::Rare;
+    if (name == "VeryRare" || name == "Very Rare") return Rarity::VeryRare;
+    if (name == "Legendary") return Rarity::Legendary;
+    throw std::invalid_argument("unknown rarity: " + name);
 }
 
 const char* weapon_category_name(WeaponCategory category) {

@@ -16,6 +16,7 @@ add_executable(dnd_tests
     test_combat.cpp
     test_currency.cpp
     test_shop.cpp
+    test_magic_items.cpp
     test_damage.cpp
     test_dice.cpp
     test_effects.cpp

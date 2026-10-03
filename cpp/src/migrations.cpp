@@ -18,7 +18,7 @@ using detail::Statement;
 // for future schema changes -- never edit an existing one, since a
 // migration's sql is exactly what already ran on every database that has it
 // recorded in SchemaMigrations.
-constexpr std::array<Migration, 22> kMigrations = {{
+constexpr std::array<Migration, 23> kMigrations = {{
     {1, "initial schema: Players, Classes, Characters", R"sql(
         CREATE TABLE IF NOT EXISTS Players (
             PlayerID INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -747,6 +747,74 @@ constexpr std::array<Migration, 22> kMigrations = {{
     )sql"},
     {22, "add RevivalPenalty to Characters (raise dead)", R"sql(
         ALTER TABLE Characters ADD COLUMN RevivalPenalty INTEGER NOT NULL DEFAULT 0;
+    )sql"},
+    // Magic items (docs/magic-items.md): rarity, +N weapons and armor
+    // generated from the mundane ones, potions, wondrous items, and scrolls
+    // of the automated spells. Prices are inside the DMG's rarity ranges.
+    {23, "add magic items and attunement", R"sql(
+        ALTER TABLE Items ADD COLUMN Rarity TEXT NOT NULL DEFAULT '';
+        ALTER TABLE Items ADD COLUMN BaseItem TEXT NOT NULL DEFAULT '';
+        ALTER TABLE Items ADD COLUMN MagicBonus INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE Items ADD COLUMN RequiresAttunement INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE Items ADD COLUMN AcBonus INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE Items ADD COLUMN SaveBonus INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE Items ADD COLUMN UnarmoredAcBonus INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE Items ADD COLUMN SetsAbility TEXT NOT NULL DEFAULT '';
+        ALTER TABLE Items ADD COLUMN SetsAbilityTo INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE Items ADD COLUMN ScrollSpellID INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE CharacterInventory ADD COLUMN Attuned INTEGER NOT NULL DEFAULT 0;
+
+        UPDATE Items SET Rarity = 'Common' WHERE Name = 'Potion of Healing';
+
+        -- +1/+2/+3 weapons, armor, and shields: a copy of each mundane item.
+        CREATE TEMP TABLE MagicTiers (Category TEXT, Bonus INTEGER, Rarity TEXT, PriceCp INTEGER);
+        INSERT INTO MagicTiers VALUES
+            ('Weapon', 1, 'Uncommon', 40000),  ('Weapon', 2, 'Rare', 400000),     ('Weapon', 3, 'VeryRare', 2000000),
+            ('Armor', 1, 'Rare', 150000),      ('Armor', 2, 'VeryRare', 1500000), ('Armor', 3, 'Legendary', 6000000),
+            ('Shield', 1, 'Uncommon', 30000),  ('Shield', 2, 'Rare', 300000),     ('Shield', 3, 'VeryRare', 1500000);
+        INSERT INTO Items (Name, Category, Description, WeightLb, CostCp, Rarity, BaseItem, MagicBonus)
+            SELECT i.Name || ' +' || t.Bonus, i.Category,
+                   CASE i.Category
+                       WHEN 'Weapon' THEN 'A magic weapon: +' || t.Bonus || ' to attack and damage rolls. '
+                       ELSE 'Magic ' || lower(i.Category) || ': +' || t.Bonus || ' to AC. '
+                   END || i.Description,
+                   i.WeightLb, i.CostCp + t.PriceCp, t.Rarity, i.Name, t.Bonus
+            FROM Items i JOIN MagicTiers t ON t.Category = i.Category
+            WHERE i.Category IN ('Weapon', 'Armor', 'Shield') AND i.BaseItem = ''
+            ORDER BY i.Name, t.Bonus;
+        INSERT INTO WeaponStats (ItemID, WeaponCategory, DamageDiceCount, DamageDiceSides, DamageType, VersatileDiceSides,
+                                 Finesse, Light, Heavy, TwoHanded, Ranged, Thrown, Reach, Loading, Ammunition)
+            SELECT m.ItemID, w.WeaponCategory, w.DamageDiceCount, w.DamageDiceSides, w.DamageType, w.VersatileDiceSides,
+                   w.Finesse, w.Light, w.Heavy, w.TwoHanded, w.Ranged, w.Thrown, w.Reach, w.Loading, w.Ammunition
+            FROM Items m JOIN Items i ON i.Name = m.BaseItem JOIN WeaponStats w ON w.ItemID = i.ItemID;
+        INSERT INTO ArmorStats (ItemID, ArmorType, BaseAC, MaxDexBonus, StrengthRequirement, StealthDisadvantage)
+            SELECT m.ItemID, a.ArmorType, a.BaseAC, a.MaxDexBonus, a.StrengthRequirement, a.StealthDisadvantage
+            FROM Items m JOIN Items i ON i.Name = m.BaseItem JOIN ArmorStats a ON a.ItemID = i.ItemID;
+        DROP TABLE MagicTiers;
+
+        INSERT INTO Items (Name, Category, Description, WeightLb, CostCp, HealDiceCount, HealDiceSides, HealBonus, Rarity) VALUES
+            ('Potion of Greater Healing', 'Consumable', 'A red, glimmering liquid. Drinking it restores 4d4 + 4 hit points.', 0.5, 15000, 4, 4, 4, 'Uncommon'),
+            ('Potion of Superior Healing', 'Consumable', 'A red, glimmering liquid. Drinking it restores 8d4 + 8 hit points.', 0.5, 60000, 8, 4, 8, 'Rare'),
+            ('Potion of Supreme Healing', 'Consumable', 'A red, glimmering liquid. Drinking it restores 10d4 + 20 hit points.', 0.5, 600000, 10, 4, 20, 'VeryRare');
+
+        INSERT INTO Items (Name, Category, Description, WeightLb, CostCp, Rarity, RequiresAttunement,
+                           AcBonus, SaveBonus, UnarmoredAcBonus, SetsAbility, SetsAbilityTo) VALUES
+            ('Cloak of Protection', 'Wondrous', 'Requires attunement. +1 to AC and saving throws while you wear it.', 1, 40000, 'Uncommon', 1, 1, 1, 0, '', 0),
+            ('Ring of Protection', 'Wondrous', 'Requires attunement. +1 to AC and saving throws while you wear it.', 0, 350000, 'Rare', 1, 1, 1, 0, '', 0),
+            ('Bracers of Defense', 'Wondrous', 'Requires attunement. +2 to AC while you wear no armor and use no shield.', 1, 400000, 'Rare', 1, 0, 0, 2, '', 0),
+            ('Gauntlets of Ogre Power', 'Wondrous', 'Requires attunement. Your Strength is 19 while you wear them (no effect if it''s already 19 or higher).', 2, 50000, 'Uncommon', 1, 0, 0, 0, 'Strength', 19),
+            ('Amulet of Health', 'Wondrous', 'Requires attunement. Your Constitution is 19 while you wear it (no effect if it''s already 19 or higher).', 1, 400000, 'Rare', 1, 0, 0, 0, 'Constitution', 19);
+
+        -- Spell scrolls of the automated spells, levels 0-3 (DMG "Spell Scroll").
+        INSERT INTO Items (Name, Category, Description, WeightLb, CostCp, Rarity, ScrollSpellID)
+            SELECT 'Spell Scroll (' || Name || ')', 'Scroll',
+                   'Read it to cast ' || Name || (CASE Level WHEN 0 THEN ' (cantrip)' ELSE ' (level ' || Level || ')' END) ||
+                   ' without a spell slot; the scroll crumbles to dust. Only classes with the spell on their list can ' ||
+                   'read it, and a spell above your highest slot level needs a spellcasting check (DC 10 + its level). ' ||
+                   'Save DC ' || (CASE WHEN Level <= 2 THEN 13 ELSE 15 END) || ', attack +' || (CASE WHEN Level <= 2 THEN 5 ELSE 7 END) || '.',
+                   0, CASE Level WHEN 0 THEN 5000 WHEN 1 THEN 7500 WHEN 2 THEN 15000 ELSE 30000 END,
+                   CASE WHEN Level <= 1 THEN 'Common' ELSE 'Uncommon' END, SpellID
+            FROM Spells WHERE Level <= 3 AND Resolution <> 'Utility';
     )sql"},
 }};
 

@@ -76,7 +76,7 @@ ExportedCharacter export_one(const Repository& repo, const Character& c, const s
     out.spell_slots_used = c.spell_slots_used;
     out.feature_uses_spent = c.feature_uses_spent;
     for (const auto& entry : repo.get_inventory(c.character_id)) {
-        out.inventory.push_back({entry.item.name, entry.quantity, entry.equipped});
+        out.inventory.push_back({entry.item.name, entry.quantity, entry.equipped, entry.attuned});
     }
     for (const auto& spell : repo.get_character_spells(c.character_id)) out.spells.push_back(spell.name);
     out.coins = c.coins;
@@ -111,7 +111,9 @@ std::string to_json(const CharacterExport& file) {
         }
         json inventory = json::array();
         for (const auto& item : c.inventory) {
-            inventory.push_back({{"item", item.item}, {"quantity", item.quantity}, {"equipped", item.equipped}});
+            json entry = {{"item", item.item}, {"quantity", item.quantity}, {"equipped", item.equipped}};
+            if (item.attuned) entry["attuned"] = true;
+            inventory.push_back(entry);
         }
         characters.push_back({
             {"name", c.name},
@@ -210,7 +212,8 @@ ParseResult parse_character_file(const std::string& text) {
             if (c.contains("inventory")) {
                 for (const auto& item : c.at("inventory")) {
                     out.inventory.push_back(
-                        {item.at("item").get<std::string>(), item.value("quantity", 1), item.value("equipped", false)});
+                        {item.at("item").get<std::string>(), item.value("quantity", 1), item.value("equipped", false),
+                         item.value("attuned", false)});
                 }
             }
             out.spells = c.value("spells", std::vector<std::string>{});
@@ -409,6 +412,8 @@ ImportResult apply_import(Repository& repo, const ImportPlan& plan, const Import
                 if (item == items.end() || entry.quantity <= 0) continue;
                 repo.add_to_inventory(id, item->item_id, entry.quantity);
                 if (entry.equipped) repo.set_equipped(id, item->item_id, true);
+                // Max HP was exported with any Amulet of Health already counted.
+                if (entry.attuned) repo.set_attuned(id, item->item_id, true);
             }
             for (const auto& spell_name : source.spells) {
                 auto spell = std::find_if(spells.begin(), spells.end(), [&](const Spell& s) { return s.name == spell_name; });

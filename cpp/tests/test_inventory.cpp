@@ -1,5 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
 #include <stdexcept>
 #include <vector>
 
@@ -94,7 +95,11 @@ TEST_CASE("total_weight and format_cost", "[inventory]") {
 TEST_CASE("get_items returns the seeded items", "[inventory][repository]") {
     dnd::Repository repo(":memory:");
     auto items = repo.get_items();
-    REQUIRE(items.size() == 37);  // 8 gear + 16 weapons + 13 armor and shield
+    // 8 gear (including the Potion of Healing) + 16 weapons + 13 armor and
+    // shield; the rest are magic items (test_magic_items.cpp).
+    REQUIRE(std::count_if(items.begin(), items.end(), [](const dnd::Item& i) {
+                return !i.magical() || i.name == "Potion of Healing";
+            }) == 37);
 
     int potion_id = item_id_named(repo, "Potion of Healing");
     for (const auto& item : items) {

@@ -20,6 +20,7 @@
 #include "dnd/class_features.hpp"
 #include "dnd/dice.hpp"
 #include "dnd/level_up.hpp"
+#include "dnd/magic_items.hpp"
 #include "dnd/progression.hpp"
 #include "dnd/rules.hpp"
 #include "dnd/spellcasting.hpp"
@@ -550,7 +551,10 @@ void LevelUpDialog::accept() {
     dnd::Character leveled = context_->before;
     if (!context_->plan.ability_score_improvement) context_->choices.ability_increases.clear();
     try {
-        dnd::apply_level_up(leveled, context_->plan, context_->choices);
+        // An Amulet of Health's HP follows the new level (and any CON increase).
+        dnd::without_item_hp(leveled, repository_.get_inventory(leveled.character_id), [&](dnd::Character& c) {
+            dnd::apply_level_up(c, context_->plan, context_->choices);
+        });
     } catch (const std::invalid_argument& error) {
         QMessageBox::warning(this, "Level Up", error.what());
         return;

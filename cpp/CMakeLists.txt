@@ -44,6 +44,7 @@ add_library(dndcore
     src/combat.cpp
     src/currency.cpp
     src/shop.cpp
+    src/magic_items.cpp
     src/damage.cpp
     src/dice.cpp
     src/effects.cpp
