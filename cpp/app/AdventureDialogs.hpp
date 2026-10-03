@@ -10,6 +10,7 @@
 #include "dnd/player.hpp"
 #include "dnd/repository.hpp"
 
+class QComboBox;
 class QLabel;
 class QListWidget;
 class QPushButton;
@@ -52,6 +53,9 @@ private:
     std::vector<dnd::Character> characters_;
     std::vector<dnd::LookupEntry> classes_;
     std::vector<QSpinBox*> spins_;
+    // Per character: attune to one item, or end attunement to one (the
+    // item id, negative to end), or nullptr when there's nothing to choose.
+    std::vector<QComboBox*> attunementCombos_;
     QLabel* resultLabel_ = nullptr;
     QPushButton* restButton_ = nullptr;
     bool rested_ = false;

@@ -17,6 +17,7 @@
 #include "dnd/currency.hpp"
 #include "dnd/equipment.hpp"
 #include "dnd/inventory.hpp"
+#include "dnd/magic_items.hpp"
 
 namespace {
 std::string nameFor(const std::vector<dnd::LookupEntry>& entries, int id) {
@@ -53,10 +54,13 @@ InventoryDialog::InventoryDialog(dnd::Repository& repository, dnd::Character cha
     equipmentLabel_ = new QLabel(this);
     equipmentLabel_->setWordWrap(true);
 
-    table_ = new QTableWidget(0, 5, this);
-    table_->setHorizontalHeaderLabels({"Item", "Qty", "Weight", "Value", "Equipped"});
+    table_ = new QTableWidget(0, 6, this);
+    table_->setHorizontalHeaderLabels({"Item", "Qty", "Weight", "Value", "Equipped", "Attuned"});
     table_->horizontalHeaderItem(4)->setToolTip(
         "Worn armor and shield, and the wielded weapon. They set AC and the attack used in combat.");
+    table_->horizontalHeaderItem(5)->setToolTip(
+        "Magic items that require attunement work only while attuned: at most 3, and attuning to one takes a short "
+        "rest (choose it in the Short Rest dialog). Attuned wondrous items count as worn.");
     table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
     table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table_->setSelectionBehavior(QAbstractItemView::SelectRows);
@@ -126,13 +130,18 @@ void InventoryDialog::reload() {
     table_->setRowCount(static_cast<int>(inventory_.size()));
     for (int row = 0; row < static_cast<int>(inventory_.size()); ++row) {
         const auto& entry = inventory_[static_cast<size_t>(row)];
-        auto* nameItem = new QTableWidgetItem(QString::fromStdString(entry.item.name));
+        QString name = QString::fromStdString(entry.item.name);
+        if (entry.item.magical()) name += QString(" (%1)").arg(dnd::rarity_name(entry.item.rarity));
+        auto* nameItem = new QTableWidgetItem(name);
         nameItem->setToolTip(QString::fromStdString(entry.item.description));
         table_->setItem(row, 0, nameItem);
         table_->setItem(row, 1, new QTableWidgetItem(QString::number(entry.quantity)));
         table_->setItem(row, 2, new QTableWidgetItem(QString("%1 lb").arg(entry.item.weight_lb * entry.quantity)));
         table_->setItem(row, 3, new QTableWidgetItem(QString::fromStdString(dnd::format_cost(entry.item.cost_cp))));
         table_->setItem(row, 4, new QTableWidgetItem(entry.equipped ? "✓" : ""));
+        table_->setItem(row, 5, new QTableWidgetItem(entry.attuned ? "✓"
+                                                     : entry.item.requires_attunement ? "needs attunement"
+                                                                                      : ""));
     }
     if (selectedRow >= 0 && selectedRow < table_->rowCount()) table_->selectRow(selectedRow);
 
@@ -140,9 +149,11 @@ void InventoryDialog::reload() {
     weightLabel_->setText(QString("Carrying: %1 lb").arg(dnd::total_weight(inventory_)));
     int itemsValue = 0;
     for (const auto& entry : inventory_) itemsValue += entry.item.cost_cp * entry.quantity;
-    coinsLabel_->setText(QString("<b>Coins:</b> %1 · <b>Items worth:</b> %2")
+    coinsLabel_->setText(QString("<b>Coins:</b> %1 · <b>Items worth:</b> %2 · <b>Attuned:</b> %3 of %4")
                              .arg(QString::fromStdString(dnd::format_coins(character_.coins)),
-                                  QString::fromStdString(dnd::format_cp(itemsValue))));
+                                  QString::fromStdString(dnd::format_cp(itemsValue)))
+                             .arg(dnd::attuned_count(inventory_))
+                             .arg(dnd::kMaxAttunedItems));
 
     auto armorClass = dnd::calculate_armor_class(character_, className_, inventory_);
     auto attack = dnd::weapon_attack(character_, className_, raceName_, inventory_);
@@ -164,12 +175,14 @@ const dnd::InventoryEntry* InventoryDialog::selectedEntry() const {
 
 void InventoryDialog::onSelectionChanged() {
     const dnd::InventoryEntry* entry = selectedEntry();
-    dropButton_->setEnabled(entry != nullptr);
-    giveButton_->setEnabled(entry != nullptr && !entry->equipped);
-    giveButton_->setToolTip(entry && entry->equipped
-                                ? "Unequip it first."
-                                : "Hand the selected item to another character: share out loot, or pass a potion "
-                                  "to whoever needs it.");
+    bool attuned = entry && entry->attuned;
+    dropButton_->setEnabled(entry != nullptr && !attuned);
+    dropButton_->setToolTip(attuned ? "End attunement first (during a short rest)." : "");
+    giveButton_->setEnabled(entry != nullptr && !entry->equipped && !attuned);
+    giveButton_->setToolTip(entry && entry->equipped ? "Unequip it first."
+                            : attuned                ? "End attunement first (during a short rest)."
+                                                     : "Hand the selected item to another character: share out loot, "
+                                                       "or pass a potion to whoever needs it.");
     bool equippable = entry && (entry->item.weapon || entry->item.armor);
     equipButton_->setEnabled(equippable);
     equipButton_->setText(entry && entry->equipped ? "Unequip" : "Equip");

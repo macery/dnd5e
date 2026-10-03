@@ -1,6 +1,16 @@
 # Magic items design
 
-Status: **phase 1 (rules and data) done; phase 2 (scrolls and UI) in progress.** Decisions were settled on 2026-10-02; see [Decisions](#decisions).
+Status: **phases 1 (rules and data) and 2 (scrolls and UI) done.** Decisions were settled on 2026-10-02; see [Decisions](#decisions).
+
+**Phase 2 as built:**
+- **Combat:** a **Read Scroll** action shares the spell controls: the pack's scrolls, each marked "DC 11 check" or "can't read", the spell's effect with the scroll's DC and attack bonus, and targets. `Encounter::read_scroll` checks, rolls any spellcasting check, uses up the scroll (ItemUsed), and casts through the same path as Cast a Spell (`resolve_spell`).
+- **Short Rest dialog:** an **Attunement** column per character: attune to one item, or end attunement to one.
+- **Inventory:** rarity after magic item names, an **Attuned** column ("needs attunement" until then), an "Attuned: 1 of 3" count, and Drop and Give disabled for attuned items.
+- **Character sheet:** scores raised by items ("19 (+4) — Gauntlets of Ogre Power; 16 without it"), with saves and skills to match.
+- **Shop:** lists only what shops sell, with a **Magic items** filter and rarity after names.
+- **Boss loot:** the Goblin Warren's boss drops a Cloak of Protection; the Crypt's a Mace +1, a Potion of Greater Healing, and a Cure Wounds scroll; the Hill Giant's two Greater Healing potions, a Shield +1, and Gauntlets of Ogre Power.
+- **UI tests** (`tests/ui/test_magic_items_ui.cpp`): reading a scroll in combat, attuning on a short rest (and what that locks in the Inventory), the Shop's filter, and the sheet.
+- **Left for later** (README TODO): charged items, and reading scrolls outside combat.
 
 **Phase 1 as built:**
 - **Migration 23:**

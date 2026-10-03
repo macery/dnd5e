@@ -134,7 +134,8 @@ const std::vector<AdventureTemplate>& adventure_templates() {
                       {{"Wolf", 2}}, {{"Rations (1 day)", 2}}, 200, true),
                 scene("The Boss's Den", "A hobgoblin has taken charge of the warren. It isn't going to give it "
                       "up without a fight.",
-                      {{"Hobgoblin", 1}, {"Goblin", 2}}, {{"Potion of Healing", 2}}, 1500, false, true),
+                      {{"Hobgoblin", 1}, {"Goblin", 2}}, {{"Potion of Healing", 2}, {"Cloak of Protection", 1}}, 1500,
+                      false, true),
             },
         },
         {
@@ -150,7 +151,10 @@ const std::vector<AdventureTemplate>& adventure_templates() {
                       {{"Zombie", 2}, {"Skeleton", 1}}, {}, 500, true),
                 scene("The Ghouls' Feast", "The smell of the barrow's deepest room is the worst yet. Ghouls look up "
                       "from what they were eating.",
-                      {{"Ghoul", 2}}, {{"Potion of Healing", 2}, {"Healer's Kit", 1}}, 2000, false, true),
+                      {{"Ghoul", 2}},
+                      {{"Potion of Greater Healing", 1}, {"Healer's Kit", 1}, {"Mace +1", 1},
+                       {"Spell Scroll (Cure Wounds)", 1}},
+                      2000, false, true),
             },
         },
         {
@@ -165,7 +169,9 @@ const std::vector<AdventureTemplate>& adventure_templates() {
                       {{"Potion of Healing", 2}}, 1000, true),
                 scene("The Owlbear Pit", "The giant keeps a pet. It's hungry.", {{"Owlbear", 1}}, {}, 800),
                 scene("The Giant's Hall", "The hill giant is waiting in a hall of stolen timber, and it's angry.",
-                      {{"Hill Giant", 1}}, {{"Potion of Healing", 3}, {"Shield", 1}}, 5000, false, true),
+                      {{"Hill Giant", 1}},
+                      {{"Potion of Greater Healing", 2}, {"Shield +1", 1}, {"Gauntlets of Ogre Power", 1}}, 5000,
+                      false, true),
             },
         },
     };

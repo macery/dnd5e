@@ -18,6 +18,7 @@
 #include "dnd/currency.hpp"
 #include "dnd/equipment.hpp"
 #include "dnd/level_up.hpp"
+#include "dnd/magic_items.hpp"
 #include "dnd/progression.hpp"
 #include "dnd/rules.hpp"
 #include "dnd/spellcasting.hpp"
@@ -186,15 +187,26 @@ CharacterSheetDialog::CharacterSheetDialog(const dnd::Character& character,
         "A passive score (10 + Perception bonus) used instead of rolling, for noticing things without "
         "actively searching.");
 
+    // Scores with attuned magic items (Gauntlets of Ogre Power, Amulet of Health).
+    const dnd::Character scored = dnd::with_item_scores(character, inventory);
     auto* abilitiesGroup = new QGroupBox("Ability Scores", this);
     auto* abilitiesForm = new QFormLayout(abilitiesGroup);
     for (int i = 0; i < dnd::kAbilityCount; ++i) {
         auto ability = static_cast<dnd::Ability>(i);
-        int score = dnd::ability_score(character, ability);
+        int score = dnd::ability_score(scored, ability);
         int modifier = dnd::ability_modifier(score);
-        addExplainedRow(abilitiesForm, dnd::ability_name(ability),
-            new QLabel(QString("%1 (%2)").arg(score).arg(formatModifier(modifier)), abilitiesGroup),
-            dnd::ability_description(ability));
+        QString text = QString("%1 (%2)").arg(score).arg(formatModifier(modifier));
+        if (score != dnd::ability_score(character, ability)) {
+            for (const auto& entry : inventory) {
+                if (dnd::item_active(entry) && entry.item.sets_ability == dnd::ability_name(ability)) {
+                    text += QString(" — %1; %2 without it")
+                                .arg(QString::fromStdString(entry.item.name))
+                                .arg(dnd::ability_score(character, ability));
+                }
+            }
+        }
+        addExplainedRow(abilitiesForm, dnd::ability_name(ability), new QLabel(text, abilitiesGroup),
+                        dnd::ability_description(ability));
     }
 
     // Each saving throw / skill row is a bonus label plus a "Roll" button
@@ -224,7 +236,7 @@ CharacterSheetDialog::CharacterSheetDialog(const dnd::Character& character,
         QString name = QString(dnd::ability_name(ability)) + " Save";
         QString explanation = QString("Rolled to resist or shrug off an effect. %1").arg(dnd::ability_description(ability));
         addExplainedRow(savesForm, dnd::ability_name(ability),
-            buildRollableRow(savesGroup, name, dnd::saving_throw_bonus(character, ability),
+            buildRollableRow(savesGroup, name, dnd::saving_throw_bonus(character, ability, inventory),
                               dnd::has_save_proficiency(character, ability)),
             explanation);
     }
@@ -235,7 +247,7 @@ CharacterSheetDialog::CharacterSheetDialog(const dnd::Character& character,
         auto skill = static_cast<dnd::Skill>(i);
         QString name = dnd::skill_name(skill);
         addExplainedRow(skillsForm, name,
-            buildRollableRow(skillsGroup, name, dnd::skill_bonus(character, skill),
+            buildRollableRow(skillsGroup, name, dnd::skill_bonus(scored, skill),
                               dnd::has_skill_proficiency(character, skill)),
             dnd::skill_description(skill));
     }

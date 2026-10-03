@@ -167,7 +167,7 @@ TEST_CASE("inventory: giving an item to another player's character", "[ui][shop]
         settle();
         REQUIRE(selectRow(inventory, "Longsword"));
         REQUIRE_FALSE(button(inventory, "Give")->isEnabled());  // equipped
-        REQUIRE(selectRow(inventory, "Potion of Healing"));
+        REQUIRE(selectRow(inventory, "Potion of Healing (Common)"));
         REQUIRE(button(inventory, "Give")->isEnabled());
     }
 

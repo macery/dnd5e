@@ -54,6 +54,13 @@ It manages players and characters, computes a full character sheet from the 5e r
   - Dodge imposes disadvantage on attacks against you.
   - Drink Potion heals from your inventory.
   - The encounter ends with a victory or a defeat.
+- **Magic items** ([docs/magic-items.md](docs/magic-items.md), 2014 DMG):
+  - **+1/+2/+3 weapons, armor, and shields:** bonuses to attack and damage, or to AC.
+  - **Healing potions** from Healing to Supreme.
+  - **Wondrous items:** Cloak and Ring of Protection, Bracers of Defense, Gauntlets of Ogre Power, and Amulet of Health.
+  - **Attunement:** one item per short rest (chosen in the Short Rest dialog), three at most.
+  - **Spell scrolls:** a **Read Scroll** action in combat. Only classes with the spell on their list can read one, a spell above your highest slot needs a check, and the scroll's own DC and attack bonus apply.
+  - **Where they come from:** boss fights drop them, and the Shop sells the common and uncommon ones.
 - **Shop** ([docs/shops.md](docs/shops.md)): buy gear at PHB list price (with change made automatically) and sell it for half; equipped gear must be unequipped first. Give coins, or items from the Inventory, to any other living character. A temple raises the dead for 550 gp; they return with 1 HP and −4 to attack rolls, saving throws, and ability checks, easing by 1 each long rest.
 - **Solo adventures** ([docs/adventures-and-currency.md](docs/adventures-and-currency.md)): twelve pre-built adventures. Nine are single fights; three are multi-fight runs (The Goblin Warren, Crypt of the Restless, The Hill Giant's Toll).
   - **Party:** you pick who goes.
@@ -251,7 +258,9 @@ Phases 1 (core and data) and 2 (UI) are done; see [docs/magic-system.md](docs/ma
 - [ ] **Re-preparing spells**: Clerics, Druids, and Wizards choose new prepared spells after a long rest, and Wizards get a real spellbook (6 spells at level 1, plus 2 per level) to prepare from. Today, the spells picked at creation or learned later are the prepared list.
 - [ ] **Effects that outlast combat**: *Mage Armor* (8 hours; AC 13 + DEX while unarmored, which also needs [armor & shields](#inventory--items)) and exhaustion levels. They need effects saved on the character; today every effect ends with the fight.
 - [ ] **More utility spells with real effects**: 18 utility spells (*Light*, *Detect Magic*, *Command*, *Sanctuary*, ...) still have no automated effect.
-- [ ] **Magic items**: +1 weapons and armor, wands, scrolls, and so on, built on top of the inventory system.
+- [x] **Magic items** ([docs/magic-items.md](docs/magic-items.md)): +1/+2/+3 weapons, armor, and shields; four healing potions; five wondrous items with attunement; spell scrolls with the DMG's reading rules; boss loot and the Shop.
+- [ ] **Charged magic items**: wands and staffs (a Wand of Magic Missiles), with charges saved per item and recharged each dawn.
+- [ ] **Scrolls out of combat**: reading a *Cure Wounds* scroll from the Inventory, like Use for potions. Scrolls are combat-only for now.
 
 ### Characters
 

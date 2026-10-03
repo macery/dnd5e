@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "dnd/character_io.hpp"
+#include "dnd/encounter.hpp"
 #include "dnd/equipment.hpp"
 #include "dnd/inventory.hpp"
 #include "dnd/magic_items.hpp"
@@ -12,6 +13,19 @@
 #include "dnd/shop.hpp"
 
 namespace {
+
+class ScriptedRandomSource : public dnd::IRandomSource {
+public:
+    explicit ScriptedRandomSource(std::vector<int> values) : values_(std::move(values)) {}
+    int roll_die(int sides) override {
+        int value = index_ < values_.size() ? values_[index_++] : values_.back();
+        return std::min(value, sides);
+    }
+
+private:
+    std::vector<int> values_;
+    size_t index_ = 0;
+};
 
 struct Magic {
     dnd::Repository repo{":memory:"};
@@ -320,4 +334,96 @@ TEST_CASE("shops sell common and uncommon magic only", "[magic_items][shop]") {
     auto refused = dnd::buy(m.repo, aria.character_id, m.item("Amulet of Health").item_id);
     REQUIRE_FALSE(refused.ok);
     REQUIRE(refused.message == "No shop sells the Amulet of Health: rare magic is found, not bought.");
+}
+
+TEST_CASE("reading a scroll in combat", "[magic_items][encounter]") {
+    Magic m;
+    auto monster = [&](const std::string& name) {
+        for (const auto& mon : m.repo.get_monsters()) {
+            if (mon.name == name) return mon;
+        }
+        FAIL("no monster " << name);
+        return dnd::Monster{};
+    };
+    auto setup = [&](dnd::Encounter& encounter, const std::string& class_name, int level, const std::string& scroll) {
+        auto c = m.get(m.add(class_name, class_name));
+        c.level = level;
+        c.wisdom = 16;
+        c.charisma = 16;
+        c.intelligence = 16;
+        m.repo.update_character(c);
+        encounter.set_scroll_spells(m.repo.get_spells());
+        encounter.add_character(c, {}, {{m.item(scroll), 1}});
+        encounter.add_monsters(monster("Goblin"), 1);
+        encounter.roll_initiative();
+        encounter.take_events();
+        return c;
+    };
+    auto log_text = [](const std::vector<dnd::EncounterEvent>& events) {
+        std::string text;
+        for (const auto& e : events) {
+            if (e.kind == dnd::EncounterEvent::Kind::Log) text += e.text + "\n";
+        }
+        return text;
+    };
+
+    SECTION("a wizard reads Magic Missile: no slot spent, the scroll is gone") {
+        // Initiative: the wizard 20, the goblin 1; then 1d4 per dart.
+        ScriptedRandomSource rolls({20, 1, 2});
+        dnd::Dice dice(rolls);
+        dnd::Encounter encounter(dice, m.repo.get_classes(), m.repo.get_races());
+        auto zanna = setup(encounter, "Wizard", 1, "Spell Scroll (Magic Missile)");
+        REQUIRE(encounter.scrolls().size() == 1);
+        int scroll = m.item("Spell Scroll (Magic Missile)").item_id;
+        REQUIRE(encounter.read_scroll(scroll, {1}));
+        auto events = encounter.take_events();
+        auto text = log_text(events);
+        REQUIRE(text.find("Wizard reads a Spell Scroll (Magic Missile). Wizard casts Magic Missile.") != std::string::npos);
+        REQUIRE(encounter.character(zanna.character_id)->spell_slots_used[0] == 0);
+        REQUIRE(encounter.scrolls().empty());
+        REQUIRE(std::any_of(events.begin(), events.end(), [&](const dnd::EncounterEvent& e) {
+            return e.kind == dnd::EncounterEvent::Kind::ItemUsed && e.item_id == scroll;
+        }));
+    }
+    SECTION("a fighter can't read a Bless scroll") {
+        ScriptedRandomSource rolls({20, 1});
+        dnd::Dice dice(rolls);
+        dnd::Encounter encounter(dice, m.repo.get_classes(), m.repo.get_races());
+        setup(encounter, "Fighter", 3, "Spell Scroll (Bless)");
+        REQUIRE_FALSE(encounter.scroll_reading(m.item("Spell Scroll (Bless)"))->readable);
+        REQUIRE_FALSE(encounter.read_scroll(m.item("Spell Scroll (Bless)").item_id, {0}));
+        REQUIRE(encounter.scrolls().size() == 1);  // still there
+    }
+    SECTION("a level-1 paladin needs a check: failing wastes the scroll") {
+        // Initiative 20 / 1; the check: d20 5, CHA +3 = 8 vs DC 11.
+        ScriptedRandomSource rolls({20, 1, 5});
+        dnd::Dice dice(rolls);
+        dnd::Encounter encounter(dice, m.repo.get_classes(), m.repo.get_races());
+        setup(encounter, "Paladin", 1, "Spell Scroll (Bless)");
+        REQUIRE(encounter.read_scroll(m.item("Spell Scroll (Bless)").item_id, {0}));
+        auto text = log_text(encounter.take_events());
+        REQUIRE(text.find("spellcasting check d20(5) +3 vs DC 11 -> failure. The scroll crumbles to dust") !=
+                std::string::npos);
+        REQUIRE(encounter.scrolls().empty());
+        REQUIRE_FALSE(encounter.awaiting_action());  // the action is spent
+    }
+    SECTION("passing the check casts it") {
+        ScriptedRandomSource rolls({20, 1, 15});
+        dnd::Dice dice(rolls);
+        dnd::Encounter encounter(dice, m.repo.get_classes(), m.repo.get_races());
+        setup(encounter, "Paladin", 1, "Spell Scroll (Bless)");
+        REQUIRE(encounter.read_scroll(m.item("Spell Scroll (Bless)").item_id, {0}));
+        auto text = log_text(encounter.take_events());
+        REQUIRE(text.find("-> success. Paladin casts Bless.") != std::string::npos);
+    }
+    SECTION("saves use the scroll's DC") {
+        // Sacred Flame (Cleric cantrip): DC 13 from the scroll, whatever the cleric's own DC.
+        ScriptedRandomSource rolls({20, 1, 2, 6});
+        dnd::Dice dice(rolls);
+        dnd::Encounter encounter(dice, m.repo.get_classes(), m.repo.get_races());
+        setup(encounter, "Cleric", 5, "Spell Scroll (Sacred Flame)");
+        REQUIRE(encounter.read_scroll(m.item("Spell Scroll (Sacred Flame)").item_id, {1}));
+        auto text = log_text(encounter.take_events());
+        REQUIRE(text.find("vs DC 13") != std::string::npos);
+    }
 }

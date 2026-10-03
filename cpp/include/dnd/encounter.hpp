@@ -13,8 +13,10 @@
 #include "dnd/equipment.hpp"
 #include "dnd/item.hpp"
 #include "dnd/lookup_entry.hpp"
+#include "dnd/magic_items.hpp"
 #include "dnd/monster.hpp"
 #include "dnd/spell.hpp"
+#include "dnd/spellcasting.hpp"
 #include "dnd/turn.hpp"
 
 namespace dnd {
@@ -320,6 +322,21 @@ public:
     // the action or the bonus action.
     bool cast_spell(int spell_id, int slot_level, const std::vector<int>& targets);
 
+    // Spell scrolls (docs/magic-items.md). The encounter only knows the
+    // spells it's given: every spell a scroll might cast.
+    void set_scroll_spells(std::vector<Spell> spells);
+    const Spell* scroll_spell(const Item& scroll) const;
+    // The current character's scrolls of known spells.
+    std::vector<InventoryEntry> scrolls() const;
+    // Whether the current character can read it, and how (dnd/magic_items.hpp).
+    std::optional<ScrollReading> scroll_reading(const Item& scroll) const;
+    // Reads a scroll as the spell's casting time: the scroll's own save DC
+    // and attack bonus, at its own level, with no slot spent. A spell above
+    // the reader's highest slot needs a spellcasting check first; on a
+    // failure the scroll is wasted. Either way it's used up (ItemUsed).
+    // False, with nothing used, if it can't be read or the targets are wrong.
+    bool read_scroll(int item_id, const std::vector<int>& targets);
+
     std::vector<EncounterEvent> take_events();
 
 private:
@@ -397,6 +414,12 @@ private:
     void check_for_victory_or_defeat();
     void award_victory_experience();
     void award_loot();
+    // Logs why and returns false unless `targets` suit the spell.
+    bool spell_targets_ok(const Spell& spell, int caster_level, int slot, const std::vector<int>& targets);
+    // Everything after paying for a spell: the action, the rolls, effects,
+    // and the log (`cast_line` first).
+    void resolve_spell(int actor_index, const Spell& spell, const CasterStats& caster, int slot,
+                       const std::vector<int>& targets, const std::string& cast_line);
     // Adds the shares to the inventories, logs them, and reports ItemGained.
     void hand_out(const std::vector<LootShare>& shares);
     void award_coins();
@@ -421,6 +444,7 @@ private:
     std::string result_message_;
     std::string victory_text_;
     std::vector<LootGrant> loot_;
+    std::vector<Spell> scroll_spells_;
     std::vector<LootGrant> pending_loot_;  // won, waiting for divide_loot
     int coins_cp_ = 0;
     std::vector<EncounterEvent> events_;

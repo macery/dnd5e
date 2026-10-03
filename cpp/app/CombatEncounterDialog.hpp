@@ -108,6 +108,7 @@ private:
     std::vector<dnd::LookupEntry> classes_;
     // The current character's castable spells, parallel to spellCombo_.
     std::vector<dnd::Spell> castableSpells_;
+    bool showingScrolls_ = false;  // the spell controls list scrolls (Read Scroll) rather than spells
 
     dnd::SystemRandomSource randomSource_;
     dnd::Dice dice_;

@@ -1965,18 +1965,7 @@ bool Encounter::cast_spell(int spell_id, int slot_level, const std::vector<int>&
     caster.spell_attack_bonus -= actor.roll_penalty;
     int slot = spell.level == 0 ? 0 : slot_level;
 
-    bool no_targets = spell_targets_nobody(spell);
-    if (!no_targets) {
-        int max_targets = spell_max_targets(spell, caster.level, slot);
-        auto candidates = spell_target_candidates(spell);
-        bool all_valid = std::all_of(target_indices.begin(), target_indices.end(), [&](int index) {
-            return std::find(candidates.begin(), candidates.end(), index) != candidates.end();
-        });
-        if (target_indices.empty() || static_cast<int>(target_indices.size()) > max_targets || !all_valid) {
-            log(spell.name + " needs 1 to " + std::to_string(max_targets) + " targets checked.");
-            return false;
-        }
-    }
+    if (!spell_targets_ok(spell, caster.level, slot, target_indices)) return false;
     if (slot > 0) {
         auto options = spell_slot_options(spell);
         if (std::find(options.begin(), options.end(), slot) == options.end() ||
@@ -1986,6 +1975,29 @@ bool Encounter::cast_spell(int spell_id, int slot_level, const std::vector<int>&
         }
     }
     changed(actor.character_id);  // the spent slot
+    resolve_spell(actor_index, spell, caster, slot, target_indices,
+                  actor.name + " casts " + spell.name + (slot > 0 ? " (" + ordinal(slot) + "-level slot)" : "") + ".");
+    return true;
+}
+
+bool Encounter::spell_targets_ok(const Spell& spell, int caster_level, int slot, const std::vector<int>& target_indices) {
+    if (spell_targets_nobody(spell)) return true;
+    int max_targets = spell_max_targets(spell, caster_level, slot);
+    auto candidates = spell_target_candidates(spell);
+    bool all_valid = std::all_of(target_indices.begin(), target_indices.end(), [&](int index) {
+        return std::find(candidates.begin(), candidates.end(), index) != candidates.end();
+    });
+    if (target_indices.empty() || static_cast<int>(target_indices.size()) > max_targets || !all_valid) {
+        log(spell.name + " needs 1 to " + std::to_string(max_targets) + " targets checked.");
+        return false;
+    }
+    return true;
+}
+
+void Encounter::resolve_spell(int actor_index, const Spell& spell, const CasterStats& caster, int slot,
+                              const std::vector<int>& target_indices, const std::string& cast_line) {
+    const Combatant& actor = combatants_[static_cast<size_t>(actor_index)];
+    bool no_targets = spell_targets_nobody(spell);
     record_spell_cast(turn_, spell);  // the action or bonus action
 
     // Each target's roll modifiers, from every effect in play.
@@ -2017,7 +2029,7 @@ bool Encounter::cast_spell(int spell_id, int slot_level, const std::vector<int>&
     auto result = dnd::cast_spell(dice_, spell, caster, slot, targets);
     for (const auto& mods : target_mods) use_effects(mods.used_effects);
 
-    log(actor.name + " casts " + spell.name + (slot > 0 ? " (" + ordinal(slot) + "-level slot)" : "") + ".");
+    log(cast_line);
     // Casting a concentration spell ends any earlier concentration.
     if (spell.concentration) start_concentration(actor_index, spell.name);
 
@@ -2026,11 +2038,11 @@ bool Encounter::cast_spell(int spell_id, int slot_level, const std::vector<int>&
     if (spell.resolution == SpellResolution::Utility) {
         log("    " + spell.description);
         check_for_victory_or_defeat();
-        return true;
+        return;
     }
     if (no_targets) {
         check_for_victory_or_defeat();
-        return true;
+        return;
     }
     if (spell.resolution == SpellResolution::Save && !result.dice.empty()) {
         std::string dice;
@@ -2104,6 +2116,111 @@ bool Encounter::cast_spell(int spell_id, int slot_level, const std::vector<int>&
     }
 
     check_for_victory_or_defeat();
+}
+
+// --- Spell scrolls -----------------------------------------------------------
+
+void Encounter::set_scroll_spells(std::vector<Spell> spells) {
+    scroll_spells_ = std::move(spells);
+}
+
+const Spell* Encounter::scroll_spell(const Item& scroll) const {
+    for (const auto& spell : scroll_spells_) {
+        if (spell.spell_id == scroll.scroll_spell_id) return &spell;
+    }
+    return nullptr;
+}
+
+std::vector<InventoryEntry> Encounter::scrolls() const {
+    std::vector<InventoryEntry> held;
+    const Combatant* actor = current();
+    if (!actor || !actor->is_character) return held;
+    auto inventory = inventories_.find(actor->character_id);
+    if (inventory == inventories_.end()) return held;
+    for (const auto& entry : inventory->second) {
+        if (entry.item.category == ItemCategory::Scroll && entry.quantity > 0 && scroll_spell(entry.item)) {
+            held.push_back(entry);
+        }
+    }
+    return held;
+}
+
+std::optional<ScrollReading> Encounter::scroll_reading(const Item& scroll) const {
+    const Combatant* actor = current();
+    const Spell* spell = scroll_spell(scroll);
+    if (!actor || !actor->is_character || !spell) return std::nullopt;
+    const Character* reader = character(actor->character_id);
+    const ClassInfo* info = reader ? find_class_info_by_id(classes_, reader->class_id) : nullptr;
+    if (!info) return std::nullopt;
+    return dnd::read_scroll(*reader, *info, *spell);
+}
+
+bool Encounter::read_scroll(int item_id, const std::vector<int>& target_indices) {
+    if (!character_can_act()) return false;
+    int actor_index = current_index();
+    const Combatant& actor = combatants_[static_cast<size_t>(actor_index)];
+    auto& inventory = inventories_[actor.character_id];
+    auto held = std::find_if(inventory.begin(), inventory.end(), [&](const InventoryEntry& entry) {
+        return entry.item.item_id == item_id && entry.item.category == ItemCategory::Scroll && entry.quantity > 0;
+    });
+    if (held == inventory.end() || !scroll_spell(held->item)) {
+        log(actor.name + " has no such scroll -- choose another action.");
+        return false;
+    }
+    const Item scroll = held->item;
+    const Spell spell = *scroll_spell(scroll);
+    if (actor.armor_not_proficient) {
+        log(actor.name + " can't cast spells while wearing armor they aren't proficient with.");
+        return false;
+    }
+    if (is_raging(actor_index)) {
+        log(actor.name + " can't cast spells while raging.");
+        return false;
+    }
+    if (auto blocked = spell_casting_blocked(turn_, spell)) {
+        log(*blocked);
+        return false;
+    }
+    auto reading = scroll_reading(scroll);
+    if (!reading || !reading->readable) {
+        log(reading ? reading->reason : actor.name + " can't read that scroll.");
+        return false;
+    }
+    Character& reader = *character_mut(actor.character_id);
+    const ClassInfo& info = *find_class_info_by_id(classes_, reader.class_id);
+    CasterStats caster = caster_stats(reader, info);
+    // The scroll's own numbers (DMG), at its own level.
+    caster.spell_attack_bonus = reading->attack_bonus - actor.roll_penalty;
+    caster.spell_save_dc = reading->save_dc;
+    int slot = spell.level;
+    if (!spell_targets_ok(spell, caster.level, slot, target_indices)) return false;
+
+    // Read: the scroll is gone either way.
+    if (--held->quantity == 0) inventory.erase(held);
+    EncounterEvent used;
+    used.kind = EncounterEvent::Kind::ItemUsed;
+    used.character_id = actor.character_id;
+    used.item_id = scroll.item_id;
+    used.quantity = 1;
+    events_.push_back(used);
+
+    std::string line = actor.name + " reads a " + scroll.name;
+    if (reading->needs_check) {
+        int roll = dice_.roll(20, 1).front();
+        int bonus = caster.spellcasting_modifier - actor.roll_penalty;
+        bool passed = roll + bonus >= reading->check_dc;
+        line += ": spellcasting check d20(" + std::to_string(roll) + ") " + format_modifier(bonus) + " vs DC " +
+                std::to_string(reading->check_dc) + " -> " + (passed ? "success" : "failure");
+        if (!passed) {
+            record_spell_cast(turn_, spell);  // the action is spent all the same
+            log(line + ". The scroll crumbles to dust, its magic wasted.");
+            return true;
+        }
+        line += ". ";
+    } else {
+        line += ". ";
+    }
+    resolve_spell(actor_index, spell, caster, slot, target_indices, line + actor.name + " casts " + spell.name + ".");
     return true;
 }
 

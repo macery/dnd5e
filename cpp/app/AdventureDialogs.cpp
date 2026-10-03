@@ -1,5 +1,6 @@
 #include "AdventureDialogs.hpp"
 
+#include <QComboBox>
 #include <QDialogButtonBox>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -18,6 +19,7 @@
 #include "dnd/character_creation.hpp"
 #include "dnd/class_features.hpp"
 #include "dnd/level_up.hpp"
+#include "dnd/magic_items.hpp"
 #include "dnd/progression.hpp"
 #include "dnd/rules.hpp"
 #include "dnd/spellcasting.hpp"
@@ -121,12 +123,16 @@ ShortRestDialog::ShortRestDialog(dnd::Repository& repository, std::vector<dnd::C
     auto* intro = new QLabel(
         "An hour's rest. Each character can spend hit dice: roll each one and add your Constitution modifier "
         "to regain HP. Short-rest features (Second Wind, Action Surge, Ki, ...), a Warlock's slots, and a "
-        "Wizard's Arcane Recovery come back too. Spent hit dice return on a long rest (half your level).",
+        "Wizard's Arcane Recovery come back too. Spent hit dice return on a long rest (half your level). "
+        "A character can also spend the rest attuning to one magic item, or ending attunement to one.",
         this);
     intro->setWordWrap(true);
 
-    auto* table = new QTableWidget(static_cast<int>(characters_.size()), 4, this);
-    table->setHorizontalHeaderLabels({"Character", "HP", "Hit dice left", "Spend"});
+    auto* table = new QTableWidget(static_cast<int>(characters_.size()), 5, this);
+    table->setHorizontalHeaderLabels({"Character", "HP", "Hit dice left", "Spend", "Attunement"});
+    table->horizontalHeaderItem(4)->setToolTip(
+        "Magic items that require attunement work only while attuned. Attuning to one takes a short rest, one item "
+        "per rest, and a character can be attuned to at most 3. Ending attunement also takes a short rest.");
     table->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
     table->horizontalHeader()->setStretchLastSection(true);
     table->verticalHeader()->setVisible(false);
@@ -150,6 +156,30 @@ ShortRestDialog::ShortRestDialog(dnd::Repository& repository, std::vector<dnd::C
                                                                             : QString("− %1").arg(-dnd::ability_modifier(c.constitution))));
         table->setCellWidget(row, 3, spin);
         spins_.push_back(spin);
+
+        QComboBox* attunement = nullptr;
+        if (!c.dead) {
+            auto inventory = repository_.get_inventory(c.character_id);
+            for (const auto& entry : inventory) {
+                bool can_attune = dnd::attunement_refusal(inventory, entry.item.item_id).empty();
+                if (!can_attune && !entry.attuned) continue;
+                if (!attunement) {
+                    attunement = new QComboBox(table);
+                    attunement->addItem("—", 0);
+                }
+                if (entry.attuned) {
+                    attunement->addItem("End: " + q(entry.item.name), -entry.item.item_id);
+                } else {
+                    attunement->addItem("Attune: " + q(entry.item.name), entry.item.item_id);
+                }
+            }
+        }
+        if (attunement) {
+            table->setCellWidget(row, 4, attunement);
+        } else {
+            table->setItem(row, 4, new QTableWidgetItem("—"));
+        }
+        attunementCombos_.push_back(attunement);
     }
 
     resultLabel_ = new QLabel(this);
@@ -183,6 +213,21 @@ void ShortRestDialog::rest() {
         auto result = dnd::short_rest(c, *info, dice, spins_[i]->value());
         repository_.update_character(c);
         QStringList what;
+        if (QComboBox* attunement = attunementCombos_[i]) {
+            int choice = attunement->currentData().toInt();
+            if (choice != 0) {
+                auto change = choice > 0 ? dnd::attune(repository_, c.character_id, choice)
+                                         : dnd::end_attunement(repository_, c.character_id, -choice);
+                // "Aria attunes to the Cloak of Protection." -> "attunes to the Cloak of Protection"
+                QString line = q(change.message);
+                if (line.startsWith(q(c.character_name) + " ")) line = line.mid(c.character_name.size() + 1);
+                if (line.endsWith('.')) line.chop(1);
+                what << line;
+                for (const auto& fresh : repository_.get_characters()) {
+                    if (fresh.character_id == c.character_id) c = fresh;  // an Amulet of Health changes HP
+                }
+            }
+        }
         if (result.hit_dice_spent > 0) {
             what << QString("spends %1 hit %2, regains %3 HP (now %4/%5)")
                         .arg(result.hit_dice_spent)

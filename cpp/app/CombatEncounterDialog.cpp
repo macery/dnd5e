@@ -49,7 +49,7 @@ QString abilityTag(dnd::Ability ability) {
 
 // LayOnHandsAction is last: it's only in the combo on a Paladin's turn.
 enum Action { AttackAction, DashAction, DodgeAction, DrinkPotionAction, CastSpellAction, StabilizeAction,
-              LayOnHandsAction };
+              ReadScrollAction, LayOnHandsAction };
 }  // namespace
 
 CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::vector<dnd::Character> characters,
@@ -144,6 +144,12 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
     actionCombo_->setItemData(StabilizeAction,
         "Keep a dying ally from dying: a DC 10 Wisdom (Medicine) check, or automatic with a Healer's Kit. "
         "A stable creature stops making death saves.",
+        Qt::ToolTipRole);
+    actionCombo_->addItem("Read Scroll");
+    actionCombo_->setItemData(ReadScrollAction,
+        "Cast the spell on a spell scroll from your pack: no slot needed, and the scroll is used up. Only classes "
+        "with the spell on their list can read it; a spell above your highest slot level needs a spellcasting check "
+        "(DC 10 + its level). The scroll's own save DC and attack bonus apply.",
         Qt::ToolTipRole);
     targetCombo_ = new QComboBox(attackGroup);
     potionCombo_ = new QComboBox(attackGroup);
@@ -305,6 +311,7 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
     connect(spellSlotCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             [this](int) { refreshSpellInfo(); });
 
+    encounter_.set_scroll_spells(repository_.get_spells());  // what scrolls in packs can cast
     for (const auto& character : characters) {
         encounter_.add_character(character, repository_.get_character_spells(character.character_id),
                                  repository_.get_inventory(character.character_id));
@@ -546,6 +553,9 @@ void CombatEncounterDialog::onNextTurnClicked() {
 }
 
 void CombatEncounterDialog::onActionChanged(int /*index*/) {
+    // Cast a Spell and Read Scroll share the spell controls.
+    bool scrolls = actionCombo_->currentIndex() == ReadScrollAction;
+    if (scrolls != showingScrolls_) refreshSpellControls();
     updateActionControlsVisibility();
     refreshSpellInfo();
 }
@@ -576,6 +586,21 @@ void CombatEncounterDialog::onTakeActionClicked() {
             }
             acted = encounter_.stabilize(stabilizeCombo_->currentData().toInt());
             break;
+        case ReadScrollAction: {
+            const dnd::Spell* spell = selectedSpell();
+            if (!spell) {
+                log("No scrolls to read -- choose another action.");
+                return;
+            }
+            std::vector<int> targets;
+            for (int row = 0; row < spellTargetList_->count(); ++row) {
+                if (spellTargetList_->item(row)->checkState() == Qt::Checked) {
+                    targets.push_back(spellTargetList_->item(row)->data(Qt::UserRole).toInt());
+                }
+            }
+            acted = encounter_.read_scroll(spellCombo_->currentData().toInt(), targets);
+            break;
+        }
         case CastSpellAction: {
             const dnd::Spell* spell = selectedSpell();
             std::vector<int> targets;
@@ -735,9 +760,13 @@ void CombatEncounterDialog::updateActionControlsVisibility() {
         if (auto* row_label = attackFormLayout_->labelForField(field)) row_label->setVisible(is_stabilize);
     }
 
-    bool is_spell = actionCombo_->currentIndex() == CastSpellAction;
+    bool is_scroll = actionCombo_->currentIndex() == ReadScrollAction;
+    bool is_spell = actionCombo_->currentIndex() == CastSpellAction || is_scroll;
     const dnd::Spell* spell = is_spell ? selectedSpell() : nullptr;
-    bool show_slot = spell && spell->level > 0;
+    bool show_slot = spell && spell->level > 0 && !is_scroll;  // a scroll casts at its own level
+    if (auto* label = qobject_cast<QLabel*>(attackFormLayout_->labelForField(spellCombo_))) {
+        label->setText(is_scroll ? "Scroll" : "Spell");
+    }
     bool show_targets = spell && !dnd::spell_targets_nobody(*spell);
     for (auto [field, visible] : {std::pair<QWidget*, bool>{spellCombo_, is_spell}, {spellSlotCombo_, show_slot},
                                   {spellTargetList_, show_targets}, {spellInfoLabel_, is_spell}}) {
@@ -755,6 +784,11 @@ void CombatEncounterDialog::updateActionControlsVisibility() {
                                            : "Cast Spell");
             break;
         case StabilizeAction: takeActionButton_->setText("Stabilize"); break;
+        case ReadScrollAction:
+            takeActionButton_->setText(spell && spell->casting_time == dnd::CastingTime::BonusAction
+                                           ? "Read Scroll (bonus action)"
+                                           : "Read Scroll");
+            break;
         case LayOnHandsAction: takeActionButton_->setText("Lay on Hands"); break;
         default: {
             const dnd::Combatant* current = encounter_.current();
@@ -842,9 +876,28 @@ const dnd::Spell* CombatEncounterDialog::selectedSpell() const {
 }
 
 void CombatEncounterDialog::refreshSpellControls() {
-    castableSpells_ = encounter_.castable_spells();
+    showingScrolls_ = actionCombo_->currentIndex() == ReadScrollAction;
     spellCombo_->blockSignals(true);
     spellCombo_->clear();
+    castableSpells_.clear();
+    if (showingScrolls_) {
+        // The scrolls in the pack, each with the spell it casts (castableSpells_ stays parallel).
+        for (const auto& entry : encounter_.scrolls()) {
+            const dnd::Spell* spell = encounter_.scroll_spell(entry.item);
+            auto reading = encounter_.scroll_reading(entry.item);
+            QString note = !reading || !reading->readable ? " — can't read"
+                           : reading->needs_check ? QString(" — DC %1 check").arg(reading->check_dc)
+                                                  : QString();
+            castableSpells_.push_back(*spell);
+            spellCombo_->addItem(QString("%1 × %2%3").arg(entry.quantity).arg(q(entry.item.name), note),
+                                 entry.item.item_id);
+            spellCombo_->setItemData(spellCombo_->count() - 1, q(spell->description), Qt::ToolTipRole);
+        }
+        spellCombo_->blockSignals(false);
+        onSpellChanged();
+        return;
+    }
+    castableSpells_ = encounter_.castable_spells();
     for (const auto& spell : castableSpells_) {
         QString level = spell.level == 0 ? "cantrip" : ordinal(spell.level);
         if (spell.casting_time == dnd::CastingTime::BonusAction) level += ", bonus action";
@@ -890,10 +943,11 @@ void CombatEncounterDialog::refreshSpellInfo() {
         const dnd::Combatant* current = encounter_.current();
         QString why = current && current->armor_not_proficient
             ? "Can't cast spells while wearing armor you aren't proficient with (take it off in the Inventory)."
-            : "No spells to cast (none known, or no slots left).";
-        spellInfoLabel_->setText(spellCombo_->count() == 0 && actionCombo_->currentIndex() == CastSpellAction
-                                     ? why
-                                     : "");
+            : showingScrolls_ ? "No spell scrolls in the pack."
+                              : "No spells to cast (none known, or no slots left).";
+        bool casting = actionCombo_->currentIndex() == CastSpellAction ||
+                       actionCombo_->currentIndex() == ReadScrollAction;
+        spellInfoLabel_->setText(spellCombo_->count() == 0 && casting ? why : "");
         return;
     }
     const dnd::Combatant* current = encounter_.current();
@@ -903,6 +957,24 @@ void CombatEncounterDialog::refreshSpellInfo() {
 
     auto caster = dnd::caster_stats(*character, *info);
     int slot = spell->level == 0 ? 0 : spellSlotCombo_->currentData().toInt();
+    QString scrollNote;
+    if (showingScrolls_) {  // the scroll's own numbers, at its own level
+        slot = spell->level;
+        dnd::Item scroll;
+        scroll.scroll_spell_id = spell->spell_id;
+        if (auto reading = encounter_.scroll_reading(scroll)) {
+            if (!reading->readable) {
+                spellInfoLabel_->setText(q(reading->reason));
+                return;
+            }
+            caster.spell_attack_bonus = reading->attack_bonus;
+            caster.spell_save_dc = reading->save_dc;
+            scrollNote = reading->needs_check
+                ? QString(" Above your highest spell slot: a DC %1 spellcasting check first, or the scroll is wasted.")
+                      .arg(reading->check_dc)
+                : QString();
+        }
+    }
     int dice = dnd::spell_dice_count(*spell, caster.level, slot);
     int projectiles = dnd::spell_projectiles(*spell, caster.level, slot);
     QString roll = QString("%1d%2").arg(dice).arg(spell->dice_sides);
@@ -961,7 +1033,7 @@ void CombatEncounterDialog::refreshSpellInfo() {
         int max_targets = dnd::spell_max_targets(*spell, caster.level, slot);
         text += max_targets > 1 ? QString(" Choose up to %1 targets.").arg(max_targets) : " Choose 1 target.";
     }
-    spellInfoLabel_->setText(text);
+    spellInfoLabel_->setText(text + scrollNote);
 }
 
 void CombatEncounterDialog::log(const QString& line) {

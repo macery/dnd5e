@@ -71,9 +71,11 @@ void fillRecipients(QComboBox* combo, dnd::Repository& repository, const dnd::Ch
     }
 }
 
-constexpr dnd::ItemCategory kCategories[] = {dnd::ItemCategory::Gear, dnd::ItemCategory::Consumable,
+constexpr dnd::ItemCategory kCategories[] = {dnd::ItemCategory::Gear,   dnd::ItemCategory::Consumable,
                                              dnd::ItemCategory::Weapon, dnd::ItemCategory::Armor,
-                                             dnd::ItemCategory::Shield};
+                                             dnd::ItemCategory::Shield, dnd::ItemCategory::Wondrous,
+                                             dnd::ItemCategory::Scroll};
+constexpr int kMagicFilter = -2;  // the Buy tab's "Magic items" choice
 
 }  // namespace
 
@@ -83,7 +85,10 @@ ShopDialog::ShopDialog(dnd::Repository& repository, dnd::Character character,
     : QDialog(parent), repository_(repository), character_(std::move(character)) {
     className_ = nameFor(classes, character_.class_id);
     raceName_ = nameFor(races, character_.race);
-    items_ = repository_.get_items();
+    // What shops sell: mundane gear, and common and uncommon magic items.
+    for (auto& item : repository_.get_items()) {
+        if (dnd::sold_in_shops(item)) items_.push_back(std::move(item));
+    }
     setWindowTitle(QString("Shop — %1").arg(text(character_.character_name)));
 
     purseLabel_ = new QLabel(this);
@@ -101,6 +106,9 @@ ShopDialog::ShopDialog(dnd::Repository& repository, dnd::Character character,
     auto* buyPage = new QWidget(tabs_);
     categoryCombo_ = new QComboBox(buyPage);
     categoryCombo_->addItem("All items", -1);
+    categoryCombo_->addItem("Magic items", kMagicFilter);
+    categoryCombo_->setItemData(1, "Common and uncommon magic items. Rarer magic is found, not bought.",
+                                Qt::ToolTipRole);
     for (auto category : kCategories) {
         categoryCombo_->addItem(dnd::item_category_name(category), static_cast<int>(category));
     }
@@ -253,12 +261,16 @@ void ShopDialog::fillBuyTable() {
     int category = categoryCombo_->currentData().toInt();
     shownItems_.clear();
     for (size_t i = 0; i < items_.size(); ++i) {
-        if (category < 0 || static_cast<int>(items_[i].category) == category) shownItems_.push_back(static_cast<int>(i));
+        bool shown = category == -1 || (category == kMagicFilter && items_[i].magical()) ||
+                     static_cast<int>(items_[i].category) == category;
+        if (shown) shownItems_.push_back(static_cast<int>(i));
     }
     buyTable_->setRowCount(static_cast<int>(shownItems_.size()));
     for (int row = 0; row < static_cast<int>(shownItems_.size()); ++row) {
         const auto& item = items_[static_cast<size_t>(shownItems_[static_cast<size_t>(row)])];
-        auto* name = new QTableWidgetItem(text(item.name));
+        QString label = text(item.name);
+        if (item.magical()) label += QString(" (%1)").arg(dnd::rarity_name(item.rarity));
+        auto* name = new QTableWidgetItem(label);
         name->setToolTip(text(item.description));
         buyTable_->setItem(row, 0, name);
         buyTable_->setItem(row, 1, new QTableWidgetItem(dnd::item_category_name(item.category)));
