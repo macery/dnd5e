@@ -11,8 +11,9 @@
 namespace dnd {
 
 // Buying, selling, raising the dead, and handing coins and items over
-// (docs/shops.md). Until campaigns exist, any character can pay for or trade
-// with any other, whoever's player they are.
+// (docs/shops.md). Any character can pay for or trade with any other,
+// whoever's player they are -- within the active campaign, when there is
+// one (dnd/campaign.hpp).
 //
 // Prices are the PHB ch. 5 list prices (Item::cost_cp).
 

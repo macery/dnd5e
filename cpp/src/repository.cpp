@@ -24,7 +24,7 @@ constexpr const char* kCharacterColumns =
     "CharacterId, CharacterName, Class, Race, Alignment, PlayerID, Level, "
     "Strength, Dexterity, Constitution, Intelligence, Wisdom, Charisma, "
     "CurrentHP, MaxHP, SkillProficiencies, SaveProficiencies, "
-    "Experience, HitDiceUsed, Background, SpellSlotsUsed, Dead, FeatureUses, FightingStyle, Coins, RevivalPenalty";
+    "Experience, HitDiceUsed, Background, SpellSlotsUsed, Dead, FeatureUses, FightingStyle, Coins, RevivalPenalty, CampaignID";
 // (Characters.ArmorClass and WeaponID still exist but are no longer used:
 // AC and weapons come from equipped inventory items since migration 15.)
 
@@ -110,6 +110,7 @@ Character read_character_row(sqlite3_stmt* stmt) {
     character.fighting_style = column_text(stmt, 23);
     character.coins = parse_coins(column_text(stmt, 24));
     character.revival_penalty = sqlite3_column_int(stmt, 25);
+    character.campaign_id = sqlite3_column_int(stmt, 26);
     return character;
 }
 
@@ -666,14 +667,15 @@ std::vector<int> split_ids(const std::string& text) {
 
 int Repository::add_adventure_run(const AdventureRun& run) {
     Statement stmt(db_,
-        "INSERT INTO AdventureRuns (Title, NextScene, Party, Status, LongRestTaken, StartedAt) "
-        "VALUES (?, ?, ?, ?, ?, ?);");
+        "INSERT INTO AdventureRuns (Title, NextScene, Party, Status, LongRestTaken, StartedAt, CampaignID) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?);");
     bind_text(stmt, 1, run.title);
     sqlite3_bind_int(stmt.get(), 2, run.next_scene);
     bind_text(stmt, 3, join_ids(run.party));
     bind_text(stmt, 4, adventure_status_name(run.status));
     sqlite3_bind_int(stmt.get(), 5, run.long_rest_taken ? 1 : 0);
     bind_text(stmt, 6, run.started_at);
+    sqlite3_bind_int(stmt.get(), 7, run.campaign_id);
     detail::run_and_expect_done(stmt, "insert adventure run");
     return static_cast<int>(sqlite3_last_insert_rowid(db_));
 }
@@ -693,7 +695,7 @@ void Repository::update_adventure_run(const AdventureRun& run) {
 }
 
 std::vector<AdventureRun> Repository::get_adventure_runs(bool in_progress_only) const {
-    std::string sql = "SELECT AdventureRunID, Title, NextScene, Party, Status, LongRestTaken, StartedAt "
+    std::string sql = "SELECT AdventureRunID, Title, NextScene, Party, Status, LongRestTaken, StartedAt, CampaignID "
                       "FROM AdventureRuns";
     if (in_progress_only) sql += " WHERE Status = 'InProgress'";
     sql += " ORDER BY AdventureRunID DESC;";
@@ -708,9 +710,74 @@ std::vector<AdventureRun> Repository::get_adventure_runs(bool in_progress_only) 
         run.status = adventure_status_from_name(column_text(stmt.get(), 4));
         run.long_rest_taken = sqlite3_column_int(stmt.get(), 5) != 0;
         run.started_at = column_text(stmt.get(), 6);
+        run.campaign_id = sqlite3_column_int(stmt.get(), 7);
         runs.push_back(std::move(run));
     }
     return runs;
+}
+
+// --- Campaigns -------------------------------------------------------------------
+
+int Repository::add_campaign(const Campaign& campaign) {
+    Statement stmt(db_, "INSERT INTO Campaigns (Name, Notes, Active, CreatedAt) VALUES (?, ?, 0, ?);");
+    bind_text(stmt, 1, campaign.name);
+    bind_text(stmt, 2, campaign.notes);
+    bind_text(stmt, 3, campaign.created_at);
+    detail::run_and_expect_done(stmt, "insert campaign");
+    return static_cast<int>(sqlite3_last_insert_rowid(db_));
+}
+
+void Repository::update_campaign(const Campaign& campaign) {
+    Statement stmt(db_, "UPDATE Campaigns SET Name = ?, Notes = ? WHERE CampaignID = ?;");
+    bind_text(stmt, 1, campaign.name);
+    bind_text(stmt, 2, campaign.notes);
+    sqlite3_bind_int(stmt.get(), 3, campaign.campaign_id);
+    detail::run_and_expect_done(stmt, "update campaign");
+}
+
+void Repository::delete_campaign(int campaign_id) {
+    with_transaction([&] {
+        for (const char* sql : {"UPDATE Characters SET CampaignID = 0 WHERE CampaignID = ?;",
+                                "UPDATE AdventureRuns SET CampaignID = 0 WHERE CampaignID = ?;",
+                                "DELETE FROM Campaigns WHERE CampaignID = ?;"}) {
+            Statement stmt(db_, sql);
+            sqlite3_bind_int(stmt.get(), 1, campaign_id);
+            detail::run_and_expect_done(stmt, "delete campaign");
+        }
+    });
+}
+
+std::vector<Campaign> Repository::get_campaigns() const {
+    Statement stmt(db_, "SELECT CampaignID, Name, Notes, Active, CreatedAt FROM Campaigns ORDER BY Name;");
+    std::vector<Campaign> campaigns;
+    while (sqlite3_step(stmt.get()) == SQLITE_ROW) {
+        Campaign campaign;
+        campaign.campaign_id = sqlite3_column_int(stmt.get(), 0);
+        campaign.name = column_text(stmt.get(), 1);
+        campaign.notes = column_text(stmt.get(), 2);
+        campaign.active = sqlite3_column_int(stmt.get(), 3) != 0;
+        campaign.created_at = column_text(stmt.get(), 4);
+        campaigns.push_back(std::move(campaign));
+    }
+    return campaigns;
+}
+
+int Repository::active_campaign_id() const {
+    Statement stmt(db_, "SELECT CampaignID FROM Campaigns WHERE Active = 1 LIMIT 1;");
+    return sqlite3_step(stmt.get()) == SQLITE_ROW ? sqlite3_column_int(stmt.get(), 0) : 0;
+}
+
+void Repository::set_active_campaign(int campaign_id) {
+    Statement stmt(db_, "UPDATE Campaigns SET Active = (CampaignID = ?);");
+    sqlite3_bind_int(stmt.get(), 1, campaign_id);
+    detail::run_and_expect_done(stmt, "set active campaign");
+}
+
+void Repository::set_character_campaign(int character_id, int campaign_id) {
+    Statement stmt(db_, "UPDATE Characters SET CampaignID = ? WHERE CharacterId = ?;");
+    sqlite3_bind_int(stmt.get(), 1, campaign_id);
+    sqlite3_bind_int(stmt.get(), 2, character_id);
+    detail::run_and_expect_done(stmt, "set character campaign");
 }
 
 void Repository::with_transaction(const std::function<void()>& work) {

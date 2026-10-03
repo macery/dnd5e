@@ -14,6 +14,9 @@ struct Character {
     int race = 0;
     int alignment = 0;
     int player_id = 0;
+    // The campaign this character plays in (0 = none). Changed only with
+    // Repository::set_character_campaign, never by update_character.
+    int campaign_id = 0;
     int level = 1;
 
     int strength = 10;

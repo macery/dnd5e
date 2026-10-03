@@ -25,6 +25,7 @@ struct AdventureRun {
     AdventureStatus status = AdventureStatus::InProgress;
     bool long_rest_taken = false;  // at the current camp
     std::string started_at;
+    int campaign_id = 0;       // the campaign active when it started (0 = none)
 };
 
 // The scene to fight next; nullptr once the run is over.

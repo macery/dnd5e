@@ -18,7 +18,7 @@ using detail::Statement;
 // for future schema changes -- never edit an existing one, since a
 // migration's sql is exactly what already ran on every database that has it
 // recorded in SchemaMigrations.
-constexpr std::array<Migration, 23> kMigrations = {{
+constexpr std::array<Migration, 24> kMigrations = {{
     {1, "initial schema: Players, Classes, Characters", R"sql(
         CREATE TABLE IF NOT EXISTS Players (
             PlayerID INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -815,6 +815,19 @@ constexpr std::array<Migration, 23> kMigrations = {{
                    0, CASE Level WHEN 0 THEN 5000 WHEN 1 THEN 7500 WHEN 2 THEN 15000 ELSE 30000 END,
                    CASE WHEN Level <= 1 THEN 'Common' ELSE 'Uncommon' END, SpellID
             FROM Spells WHERE Level <= 3 AND Resolution <> 'Utility';
+    )sql"},
+    // Campaigns (docs/campaigns.md): rosters of characters from any players,
+    // one active at a time, and adventure runs that belong to one.
+    {24, "add Campaigns", R"sql(
+        CREATE TABLE Campaigns (
+            CampaignID INTEGER PRIMARY KEY AUTOINCREMENT,
+            Name       TEXT NOT NULL UNIQUE,
+            Notes      TEXT NOT NULL DEFAULT '',
+            Active     INTEGER NOT NULL DEFAULT 0,
+            CreatedAt  TEXT NOT NULL DEFAULT ''
+        );
+        ALTER TABLE Characters ADD COLUMN CampaignID INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE AdventureRuns ADD COLUMN CampaignID INTEGER NOT NULL DEFAULT 0;
     )sql"},
 }};
 

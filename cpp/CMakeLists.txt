@@ -45,6 +45,7 @@ add_library(dndcore
     src/currency.cpp
     src/shop.cpp
     src/magic_items.cpp
+    src/campaign.cpp
     src/damage.cpp
     src/dice.cpp
     src/effects.cpp

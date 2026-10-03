@@ -82,6 +82,19 @@ public:
     // Newest first; with `in_progress_only`, just the ones that can be resumed.
     std::vector<AdventureRun> get_adventure_runs(bool in_progress_only = false) const;
 
+    // Campaigns (docs/campaigns.md), by name. Deleting one keeps its
+    // characters and runs; they just leave it.
+    int add_campaign(const Campaign& campaign);
+    void update_campaign(const Campaign& campaign);  // name and notes
+    void delete_campaign(int campaign_id);
+    std::vector<Campaign> get_campaigns() const;
+    // The active campaign's id, or 0 when none is.
+    int active_campaign_id() const;
+    // Makes `campaign_id` the only active campaign (0: none).
+    void set_active_campaign(int campaign_id);
+    // Moves a character into a campaign (0: out of any).
+    void set_character_campaign(int character_id, int campaign_id);
+
     // Runs `work` atomically: everything it changes is committed, or -- if it
     // throws -- rolled back and the exception rethrown. Nests safely (a
     // savepoint, not BEGIN).

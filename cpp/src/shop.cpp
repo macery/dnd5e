@@ -2,6 +2,7 @@
 
 #include <algorithm>
 
+#include "dnd/campaign.hpp"
 #include "dnd/inventory.hpp"
 
 namespace dnd {
@@ -121,6 +122,7 @@ ShopResult raise_dead(Repository& repo, int character_id, int payer_id) {
     auto payer = find_character(repo, payer_id);
     if (!character || !payer) return refuse("That character no longer exists.");
     if (!character->dead) return refuse(character->character_name + " isn't dead.");
+    if (!in_play(repo, *payer)) return refuse(payer->character_name + " isn't in this campaign.");
     bool self_paid = payer_id == character_id;
     auto paid = pay(payer->coins, kRaiseDeadCostCp);
     if (!paid) {
@@ -152,6 +154,7 @@ ShopResult give_coins(Repository& repo, int from_id, int to_id, const Coins& coi
     auto to = find_character(repo, to_id);
     if (!from || !to) return refuse("That character no longer exists.");
     if (to->dead) return refuse(to->character_name + " is dead.");
+    if (!in_play(repo, *to)) return refuse(to->character_name + " isn't in this campaign.");
     if (total_cp(coins) <= 0) return refuse("Choose some coins to give.");
     for (int i = 0; i < kCoinCount; ++i) {
         size_t slot = static_cast<size_t>(i);
@@ -179,6 +182,7 @@ ShopResult give_item(Repository& repo, int from_id, int to_id, int item_id, int 
     auto to = find_character(repo, to_id);
     if (!from || !to) return refuse("That character no longer exists.");
     if (to->dead) return refuse(to->character_name + " is dead.");
+    if (!in_play(repo, *to)) return refuse(to->character_name + " isn't in this campaign.");
     auto inventory = repo.get_inventory(from_id);
     auto entry = std::find_if(inventory.begin(), inventory.end(),
                               [item_id](const InventoryEntry& e) { return e.item.item_id == item_id; });
