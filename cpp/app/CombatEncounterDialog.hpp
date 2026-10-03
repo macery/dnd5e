@@ -125,6 +125,7 @@ private:
     QPushButton* rollInitiativeButton_ = nullptr;
     QPushButton* nextTurnButton_ = nullptr;
     QPushButton* continueButton_ = nullptr;  // adventures: shown once the fight is over
+    QCheckBox* reactionsBox_ = nullptr;      // Automatic reactions
     QGroupBox* lootGroup_ = nullptr;
     QGridLayout* lootGrid_ = nullptr;
     struct LootRow {

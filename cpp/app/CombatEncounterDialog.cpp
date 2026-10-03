@@ -123,7 +123,7 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
         "Rebuke (Warlocks) when hurt. Each spends a slot (Uncanny Dodge spends nothing) and the character's reaction "
         "until their next turn. Uncheck to save slots.");
     connect(reactionsBox, &QCheckBox::toggled, this, [this](bool on) { encounter_.set_auto_reactions(on); });
-    turnRow->addWidget(reactionsBox);
+    reactionsBox_ = reactionsBox;  // on its own line: the turn row is already as wide as small screens allow
     turnRow->addStretch(1);
     turnRow->addWidget(currentTurnLabel_);
 
@@ -271,6 +271,7 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
     fightLayout->addLayout(monsterRow);
     fightLayout->addWidget(difficultyLabel_);
     fightLayout->addLayout(turnRow);
+    fightLayout->addWidget(reactionsBox_);
     fightLayout->addWidget(tableAndLog, 1);
 
     auto* turnPanel = new QWidget(this);
