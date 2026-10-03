@@ -18,6 +18,7 @@ enum class SpellResolution {
     Utility,    // no automated effect yet: casting just spends the slot and shows the description
     Buff,       // no roll: applies its effects to allies or the caster (Bless, Shield of Faith)
     Stabilize,  // a dying creature becomes stable (Spare the Dying)
+    Revive,     // a character who died in this fight returns with 1 HP (Revivify)
 };
 
 // When a spell's effect lands (SpellEffects.Trigger).
@@ -49,6 +50,9 @@ struct SpellEffectSpec {
     int rounds = 0;
     bool until_used = false;
     std::string label;
+    // The target repeats the spell's save against the caster's DC at the end
+    // of each of its turns; success ends it (Hold Person).
+    bool repeat_save = false;
 };
 
 enum class CastingTime { Action, BonusAction, Reaction };
@@ -96,6 +100,9 @@ struct Spell {
     // Only creatures of this type can be targeted ("Humanoid" for Charm
     // Person); empty for any.
     std::string target_creature_type;
+    // An item the spell uses up, which the caster must carry ("Diamonds
+    // (300 gp)" for Revivify); empty for none. Scrolls don't need it (DMG).
+    std::string consumed_item;
     std::vector<SpellEffectSpec> effects;  // SpellEffects rows
 
     std::vector<std::string> class_names;  // classes whose list includes it (ClassSpells)

@@ -5,6 +5,7 @@
 
 #include <QCheckBox>
 #include <QGroupBox>
+#include <QListWidget>
 #include <QPlainTextEdit>
 #include <QSplitter>
 
@@ -230,4 +231,36 @@ TEST_CASE("combat: closing the window hands out undivided loot", "[ui][combat][l
         }
     }
     REQUIRE(torches == 2);  // none lost
+}
+
+TEST_CASE("combat: a level-5 wizard casts Fireball at several targets", "[ui][combat][spells23]") {
+    World world;
+    auto zanna = tough(world, "Zanna", "Wizard", 5, {});
+    for (const auto& spell : world.repo.get_spells()) {
+        if (spell.name == "Fireball") world.repo.add_character_spell(zanna.character_id, spell.spell_id);
+    }
+    AdventureFight fight;
+    fight.title = "Test";
+    fight.scene.title = "Orcs";
+    fight.scene.narration = "Orcs.";
+    fight.scene.monsters = {{"Orc", 3}};
+    CombatEncounterDialog combat(world.repo, {zanna}, world.repo.get_monsters(), nullptr, &fight);
+    combat.show();
+    button(combat, "Roll Initiative")->click();
+    settle();
+
+    REQUIRE(choose(combat, "Cast a Spell"));
+    REQUIRE(choose(combat, "Fireball (3rd)"));
+    REQUIRE(visibleText(combat).contains("Choose up to 6 targets."));
+    QListWidget* targets = nullptr;
+    for (auto* list : combat.findChildren<QListWidget*>()) {
+        if (list->isVisible() && list->count() == 3) targets = list;
+    }
+    REQUIRE(targets != nullptr);
+    for (int row = 0; row < targets->count(); ++row) targets->item(row)->setCheckState(Qt::Checked);
+    button(combat, "Cast Spell")->click();
+    settle();
+    QString text = log(combat);
+    REQUIRE(text.contains("Zanna casts Fireball (3rd-level slot)."));
+    REQUIRE(text.count("DEX save") == 3);
 }

@@ -63,6 +63,7 @@ const char* spell_resolution_name(SpellResolution resolution) {
         case SpellResolution::Utility: return "Utility";
         case SpellResolution::Buff: return "Buff";
         case SpellResolution::Stabilize: return "Stabilize";
+        case SpellResolution::Revive: return "Revive";
     }
     throw std::invalid_argument("unknown spell resolution");
 }
@@ -70,7 +71,7 @@ const char* spell_resolution_name(SpellResolution resolution) {
 SpellResolution spell_resolution_from_name(const std::string& name) {
     for (auto resolution : {SpellResolution::Attack, SpellResolution::Save, SpellResolution::AutoHit,
                             SpellResolution::Heal, SpellResolution::Utility, SpellResolution::Buff,
-                            SpellResolution::Stabilize}) {
+                            SpellResolution::Stabilize, SpellResolution::Revive}) {
         if (name == spell_resolution_name(resolution)) return resolution;
     }
     throw std::invalid_argument("unknown spell resolution: " + name);
@@ -399,6 +400,9 @@ std::string spell_summary(const Spell& spell) {
         case SpellResolution::Stabilize:
             summary = "a dying creature becomes stable";
             break;
+        case SpellResolution::Revive:
+            summary = "a creature that died in this fight returns with 1 HP";
+            break;
     }
     if (spell.concentration) summary += " (concentration)";
     return summary;
@@ -431,7 +435,8 @@ SpellCastResult cast_spell(const Dice& dice, const Spell& spell, const CasterSta
     int dice_count = spell_dice_count(spell, caster.level, slot_level);
     int bonus = spell.flat_bonus + (spell.adds_modifier ? caster.spellcasting_modifier : 0);
 
-    if (spell.resolution == SpellResolution::Buff || spell.resolution == SpellResolution::Stabilize) {
+    if (spell.resolution == SpellResolution::Buff || spell.resolution == SpellResolution::Stabilize ||
+        spell.resolution == SpellResolution::Revive) {
         for (size_t i = 0; i < targets.size(); ++i) {
             SpellEffectRoll effect;
             effect.target = static_cast<int>(i);
@@ -459,6 +464,17 @@ SpellCastResult cast_spell(const Dice& dice, const Spell& spell, const CasterSta
             effect.saved = !effect.auto_failed &&
                            effect.save_roll + target.save_bonus + bonus_total >= caster.spell_save_dc;
             effect.amount = effect.saved ? (spell.save_halves ? full / 2 : 0) : full;
+            result.effects.push_back(effect);
+        }
+        return result;
+    }
+
+    if (spell.resolution == SpellResolution::Heal) {  // one roll per creature healed (Mass Healing Word)
+        for (size_t i = 0; i < targets.size(); ++i) {
+            SpellEffectRoll effect;
+            effect.target = static_cast<int>(i);
+            effect.hit = true;
+            effect.amount = std::max(0, Dice::sum(dice.roll(spell.dice_sides, dice_count)) + bonus);
             result.effects.push_back(effect);
         }
         return result;

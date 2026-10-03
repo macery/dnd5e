@@ -1010,6 +1010,12 @@ void CombatEncounterDialog::refreshSpellInfo() {
             text = "No automated effect yet -- casting uses the action (and slot) and shows the description.";
             break;
         case dnd::SpellResolution::Buff:
+        case dnd::SpellResolution::Revive:
+            text = QString("A character who died in this fight returns with 1 HP.%1")
+                       .arg(spell->consumed_item.empty() || showingScrolls_
+                                ? QString()
+                                : QString(" Uses up %1.").arg(q(spell->consumed_item)));
+            break;
         case dnd::SpellResolution::Stabilize: {
             // "buff: Blessed (up to 3 allies) (concentration)" -> "Buff: Blessed (up to 3 allies)."
             QString summary = q(dnd::spell_summary(*spell)).remove(" (concentration)");

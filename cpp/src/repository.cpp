@@ -191,7 +191,7 @@ constexpr const char* kSpellColumns =
     "Spells.SaveAbility, Spells.SaveHalves, Spells.DiceCount, Spells.DiceSides, Spells.FlatBonus, "
     "Spells.AddsModifier, Spells.DamageType, Spells.Projectiles, Spells.MaxTargets, Spells.UpcastDice, "
     "Spells.UpcastProjectiles, Spells.CantripScaling, Spells.UpcastTargets, Spells.CombatSaveAdvantage, "
-    "Spells.TargetCreatureType";
+    "Spells.TargetCreatureType, Spells.ConsumedItem";
 
 Spell read_spell_row(sqlite3_stmt* stmt) {
     Spell spell;
@@ -222,6 +222,7 @@ Spell read_spell_row(sqlite3_stmt* stmt) {
     spell.upcast_targets = sqlite3_column_int(stmt, 23);
     spell.combat_save_advantage = sqlite3_column_int(stmt, 24) != 0;
     spell.target_creature_type = column_text(stmt, 25);
+    spell.consumed_item = column_text(stmt, 26);
     return spell;
 }
 
@@ -239,7 +240,7 @@ std::vector<Spell> run_spell_query(sqlite3* db, const std::string& sql, int bind
         "SELECT Classes.ClassName FROM ClassSpells JOIN Classes ON Classes.ClassID = ClassSpells.ClassID "
         "WHERE ClassSpells.SpellID = ? ORDER BY Classes.ClassName;");
     Statement effects(db,
-        "SELECT EffectTrigger, Kind, ConditionName, Amount, Duration, Rounds, UntilUsed, Label FROM SpellEffects "
+        "SELECT EffectTrigger, Kind, ConditionName, Amount, Duration, Rounds, UntilUsed, Label, RepeatSave FROM SpellEffects "
         "WHERE SpellID = ? ORDER BY SpellEffectID;");
     for (auto& spell : spells) {
         sqlite3_reset(classes.get());
@@ -258,6 +259,7 @@ std::vector<Spell> run_spell_query(sqlite3* db, const std::string& sql, int bind
             effect.duration = spell_effect_duration_from_name(column_text(effects.get(), 4));
             effect.rounds = sqlite3_column_int(effects.get(), 5);
             effect.until_used = sqlite3_column_int(effects.get(), 6) != 0;
+            effect.repeat_save = sqlite3_column_int(effects.get(), 8) != 0;
             effect.label = column_text(effects.get(), 7);
             spell.effects.push_back(std::move(effect));
         }

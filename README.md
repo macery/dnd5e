@@ -253,6 +253,11 @@ Phases 1 (core and data) and 2 (UI) are done; see [docs/magic-system.md](docs/ma
 - [x] **Spell slots**: full, half, and pact slot tables for levels 1–20, spent by casting. Long Rest restores every slot; Short Rest restores Warlock pact slots.
 - [x] **Known/prepared spells**: the wizard's "Choose Spells" step, the Spellbook dialog (learn, forget, cast out of combat), and a Spellcasting section on the character sheet. Prepared casters keep the spells they picked; re-preparing after a long rest is phase 3.
 - [x] **Starter spell list**: 18 spells with automated effects (migration 11), plus 24 *Utility* spells with no automated effect yet (migration 12), so every caster can fill its PHB level-1 picks. *Shield* waits for reactions (below).
+- [x] **2nd- and 3rd-level spells** ([docs/spells-2-3.md](docs/spells-2-3.md)):
+  - Automated: *Scorching Ray*, *Shatter*, *Hold Person* and *Blindness/Deafness* (a save at the end of each turn), *Fireball*, *Lightning Bolt*, *Mass Healing Word*, and *Revivify* (someone who died in this fight; uses up Diamonds (300 gp), sold in the Shop).
+  - 28 more as Utility, so every class has picks through level 5.
+  - Scrolls of the new automated spells.
+- [ ] **More spells (4th level and up), and the map-bound 2nd–3rd ones**: *Spiritual Weapon*, *Spirit Guardians*, *Moonbeam*, *Call Lightning*, *Haste*, *Hypnotic Pattern*, and *Aid* are Utility for now.
 - [x] **Cast a Spell in combat**: pick a spell, a slot level, and targets. Monsters make saving throws with their ability modifiers, and everything is logged. Conditions, Dodge, and *Bless* apply to spell attacks and saves.
 - [x] **Spell side effects**: *Bless*, *Shield of Faith*, *Divine Favor*, *Guiding Bolt*, *Ray of Frost*, *Chill Touch*, *Vicious Mockery*, *Faerie Fire*, *Charm Person*, and *Spare the Dying* do what the PHB says (`SpellEffects`, effects phase 3).
 - [x] **Concentration**: one spell at a time (casting another ends the first); damage forces a CON save against DC max(10, half the damage); dropping to 0 or dying ends it, along with the spell's effects. *Bless*, *Shield of Faith*, *Divine Favor*, and *Faerie Fire* use it.

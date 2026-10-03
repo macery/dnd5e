@@ -56,6 +56,9 @@ struct Combatant {
     // Characters only: wearing armor they aren't proficient with, which also
     // rules out spellcasting (PHB ch. 5).
     bool armor_not_proficient = false;
+    // Characters only: died during this encounter, so Revivify ("within the
+    // last minute") can still bring them back.
+    bool died_this_fight = false;
     // Characters only: the *raise dead* penalty (Character::revival_penalty),
     // taken off attack rolls, saving throws, and initiative.
     int roll_penalty = 0;
@@ -379,9 +382,12 @@ private:
     bool charmed_by(int attacker, int target) const;
     void use_effects(const std::vector<int>& effect_ids);
     // Applies `spell`'s effects with this trigger from `caster` to `target`;
-    // returns their labels for the log.
+    // returns their labels for the log. `save_dc` is the caster's, for
+    // effects the target can save against at the end of each turn.
     std::vector<std::string> apply_spell_effects(const Spell& spell, SpellEffectTrigger trigger, int caster,
-                                                 int target);
+                                                 int target, int save_dc = 0);
+    // Revivify: brings a character who died in this fight back with 1 HP.
+    std::string revive(int target);
 
     // Effect bookkeeping at turn boundaries (durations, standing up, saves to end).
     void start_turn(int index);

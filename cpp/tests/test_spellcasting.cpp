@@ -153,7 +153,7 @@ TEST_CASE("spending slots and resting", "[spellcasting]") {
 TEST_CASE("seeded spells load with their class lists", "[spellcasting][repository]") {
     dnd::Repository repo(":memory:");
     auto spells = repo.get_spells();
-    REQUIRE(spells.size() == 42);  // 18 with automated effects + 24 utility
+    REQUIRE(spells.size() == 78);  // levels 0-1: 18 automated + 24 utility; levels 2-3: 8 + 28
     REQUIRE(spells.front().level == 0);  // ordered by level
 
     for (const auto& spell : spells) {

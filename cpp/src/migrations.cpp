@@ -18,7 +18,7 @@ using detail::Statement;
 // for future schema changes -- never edit an existing one, since a
 // migration's sql is exactly what already ran on every database that has it
 // recorded in SchemaMigrations.
-constexpr std::array<Migration, 24> kMigrations = {{
+constexpr std::array<Migration, 25> kMigrations = {{
     {1, "initial schema: Players, Classes, Characters", R"sql(
         CREATE TABLE IF NOT EXISTS Players (
             PlayerID INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -828,6 +828,123 @@ constexpr std::array<Migration, 24> kMigrations = {{
         );
         ALTER TABLE Characters ADD COLUMN CampaignID INTEGER NOT NULL DEFAULT 0;
         ALTER TABLE AdventureRuns ADD COLUMN CampaignID INTEGER NOT NULL DEFAULT 0;
+    )sql"},
+    // 2nd- and 3rd-level spells (docs/spells-2-3.md): automated ones that fit
+    // combat, Utility ones to fill every class's picks, repeat saves,
+    // Revivify and its diamonds, and scrolls of the new automated spells.
+    {25, "add 2nd- and 3rd-level spells", R"sql(
+        ALTER TABLE Spells ADD COLUMN ConsumedItem TEXT NOT NULL DEFAULT '';
+        ALTER TABLE SpellEffects ADD COLUMN RepeatSave INTEGER NOT NULL DEFAULT 0;
+
+        INSERT INTO Items (Name, Category, Description, WeightLb, CostCp) VALUES
+            ('Diamonds (300 gp)', 'Gear', 'Diamonds worth 300 gp: the material component Revivify consumes.', 0, 30000);
+
+        INSERT INTO Spells (Name, Level, School, Description, CastingTime, RangeText, DurationText, Concentration,
+                            Resolution, MeleeAttack, SaveAbility, SaveHalves, DiceCount, DiceSides, FlatBonus,
+                            AddsModifier, DamageType, Projectiles, MaxTargets, UpcastDice, UpcastProjectiles,
+                            CantripScaling, UpcastTargets, TargetCreatureType, ConsumedItem) VALUES
+            ('Scorching Ray', 2, 'Evocation', 'You create three rays of fire and hurl them at targets within range: a ranged spell attack for each, 2d6 fire on a hit. One more ray per slot level above 2nd.', 'Action', '120 feet', 'Instantaneous', 0, 'Attack', 0, '', 0, 2, 6, 0, 0, 'fire', 3, 3, 0, 1, 'Dice', 0, '', ''),
+            ('Shatter', 2, 'Evocation', 'A sudden loud ringing noise erupts from a point you choose. Hits up to 4 creatures (a 10-foot sphere): CON save, 3d8 thunder, half on a success.', 'Action', '60 feet', 'Instantaneous', 0, 'Save', 0, 'Constitution', 1, 3, 8, 0, 0, 'thunder', 1, 4, 1, 0, 'Dice', 0, '', ''),
+            ('Hold Person', 2, 'Enchantment', 'A humanoid must succeed on a Wisdom save or be paralyzed. It repeats the save at the end of each of its turns, ending the spell on itself on a success. One more target per slot level above 2nd.', 'Action', '60 feet', 'Concentration, up to 1 minute', 1, 'Save', 0, 'Wisdom', 0, 0, 1, 0, 0, '', 1, 1, 0, 0, 'Dice', 1, 'Humanoid', ''),
+            ('Blindness/Deafness', 2, 'Necromancy', 'A foe must succeed on a Constitution save or be blinded for the duration. It repeats the save at the end of each of its turns, ending the spell on a success. One more target per slot level above 2nd. (Deafness isn''t simulated.)', 'Action', '30 feet', '1 minute', 0, 'Save', 0, 'Constitution', 0, 0, 1, 0, 0, '', 1, 1, 0, 0, 'Dice', 1, '', ''),
+            ('Fireball', 3, 'Evocation', 'A bright streak blossoms into an explosion of flame. Hits up to 6 creatures (a 20-foot sphere): DEX save, 8d6 fire, half on a success. One more d6 per slot level above 3rd.', 'Action', '150 feet', 'Instantaneous', 0, 'Save', 0, 'Dexterity', 1, 8, 6, 0, 0, 'fire', 1, 6, 1, 0, 'Dice', 0, '', ''),
+            ('Lightning Bolt', 3, 'Evocation', 'A stroke of lightning forms a line 100 feet long. Hits up to 4 creatures: DEX save, 8d6 lightning, half on a success. One more d6 per slot level above 3rd.', 'Action', 'Self (100-foot line)', 'Instantaneous', 0, 'Save', 0, 'Dexterity', 1, 8, 6, 0, 0, 'lightning', 1, 4, 1, 0, 'Dice', 0, '', ''),
+            ('Mass Healing Word', 3, 'Evocation', 'Up to six creatures of your choice that you can see regain 1d4 + your spellcasting modifier hit points. One more d4 per slot level above 3rd.', 'BonusAction', '60 feet', 'Instantaneous', 0, 'Heal', 0, '', 0, 1, 4, 0, 1, '', 1, 6, 1, 0, 'Dice', 0, '', ''),
+            ('Revivify', 3, 'Necromancy', 'You touch a creature that has died within the last minute (here: in this fight). It returns to life with 1 hit point. Uses up diamonds worth 300 gp.', 'Action', 'Touch', 'Instantaneous', 0, 'Revive', 0, '', 0, 0, 0, 0, 0, '', 1, 1, 0, 0, 'Dice', 0, '', 'Diamonds (300 gp)');
+
+        INSERT INTO SpellEffects (SpellID, EffectTrigger, Kind, ConditionName, Amount, Duration, Rounds, UntilUsed, Label, RepeatSave)
+            SELECT SpellID, 'OnFailedSave', 'Condition', 'Paralyzed', 0, 'Rounds', 10, 0, 'Held (Hold Person)', 1 FROM Spells WHERE Name = 'Hold Person';
+        INSERT INTO SpellEffects (SpellID, EffectTrigger, Kind, ConditionName, Amount, Duration, Rounds, UntilUsed, Label, RepeatSave)
+            SELECT SpellID, 'OnFailedSave', 'Condition', 'Blinded', 0, 'Rounds', 10, 0, 'Blinded', 1 FROM Spells WHERE Name = 'Blindness/Deafness';
+
+        INSERT INTO Spells (Name, Level, School, Description, CastingTime, RangeText, DurationText, Concentration,
+                            Resolution, DiceCount, DiceSides) VALUES
+            ('Aid', 2, 'Abjuration', 'Up to three creatures'' hit point maximum and current hit points rise by 5 for 8 hours. (No automated effect yet: it outlasts combat.)', 'Action', '30 feet', '8 hours', 0, 'Utility', 0, 0),
+            ('Barkskin', 2, 'Transmutation', 'A willing creature''s skin becomes rough and bark-like: its AC can''t be less than 16. (No automated effect yet.)', 'Action', 'Touch', 'Concentration, up to 1 hour', 1, 'Utility', 0, 0),
+            ('Darkvision', 2, 'Transmutation', 'A willing creature gains darkvision out to 60 feet for 8 hours. (No automated effect yet.)', 'Action', 'Touch', '8 hours', 0, 'Utility', 0, 0),
+            ('Enhance Ability', 2, 'Transmutation', 'A creature gains a magical enhancement such as advantage on one ability''s checks. (No automated effect yet.)', 'Action', 'Touch', 'Concentration, up to 1 hour', 1, 'Utility', 0, 0),
+            ('Invisibility', 2, 'Illusion', 'A creature you touch becomes invisible until it attacks or casts a spell. (No automated effect yet.)', 'Action', 'Touch', 'Concentration, up to 1 hour', 1, 'Utility', 0, 0),
+            ('Lesser Restoration', 2, 'Abjuration', 'You end one disease or one condition afflicting a creature: blinded, deafened, paralyzed, or poisoned. (No automated effect yet.)', 'Action', 'Touch', 'Instantaneous', 0, 'Utility', 0, 0),
+            ('Magic Weapon', 2, 'Transmutation', 'A nonmagical weapon becomes a +1 magic weapon. (No automated effect yet.)', 'BonusAction', 'Touch', 'Concentration, up to 1 hour', 1, 'Utility', 0, 0),
+            ('Mirror Image', 2, 'Illusion', 'Three illusory duplicates of yourself appear and may take hits meant for you. (No automated effect yet.)', 'Action', 'Self', '1 minute', 0, 'Utility', 0, 0),
+            ('Misty Step', 2, 'Conjuration', 'You teleport up to 30 feet to an unoccupied space you can see. (No automated effect yet: there''s no map.)', 'BonusAction', 'Self', 'Instantaneous', 0, 'Utility', 0, 0),
+            ('Moonbeam', 2, 'Evocation', 'A silvery beam of pale light: creatures in it take 2d10 radiant (CON half). (No automated effect yet: it needs a map.)', 'Action', '120 feet', 'Concentration, up to 1 minute', 1, 'Utility', 0, 0),
+            ('Pass without Trace', 2, 'Abjuration', 'The party gains +10 to Dexterity (Stealth) checks and can''t be tracked. (No automated effect yet.)', 'Action', 'Self', 'Concentration, up to 1 hour', 1, 'Utility', 0, 0),
+            ('Silence', 2, 'Illusion', 'No sound can be created within a 20-foot sphere. (No automated effect yet.)', 'Action', '120 feet', 'Concentration, up to 10 minutes', 1, 'Utility', 0, 0),
+            ('Spike Growth', 2, 'Transmutation', 'The ground in a 20-foot radius sprouts hard spikes: 2d4 piercing per 5 feet moved. (No automated effect yet: it needs a map.)', 'Action', '150 feet', 'Concentration, up to 10 minutes', 1, 'Utility', 0, 0),
+            ('Spiritual Weapon', 2, 'Evocation', 'A floating spectral weapon that attacks with a bonus action: 1d8 + modifier force. (No automated effect yet.)', 'BonusAction', '60 feet', '1 minute', 0, 'Utility', 0, 0),
+            ('Suggestion', 2, 'Enchantment', 'You suggest a course of activity to a creature that can hear and understand you (WIS save). (No automated effect yet.)', 'Action', '30 feet', 'Concentration, up to 8 hours', 1, 'Utility', 0, 0),
+            ('Beacon of Hope', 3, 'Abjuration', 'Allies have advantage on WIS saves and death saves, and regain the maximum from healing. (No automated effect yet.)', 'Action', '30 feet', 'Concentration, up to 1 minute', 1, 'Utility', 0, 0),
+            ('Call Lightning', 3, 'Conjuration', 'A storm cloud: each turn, call a bolt for 3d10 lightning (DEX half). (No automated effect yet.)', 'Action', '120 feet', 'Concentration, up to 10 minutes', 1, 'Utility', 0, 0),
+            ('Conjure Animals', 3, 'Conjuration', 'You summon fey spirits that take the form of beasts. (No automated effect yet: summons aren''t simulated.)', 'Action', '60 feet', 'Concentration, up to 1 hour', 1, 'Utility', 0, 0),
+            ('Crusader''s Mantle', 3, 'Evocation', 'Allies within 30 feet deal an extra 1d4 radiant damage with weapon attacks. (No automated effect yet.)', 'Action', 'Self (30-foot radius)', 'Concentration, up to 1 minute', 1, 'Utility', 0, 0),
+            ('Daylight', 3, 'Evocation', 'A 60-foot-radius sphere of light spreads out from a point you choose. (No automated effect yet.)', 'Action', '60 feet', '1 hour', 0, 'Utility', 0, 0),
+            ('Dispel Magic', 3, 'Abjuration', 'Spells of 3rd level or lower on a target end. (No automated effect yet.)', 'Action', '120 feet', 'Instantaneous', 0, 'Utility', 0, 0),
+            ('Fly', 3, 'Transmutation', 'A willing creature gains a flying speed of 60 feet. (No automated effect yet.)', 'Action', 'Touch', 'Concentration, up to 10 minutes', 1, 'Utility', 0, 0),
+            ('Haste', 3, 'Transmutation', 'A willing creature gets double speed, +2 AC, advantage on DEX saves, and an extra action. (No automated effect yet.)', 'Action', '30 feet', 'Concentration, up to 1 minute', 1, 'Utility', 0, 0),
+            ('Hunger of Hadar', 3, 'Conjuration', 'A 20-foot sphere of blackness and bitter cold: 2d6 cold and 2d6 acid to those inside. (No automated effect yet: it needs a map.)', 'Action', '150 feet', 'Concentration, up to 1 minute', 1, 'Utility', 0, 0),
+            ('Hypnotic Pattern', 3, 'Illusion', 'Creatures in a 30-foot cube that fail a WIS save are charmed and incapacitated. (No automated effect yet.)', 'Action', '120 feet', 'Concentration, up to 1 minute', 1, 'Utility', 0, 0),
+            ('Remove Curse', 3, 'Abjuration', 'All curses affecting one creature or object end. (No automated effect yet.)', 'Action', 'Touch', 'Instantaneous', 0, 'Utility', 0, 0),
+            ('Spirit Guardians', 3, 'Conjuration', 'Spirits flit around you: enemies near you are slowed and take 3d8 radiant or necrotic (WIS half). (No automated effect yet: it needs a map.)', 'Action', 'Self (15-foot radius)', 'Concentration, up to 10 minutes', 1, 'Utility', 0, 0),
+            ('Vampiric Touch', 3, 'Necromancy', 'A melee spell attack for 3d6 necrotic; you regain half the damage. (No automated effect yet.)', 'Action', 'Self', 'Concentration, up to 1 minute', 1, 'Utility', 0, 0);
+
+        WITH Pairs (ClassName, SpellName) AS (VALUES
+            ('Sorcerer', 'Scorching Ray'), ('Wizard', 'Scorching Ray'),
+            ('Bard', 'Shatter'), ('Sorcerer', 'Shatter'), ('Warlock', 'Shatter'), ('Wizard', 'Shatter'),
+            ('Bard', 'Hold Person'), ('Cleric', 'Hold Person'), ('Druid', 'Hold Person'), ('Sorcerer', 'Hold Person'),
+            ('Warlock', 'Hold Person'), ('Wizard', 'Hold Person'),
+            ('Bard', 'Blindness/Deafness'), ('Cleric', 'Blindness/Deafness'), ('Sorcerer', 'Blindness/Deafness'),
+            ('Wizard', 'Blindness/Deafness'),
+            ('Sorcerer', 'Fireball'), ('Wizard', 'Fireball'),
+            ('Sorcerer', 'Lightning Bolt'), ('Wizard', 'Lightning Bolt'),
+            ('Cleric', 'Mass Healing Word'),
+            ('Cleric', 'Revivify'), ('Paladin', 'Revivify'),
+            ('Cleric', 'Aid'), ('Paladin', 'Aid'),
+            ('Druid', 'Barkskin'), ('Ranger', 'Barkskin'),
+            ('Druid', 'Darkvision'), ('Ranger', 'Darkvision'), ('Sorcerer', 'Darkvision'), ('Wizard', 'Darkvision'),
+            ('Bard', 'Enhance Ability'), ('Cleric', 'Enhance Ability'), ('Druid', 'Enhance Ability'), ('Sorcerer', 'Enhance Ability'),
+            ('Bard', 'Invisibility'), ('Sorcerer', 'Invisibility'), ('Warlock', 'Invisibility'), ('Wizard', 'Invisibility'),
+            ('Bard', 'Lesser Restoration'), ('Cleric', 'Lesser Restoration'), ('Druid', 'Lesser Restoration'),
+            ('Paladin', 'Lesser Restoration'), ('Ranger', 'Lesser Restoration'),
+            ('Paladin', 'Magic Weapon'), ('Wizard', 'Magic Weapon'),
+            ('Sorcerer', 'Mirror Image'), ('Warlock', 'Mirror Image'), ('Wizard', 'Mirror Image'),
+            ('Sorcerer', 'Misty Step'), ('Warlock', 'Misty Step'), ('Wizard', 'Misty Step'),
+            ('Druid', 'Moonbeam'),
+            ('Druid', 'Pass without Trace'), ('Ranger', 'Pass without Trace'),
+            ('Bard', 'Silence'), ('Cleric', 'Silence'), ('Ranger', 'Silence'),
+            ('Druid', 'Spike Growth'), ('Ranger', 'Spike Growth'),
+            ('Cleric', 'Spiritual Weapon'),
+            ('Bard', 'Suggestion'), ('Sorcerer', 'Suggestion'), ('Warlock', 'Suggestion'), ('Wizard', 'Suggestion'),
+            ('Cleric', 'Beacon of Hope'),
+            ('Druid', 'Call Lightning'),
+            ('Druid', 'Conjure Animals'), ('Ranger', 'Conjure Animals'),
+            ('Paladin', 'Crusader''s Mantle'),
+            ('Cleric', 'Daylight'), ('Druid', 'Daylight'), ('Paladin', 'Daylight'), ('Ranger', 'Daylight'), ('Sorcerer', 'Daylight'),
+            ('Bard', 'Dispel Magic'), ('Cleric', 'Dispel Magic'), ('Druid', 'Dispel Magic'), ('Paladin', 'Dispel Magic'),
+            ('Sorcerer', 'Dispel Magic'), ('Warlock', 'Dispel Magic'), ('Wizard', 'Dispel Magic'),
+            ('Sorcerer', 'Fly'), ('Warlock', 'Fly'), ('Wizard', 'Fly'),
+            ('Sorcerer', 'Haste'), ('Wizard', 'Haste'),
+            ('Warlock', 'Hunger of Hadar'),
+            ('Bard', 'Hypnotic Pattern'), ('Sorcerer', 'Hypnotic Pattern'), ('Warlock', 'Hypnotic Pattern'), ('Wizard', 'Hypnotic Pattern'),
+            ('Cleric', 'Remove Curse'), ('Paladin', 'Remove Curse'), ('Warlock', 'Remove Curse'), ('Wizard', 'Remove Curse'),
+            ('Cleric', 'Spirit Guardians'),
+            ('Warlock', 'Vampiric Touch'), ('Wizard', 'Vampiric Touch')
+        )
+        INSERT INTO ClassSpells (ClassID, SpellID)
+        SELECT Classes.ClassID, Spells.SpellID FROM Pairs
+        JOIN Classes ON Classes.ClassName = Pairs.ClassName
+        JOIN Spells ON Spells.Name = Pairs.SpellName;
+
+        -- Scrolls of the new automated spells (DMG: 2nd 150 gp, 3rd 300 gp, uncommon).
+        INSERT INTO Items (Name, Category, Description, WeightLb, CostCp, Rarity, ScrollSpellID)
+            SELECT 'Spell Scroll (' || Name || ')', 'Scroll',
+                   'Read it to cast ' || Name || ' (level ' || Level || ')' ||
+                   ' without a spell slot or material components; the scroll crumbles to dust. Only classes with the ' ||
+                   'spell on their list can read it, and a spell above your highest slot level needs a spellcasting ' ||
+                   'check (DC 10 + its level). Save DC ' || (CASE WHEN Level <= 2 THEN 13 ELSE 15 END) ||
+                   ', attack +' || (CASE WHEN Level <= 2 THEN 5 ELSE 7 END) || '.',
+                   0, CASE Level WHEN 2 THEN 15000 ELSE 30000 END, 'Uncommon', SpellID
+            FROM Spells WHERE Level IN (2, 3) AND Resolution <> 'Utility';
     )sql"},
 }};
 

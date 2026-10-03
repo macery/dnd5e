@@ -1,6 +1,6 @@
 # Campaigns design
 
-Status: **phases 1 (core) and 2 (UI) done.** You asked me to go ahead within a limited budget, so I settled the questions below with the recommended answers myself (2026-10-02). Any of them can be revisited.
+Status: **phases 1 (core) and 2 (UI) done.** The questions below were settled with the recommended answers without a review round (2026-10-02). Any of them can be revisited.
 
 **As built:**
 - **Core:**
@@ -45,7 +45,7 @@ That works for one table. With two groups, or characters a player is building bu
 - **Per-campaign houserules, calendars, session logs, or DM tools.**
 - **Players belonging to campaigns.** Characters join, and the player comes along through them.
 
-## Decisions (settled as recommended)
+## Decisions (settled as recommended; open to revisiting)
 
 1. **Membership:** a character is in at most one campaign (`Characters.CampaignID`; 0 = none).
 2. **Active campaign:** stored in the database (`Campaigns.Active`), so it survives restarts and the core rules can see it. "No campaign" means everything is open, as today.

@@ -618,10 +618,24 @@ void Encounter::fall_unconscious(int index) {
     add_effect(unconscious);
 }
 
+std::string Encounter::revive(int index) {
+    Combatant& combatant = combatants_[static_cast<size_t>(index)];
+    combatant.death_saves = DeathSaveState{};
+    combatant.died_this_fight = false;
+    combatant.current_hp = 1;
+    if (Character* character = character_mut(combatant.character_id)) {
+        character->dead = false;
+        character->current_hp = 1;
+        changed(character->character_id);
+    }
+    return "returns to life with 1 HP";
+}
+
 std::vector<std::string> Encounter::mark_dead(int index, const std::string& how) {
     std::vector<std::string> lines;
     Combatant& combatant = combatants_[static_cast<size_t>(index)];
     combatant.death_saves.dead = true;
+    combatant.died_this_fight = true;
     combatant.current_hp = 0;
     effects_.erase(std::remove_if(effects_.begin(), effects_.end(),
                                   [index](const ActiveEffect& e) { return e.target == index; }),
@@ -881,7 +895,7 @@ void Encounter::weapon_attack(int attacker_index, int target_index, const Weapon
 }
 
 std::vector<std::string> Encounter::apply_spell_effects(const Spell& spell, SpellEffectTrigger trigger, int caster,
-                                                        int target) {
+                                                        int target, int save_dc) {
     std::vector<std::string> labels;
     for (const auto& spec : spell.effects) {
         if (spec.trigger != trigger) continue;
@@ -894,6 +908,7 @@ std::vector<std::string> Encounter::apply_spell_effects(const Spell& spell, Spel
         effect.concentration = spell.concentration;
         effect.label = spec.label;
         effect.duration.until_used = spec.until_used;
+        if (spec.repeat_save) effect.save_to_end = SaveToEnd{spell.save_ability, save_dc};  // Hold Person
         switch (spec.duration) {
             case SpellEffectDuration::UntilRemoved:
                 effect.duration.kind = DurationKind::UntilRemoved;
@@ -1440,6 +1455,12 @@ std::vector<int> Encounter::spell_target_candidates(const Spell& spell) const {
     int actor_index = current_index();
     for (int i = 0; i < static_cast<int>(combatants_.size()); ++i) {
         const auto& candidate = combatants_[static_cast<size_t>(i)];
+        if (spell.resolution == SpellResolution::Revive) {  // only the dead, and only this fight's
+            if (candidate.is_character && candidate.death_saves.dead && candidate.died_this_fight) {
+                candidates.push_back(i);
+            }
+            continue;
+        }
         if (candidate.death_saves.dead) continue;
         bool eligible = false;
         switch (spell.resolution) {
@@ -1966,6 +1987,19 @@ bool Encounter::cast_spell(int spell_id, int slot_level, const std::vector<int>&
     int slot = spell.level == 0 ? 0 : slot_level;
 
     if (!spell_targets_ok(spell, caster.level, slot, target_indices)) return false;
+    // A costly material component the spell uses up (Revivify's diamonds).
+    auto& inventory = inventories_[actor.character_id];
+    auto component = inventory.end();
+    if (!spell.consumed_item.empty()) {
+        component = std::find_if(inventory.begin(), inventory.end(), [&](const InventoryEntry& entry) {
+            return entry.item.name == spell.consumed_item && entry.quantity > 0;
+        });
+        if (component == inventory.end()) {
+            log(spell.name + " needs " + spell.consumed_item + ", which " + actor.name +
+                " doesn't have. (The Shop sells them.)");
+            return false;
+        }
+    }
     if (slot > 0) {
         auto options = spell_slot_options(spell);
         if (std::find(options.begin(), options.end(), slot) == options.end() ||
@@ -1975,6 +2009,15 @@ bool Encounter::cast_spell(int spell_id, int slot_level, const std::vector<int>&
         }
     }
     changed(actor.character_id);  // the spent slot
+    if (component != inventory.end()) {
+        EncounterEvent used;
+        used.kind = EncounterEvent::Kind::ItemUsed;
+        used.character_id = actor.character_id;
+        used.item_id = component->item.item_id;
+        used.quantity = 1;
+        events_.push_back(used);
+        if (--component->quantity == 0) inventory.erase(component);
+    }
     resolve_spell(actor_index, spell, caster, slot, target_indices,
                   actor.name + " casts " + spell.name + (slot > 0 ? " (" + ordinal(slot) + "-level slot)" : "") + ".");
     return true;
@@ -2077,7 +2120,8 @@ void Encounter::resolve_spell(int actor_index, const Spell& spell, const CasterS
             case SpellResolution::Save:
                 followups = apply_damage(target_index, dealt, false, actor_index, spell.damage_type);
                 if (!effect.saved && target.current_hp > 0) {
-                    labels = apply_spell_effects(spell, SpellEffectTrigger::OnFailedSave, actor_index, target_index);
+                    labels = apply_spell_effects(spell, SpellEffectTrigger::OnFailedSave, actor_index, target_index,
+                                                 caster.spell_save_dc);
                 }
                 outcome = ability_tag(spell.save_ability) + " save d20(" + std::to_string(effect.save_roll) + ") " +
                           format_modifier(targets[slot_index].save_bonus) +
@@ -2096,6 +2140,9 @@ void Encounter::resolve_spell(int actor_index, const Spell& spell, const CasterS
                 target.death_saves.stable = true;
                 outcome = "stable";
                 break;
+            case SpellResolution::Revive:
+                outcome = revive(target_index);
+                break;
             case SpellResolution::AutoHit:
                 followups = apply_damage(target_index, dealt, false, actor_index, spell.damage_type);
                 outcome = "hit for " + std::to_string(dealt) + damage_note;
@@ -2110,7 +2157,8 @@ void Encounter::resolve_spell(int actor_index, const Spell& spell, const CasterS
                 break;
         }
         if (!labels.empty()) outcome += "; " + join(labels, ", ");
-        bool shows_hp = spell.resolution != SpellResolution::Buff && spell.resolution != SpellResolution::Stabilize;
+        bool shows_hp = spell.resolution != SpellResolution::Buff && spell.resolution != SpellResolution::Stabilize &&
+                        spell.resolution != SpellResolution::Revive;
         log("    " + target.name + ": " + outcome + (shows_hp ? ". Now " + hp_text(target) + " HP." : "."));
         for (const auto& line : followups) log(line);
     }
