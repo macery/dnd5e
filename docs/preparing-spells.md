@@ -8,7 +8,7 @@ Status: **done.** As before, the questions were settled with the recommended ans
   - `spell_allowance` gives a Wizard its spellbook's size.
   - New: `prepares_spells`, `preparation_refusal`, `prepared_leveled_count`, and `starts_prepared`.
   - `take_long_rest` opens the window, and `Encounter::roll_initiative` closes it. `castable_spells` skips unprepared spells.
-- **`dnd/spellbook`:** `add_known_spell` (creation, Level Up, the Spellbook, and import all use it) and `set_prepared`.
+- **`dnd/spellbook`:** `add_known_spell` (creation, Level Up, and the Spellbook use it; import restores the file's prepared flags instead) and `set_prepared`.
 - **Exports** carry an optional `unprepared_spells`.
 - **Spellbook dialog:**
   - A Prepared column for Wizards ("always" for cantrips), with **Prepare** and **Unprepare** buttons. The counts read "Spellbook: 3 / 6 · Prepared: 2 / 2".
