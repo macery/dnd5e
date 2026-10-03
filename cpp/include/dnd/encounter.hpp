@@ -59,6 +59,9 @@ struct Combatant {
     // Characters only: died during this encounter, so Revivify ("within the
     // last minute") can still bring them back.
     bool died_this_fight = false;
+    // Used its reaction since the start of its last turn (Shield, Uncanny
+    // Dodge, Hellish Rebuke).
+    bool reaction_used = false;
     // Characters only: the *raise dead* penalty (Character::revival_penalty),
     // taken off attack rolls, saving throws, and initiative.
     int roll_penalty = 0;
@@ -203,6 +206,12 @@ public:
     // What the current character has left this turn.
     const TurnState& turn() const { return turn_; }
     bool started() const { return !turn_order_.empty(); }
+
+    // Reactions (docs/reactions.md) happen on monsters' turns, so they're
+    // automatic: Shield when it turns a hit into a miss, Uncanny Dodge on a
+    // hit, Hellish Rebuke when damaged. On by default.
+    void set_auto_reactions(bool on) { auto_reactions_ = on; }
+    bool auto_reactions() const { return auto_reactions_; }
     EncounterStatus status() const { return status_; }
     // "Victory! All enemies defeated. <victory text>" / "Defeat! All characters
     // have fallen." once the fight ends; empty before.
@@ -388,6 +397,12 @@ private:
                                                  int target, int save_dc = 0);
     // Revivify: brings a character who died in this fight back with 1 HP.
     std::string revive(int target);
+    // A character's prepared spell by name with a slot to cast it, or nullptr.
+    const Spell* reaction_spell(int index, const std::string& name) const;
+    // Spends the lowest slot that can cast `spell`; returns its level (0: none).
+    int spend_lowest_slot(int index, const Spell& spell);
+    // Hellish Rebuke back at `attacker` after `index` took damage from it.
+    void hellish_rebuke(int index, int attacker);
 
     // Effect bookkeeping at turn boundaries (durations, standing up, saves to end).
     void start_turn(int index);
@@ -451,6 +466,7 @@ private:
     std::string victory_text_;
     std::vector<LootGrant> loot_;
     std::vector<Spell> scroll_spells_;
+    bool auto_reactions_ = true;
     std::vector<LootGrant> pending_loot_;  // won, waiting for divide_loot
     int coins_cp_ = 0;
     std::vector<EncounterEvent> events_;

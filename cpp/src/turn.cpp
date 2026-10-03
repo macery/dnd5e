@@ -5,7 +5,7 @@ namespace dnd {
 std::optional<std::string> spell_casting_blocked(const TurnState& turn, const Spell& spell) {
     switch (spell.casting_time) {
         case CastingTime::Reaction:
-            return spell.name + " is cast as a reaction, and reactions aren't supported yet.";
+            return spell.name + " is a reaction: it's cast on its own on a monster's turn, when it helps.";
         case CastingTime::BonusAction:
             if (turn.bonus_action_used) return "The bonus action has already been used this turn.";
             if (turn.levelled_action_spell_cast) {

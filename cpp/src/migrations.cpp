@@ -18,7 +18,7 @@ using detail::Statement;
 // for future schema changes -- never edit an existing one, since a
 // migration's sql is exactly what already ran on every database that has it
 // recorded in SchemaMigrations.
-constexpr std::array<Migration, 26> kMigrations = {{
+constexpr std::array<Migration, 27> kMigrations = {{
     {1, "initial schema: Players, Classes, Characters", R"sql(
         CREATE TABLE IF NOT EXISTS Players (
             PlayerID INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -951,6 +951,23 @@ constexpr std::array<Migration, 26> kMigrations = {{
     {26, "add CharacterSpells.Prepared and Characters.MayPrepare", R"sql(
         ALTER TABLE CharacterSpells ADD COLUMN Prepared INTEGER NOT NULL DEFAULT 1;
         ALTER TABLE Characters ADD COLUMN MayPrepare INTEGER NOT NULL DEFAULT 1;
+    )sql"},
+    // Reaction spells (docs/reactions.md), cast on their own on monsters' turns.
+    {27, "add Shield and Hellish Rebuke", R"sql(
+        INSERT INTO Spells (Name, Level, School, Description, CastingTime, RangeText, DurationText, Concentration,
+                            Resolution, MeleeAttack, SaveAbility, SaveHalves, DiceCount, DiceSides, FlatBonus,
+                            AddsModifier, DamageType, Projectiles, MaxTargets, UpcastDice, UpcastProjectiles,
+                            CantripScaling) VALUES
+            ('Shield', 1, 'Abjuration', 'A reaction when an attack hits you: +5 AC until the start of your next turn, including against that attack. Cast on its own on a monster''s turn when it turns a hit into a miss.', 'Reaction', 'Self', '1 round', 0, 'Utility', 0, '', 0, 0, 0, 0, 0, '', 1, 1, 0, 0, 'Dice'),
+            ('Hellish Rebuke', 1, 'Evocation', 'A reaction when a creature you can see damages you: it makes a DEX save, taking 2d10 fire, half on a success. One more d10 per slot level above 1st. Cast on its own when you''re hurt.', 'Reaction', '60 feet', 'Instantaneous', 0, 'Save', 0, 'Dexterity', 1, 2, 10, 0, 0, 'fire', 1, 1, 1, 0, 'Dice');
+
+        WITH Pairs (ClassName, SpellName) AS (VALUES
+            ('Sorcerer', 'Shield'), ('Wizard', 'Shield'), ('Warlock', 'Hellish Rebuke')
+        )
+        INSERT INTO ClassSpells (ClassID, SpellID)
+        SELECT Classes.ClassID, Spells.SpellID FROM Pairs
+        JOIN Classes ON Classes.ClassName = Pairs.ClassName
+        JOIN Spells ON Spells.Name = Pairs.SpellName;
     )sql"},
 }};
 

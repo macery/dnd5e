@@ -490,6 +490,7 @@ void Encounter::start_turn(int index) {
     // Regeneration (Troll): 10 HP at the start of its turn, unless it took
     // fire or acid damage since its last one.
     Combatant& self = combatants_[static_cast<size_t>(index)];
+    self.reaction_used = false;  // a reaction comes back at the start of each turn
     if (has_trait(index, "Regeneration") && self.current_hp > 0) {
         if (self.regeneration_blocked) {
             log(self.name + " doesn't regenerate (fire or acid).");
@@ -623,6 +624,63 @@ void Encounter::fall_unconscious(int index) {
     unconscious.target = index;
     unconscious.label = "Unconscious";
     add_effect(unconscious);
+}
+
+const Spell* Encounter::reaction_spell(int index, const std::string& name) const {
+    const Combatant& combatant = combatants_.at(static_cast<size_t>(index));
+    auto known = known_spells_.find(combatant.character_id);
+    const Character* caster = character(combatant.character_id);
+    const ClassInfo* info = caster ? find_class_info_by_id(classes_, caster->class_id) : nullptr;
+    if (known == known_spells_.end() || !info) return nullptr;
+    for (const auto& spell : known->second) {
+        if (spell.name != name || !spell.prepared) continue;
+        for (int level = std::max(1, spell.level); level <= kMaxSpellLevel; ++level) {
+            if (slots_remaining(*caster, *info, level) > 0) return &spell;
+        }
+    }
+    return nullptr;
+}
+
+int Encounter::spend_lowest_slot(int index, const Spell& spell) {
+    const Combatant& combatant = combatants_.at(static_cast<size_t>(index));
+    Character* caster = character_mut(combatant.character_id);
+    const ClassInfo* info = caster ? find_class_info_by_id(classes_, caster->class_id) : nullptr;
+    if (!info) return 0;
+    for (int level = std::max(1, spell.level); level <= kMaxSpellLevel; ++level) {
+        if (spend_spell_slot(*caster, *info, level)) {
+            changed(caster->character_id);
+            return level;
+        }
+    }
+    return 0;
+}
+
+void Encounter::hellish_rebuke(int index, int attacker_index) {
+    Combatant& rebuker = combatants_[static_cast<size_t>(index)];
+    Combatant& attacker = combatants_[static_cast<size_t>(attacker_index)];
+    if (attacker.current_hp <= 0 || rebuker.armor_not_proficient) return;
+    const Spell* rebuke = reaction_spell(index, "Hellish Rebuke");
+    if (!rebuke) return;
+    const Spell spell = *rebuke;
+    const Character* caster = character(rebuker.character_id);
+    const ClassInfo* info = caster ? find_class_info_by_id(classes_, caster->class_id) : nullptr;
+    if (!info) return;
+    int dc = caster_stats(*caster, *info).spell_save_dc;
+    int slot = spend_lowest_slot(index, spell);
+    if (slot == 0) return;
+    rebuker.reaction_used = true;
+    int dice_count = spell_dice_count(spell, caster->level, slot);
+    int rolled = sum(dice_.roll(spell.dice_sides, dice_count));
+    std::string detail;
+    bool saved = roll_save(attacker_index, spell.save_ability, dc, detail);
+    int amount = saved ? rolled / 2 : rolled;
+    std::string note;
+    int dealt = typed_damage(attacker_index, amount, spell.damage_type, note);
+    auto followups = apply_damage(attacker_index, dealt, false, index, spell.damage_type);
+    log("    " + rebuker.name + " casts Hellish Rebuke as a reaction (" + ordinal(slot) + "-level slot) at " +
+        attacker.name + ": " + detail + " vs DC " + std::to_string(dc) + " -> " + (saved ? "saved" : "failed") +
+        ", takes " + std::to_string(dealt) + note + ". Now " + hp_text(attacker) + " HP.");
+    for (const auto& line : followups) log(line);
 }
 
 std::string Encounter::revive(int index) {
@@ -783,6 +841,34 @@ void Encounter::weapon_attack(int attacker_index, int target_index, const Weapon
                                  mods.auto_crit, attack.great_weapon_fighting);
     use_effects(mods.used_effects);
 
+    // Reactions against a monster's hit (automatic; docs/reactions.md).
+    std::vector<std::string> reaction_lines;
+    bool reacting = auto_reactions_ && monster_attack && target.is_character && !target.reaction_used &&
+                    target.current_hp > 0;
+    if (reacting && result.hit && !result.critical) {
+        // Shield: +5 AC until the start of its next turn, if that makes this attack miss.
+        int total = result.attack_roll + attack_bonus + sum(bonus_rolls);
+        const Spell* shield = target.armor_not_proficient ? nullptr : reaction_spell(target_index, "Shield");
+        if (shield && total < armor_class(target_index) + 5) {
+            int slot = spend_lowest_slot(target_index, *shield);
+            target.reaction_used = true;
+            ActiveEffect effect;
+            effect.kind = EffectKind::ArmorClassBonus;
+            effect.amount = 5;
+            effect.target = target_index;
+            effect.source = target_index;
+            effect.duration.kind = DurationKind::UntilStartOfTurn;
+            effect.duration.participant = target_index;
+            effect.label = "Shield (+5 AC)";
+            add_effect(effect);
+            result.hit = false;
+            result.damage_total = 0;
+            reaction_lines.push_back("    " + target.name + " casts Shield as a reaction (" + ordinal(slot) +
+                                     "-level slot): AC " + std::to_string(armor_class(target_index)) +
+                                     " until the start of " + target.name + "'s next turn, and the attack misses.");
+        }
+    }
+
     std::string extra_note;
     if (result.rerolled > 0) {
         extra_note += " (Great Weapon Fighting rerolled " + std::to_string(result.rerolled) + " " +
@@ -859,6 +945,13 @@ void Encounter::weapon_attack(int attacker_index, int target_index, const Weapon
                               (monster_attack ? typed_damage(target_index, extra_damage,
                                                              monster_attack->extra_damage_type, extra_note)
                                               : 0);
+        // Uncanny Dodge (Rogue 5): halve an attack's damage.
+        if (reacting && !target.reaction_used && target.class_name == "Rogue" && target.level >= 5 &&
+            result.damage_total > 0) {
+            target.reaction_used = true;
+            result.damage_total /= 2;
+            extra_note += " (halved by Uncanny Dodge)";
+        }
     }
 
     auto followups = result.hit ? apply_damage(target_index, result.damage_total, result.critical, attacker_index,
@@ -869,7 +962,12 @@ void Encounter::weapon_attack(int attacker_index, int target_index, const Weapon
         format_modifier(attack.attack_bonus) + penalty_note(attacker.roll_penalty) +
         bonus_note(mods.bonus_dice, bonus_rolls) + mode_note(mods) + " -> " + attack_outcome(result.hit, result.critical, result.damage_total) + extra_note + ". " + target.name +
         " is now " + hp_text(target) + " HP.");
+    for (const auto& line : reaction_lines) log(line);
     for (const auto& line : followups) log(line);
+    // Hellish Rebuke: hit back at whoever just hurt them.
+    if (reacting && result.hit && result.damage_total > 0 && !target.reaction_used && target.current_hp > 0) {
+        hellish_rebuke(target_index, attacker_index);
+    }
 
     // A monster attack's rider (Wolf: DC 11 STR save or knocked prone).
     bool spared = monster_attack && monster_attack->on_hit_condition == Condition::Paralyzed &&

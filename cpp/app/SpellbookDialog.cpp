@@ -239,7 +239,7 @@ void SpellbookDialog::onSelectionChanged() {
     prepareButton_->setToolTip(!refusal.empty() ? q(refusal) : QString());
 
     slotCombo_->clear();
-    bool castable = spell && spell->prepared &&
+    bool castable = spell && spell->prepared && spell->casting_time != dnd::CastingTime::Reaction &&
                     (spell->resolution == dnd::SpellResolution::Heal ||
                      spell->resolution == dnd::SpellResolution::Utility);
     if (spell && spell->level > 0) {

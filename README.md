@@ -252,7 +252,7 @@ Phases 1 (core and data) and 2 (UI) are done; see [docs/magic-system.md](docs/ma
 - [x] **Spellcasting stats**: each class's spellcasting ability, caster type, cantrip and spell counts, spell save DC, and spell attack bonus (`dnd/spellcasting.hpp`), shown on the sheet and in the Spellbook.
 - [x] **Spell slots**: full, half, and pact slot tables for levels 1–20, spent by casting. Long Rest restores every slot; Short Rest restores Warlock pact slots.
 - [x] **Known/prepared spells**: the wizard's "Choose Spells" step, the Spellbook dialog (learn, forget, cast out of combat), and a Spellcasting section on the character sheet. Prepared casters keep the spells they picked; re-preparing after a long rest is phase 3.
-- [x] **Starter spell list**: 18 spells with automated effects (migration 11), plus 24 *Utility* spells with no automated effect yet (migration 12), so every caster can fill its PHB level-1 picks. *Shield* waits for reactions (below).
+- [x] **Starter spell list**: 18 spells with automated effects (migration 11), plus 24 *Utility* spells with no automated effect yet (migration 12), so every caster can fill its PHB level-1 picks. *Shield* came with reactions (below).
 - [x] **2nd- and 3rd-level spells** ([docs/spells-2-3.md](docs/spells-2-3.md)):
   - Automated: *Scorching Ray*, *Shatter*, *Hold Person* and *Blindness/Deafness* (a save at the end of each turn), *Fireball*, *Lightning Bolt*, *Mass Healing Word*, and *Revivify* (someone who died in this fight; uses up Diamonds (300 gp), sold in the Shop).
   - 28 more as Utility, so every class has picks through level 5.
@@ -262,7 +262,8 @@ Phases 1 (core and data) and 2 (UI) are done; see [docs/magic-system.md](docs/ma
 - [x] **Spell side effects**: *Bless*, *Shield of Faith*, *Divine Favor*, *Guiding Bolt*, *Ray of Frost*, *Chill Touch*, *Vicious Mockery*, *Faerie Fire*, *Charm Person*, and *Spare the Dying* do what the PHB says (`SpellEffects`, effects phase 3).
 - [x] **Concentration**: one spell at a time (casting another ends the first); damage forces a CON save against DC max(10, half the damage); dropping to 0 or dying ends it, along with the spell's effects. *Bless*, *Shield of Faith*, *Divine Favor*, and *Faerie Fire* use it.
 - [x] **Scaling**: cantrips get extra dice (or extra beams, for Eldritch Blast) at levels 5, 11, and 17, and casting with a higher-level slot adds dice or darts.
-- [ ] **Reactions**: *Shield*, *Hellish Rebuke*, *Feather Fall*, and opportunity attacks. They need a way to interrupt another creature's turn.
+- [x] **Reactions** ([docs/reactions.md](docs/reactions.md)): automatic on monsters' turns. *Shield* when it turns a hit into a miss, a Rogue's Uncanny Dodge, and *Hellish Rebuke*. A combat-screen checkbox turns them off.
+- [ ] **More reactions**: opportunity attacks (they need a map), *Counterspell* (monsters don't cast yet), and choosing reactions by hand.
 - [x] **Bonus actions**: each turn has one action and one bonus action, shown live in combat. *Healing Word*, *Shield of Faith*, *Divine Favor*, and *Sanctuary* use the bonus action, and the PHB rule applies: after a bonus-action spell, only an action cantrip can follow. Extra Attack gives two attacks per Attack action from level 5. Class-feature bonus actions are next; see [docs/class-features.md](docs/class-features.md).
 - [x] **Re-preparing spells** ([docs/preparing-spells.md](docs/preparing-spells.md)):
   - Clerics, Druids, Paladins, and Wizards change prepared spells after a long rest, until their next fight. The Spellbook says when it's open.

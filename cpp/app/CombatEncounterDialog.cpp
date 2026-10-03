@@ -115,6 +115,15 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
     continueButton_->setToolTip("The fight is over: back to the adventure.");
     continueButton_->setVisible(false);
     turnRow->addWidget(continueButton_);
+    auto* reactionsBox = new QCheckBox("Automatic reactions", this);
+    reactionsBox->setChecked(true);
+    reactionsBox->setToolTip(
+        "Reactions happen on monsters' turns, so they're taken for you when they help: Shield (Sorcerers, "
+        "Wizards) when +5 AC turns a hit into a miss, a level-5 Rogue's Uncanny Dodge to halve a hit, and Hellish "
+        "Rebuke (Warlocks) when hurt. Each spends a slot (Uncanny Dodge spends nothing) and the character's reaction "
+        "until their next turn. Uncheck to save slots.");
+    connect(reactionsBox, &QCheckBox::toggled, this, [this](bool on) { encounter_.set_auto_reactions(on); });
+    turnRow->addWidget(reactionsBox);
     turnRow->addStretch(1);
     turnRow->addWidget(currentTurnLabel_);
 
