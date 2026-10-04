@@ -11,6 +11,8 @@ It manages players and characters, computes a full character sheet from the 5e r
 ## Features
 
 - **Players & characters**: create, edit, and delete players and their characters.
+  - The main window lists every character in play, meaning the active campaign's (or everyone's, with no campaign), with a Player column.
+  - The player list filters it to one player, and **All players** is the default.
 - **Character creation wizard**: a step-by-step guide that builds a rules-valid level-1 character:
   - **Class:** sets the hit die, saving throws, and skill choices.
   - **Race:** adds ability bonuses, with a choice of +1s for Half-Elves.

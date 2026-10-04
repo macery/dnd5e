@@ -88,6 +88,8 @@ MainWindow::MainWindow(dnd::Repository& repository, QWidget* parent)
     editPlayerButton_ = new QPushButton("Edit Player", central);
     deletePlayerButton_ = new QPushButton("Delete Player", central);
     playerCombo_->setMinimumWidth(160);
+    playerCombo_->setToolTip("Which characters the list shows: everyone in play (the active campaign's characters, "
+                             "or every character with no campaign), or just one player's.");
     newPlayerName_->setMinimumWidth(160);
     playerRow->addWidget(playerCombo_);
     playerRow->addWidget(newPlayerName_);
@@ -215,7 +217,7 @@ MainWindow::MainWindow(dnd::Repository& repository, QWidget* parent)
 }
 
 int MainWindow::currentPlayerId() const {
-    return playerCombo_->currentData().toInt();
+    return playerCombo_->currentData().toInt();  // 0: "All players"
 }
 
 QString MainWindow::currentPlayerName() const {
@@ -223,13 +225,39 @@ QString MainWindow::currentPlayerName() const {
 }
 
 void MainWindow::reloadPlayers() {
+    int selected = playerCombo_->count() > 0 ? currentPlayerId() : 0;
+    auto players = repository_.get_players();
     playerCombo_->blockSignals(true);
     playerCombo_->clear();
-    for (const auto& player : repository_.get_players()) {
+    playerCombo_->addItem("All players", 0);
+    for (const auto& player : players) {
         playerCombo_->addItem(QString::fromStdString(player.player_name), player.player_id);
     }
+    playerCombo_->setCurrentIndex(std::max(0, playerCombo_->findData(selected)));
     playerCombo_->blockSignals(false);
+    characterModel_->setPlayers(players);
     reloadCharactersForCurrentPlayer();
+}
+
+int MainWindow::playerForAction(const QString& action) {
+    if (currentPlayerId() != 0) return currentPlayerId();
+    auto players = repository_.get_players();
+    if (players.empty()) {
+        QMessageBox::information(this, action, "Add a player first.");
+        return 0;
+    }
+    if (players.size() == 1) return players.front().player_id;
+    QModelIndex index = characterTable_->currentIndex();
+    if (action == "Export" && index.isValid()) return characterModel_->characterAt(index.row()).player_id;
+    QStringList names;
+    for (const auto& player : players) names << QString::fromStdString(player.player_name);
+    bool ok = false;
+    QString name = QInputDialog::getItem(this, action, "Which player?", names, 0, false, &ok);
+    if (!ok) return 0;
+    for (const auto& player : players) {
+        if (QString::fromStdString(player.player_name) == name) return player.player_id;
+    }
+    return 0;
 }
 
 void MainWindow::reloadLookupTables() {
@@ -259,6 +287,7 @@ void MainWindow::reloadCampaigns() {
 void MainWindow::onCampaignSelected(int /*index*/) {
     repository_.set_active_campaign(campaignCombo_->currentData().toInt());
     reloadCampaigns();
+    reloadCharactersForCurrentPlayer();  // the list shows who's in play
 }
 
 void MainWindow::onCampaignsClicked() {
@@ -269,11 +298,19 @@ void MainWindow::onCampaignsClicked() {
 }
 
 void MainWindow::reloadCharactersForCurrentPlayer() {
-    if (playerCombo_->count() == 0) {
-        characterModel_->setCharacters({});
-        return;
+    // Everyone in play (the active campaign's characters, or all of them),
+    // narrowed to one player when the filter names one.
+    std::vector<dnd::Character> shown;
+    for (auto& character : dnd::characters_in_play(repository_)) {
+        if (currentPlayerId() == 0 || character.player_id == currentPlayerId()) shown.push_back(std::move(character));
     }
-    characterModel_->setCharacters(repository_.get_characters_by_player(currentPlayerId()));
+    characterModel_->setCharacters(std::move(shown));
+    bool onePlayer = currentPlayerId() != 0;
+    editPlayerButton_->setEnabled(onePlayer);
+    deletePlayerButton_->setEnabled(onePlayer);
+    QString why = onePlayer ? QString() : QString("Choose a player in the list first.");
+    editPlayerButton_->setToolTip(why);
+    deletePlayerButton_->setToolTip(why);
 }
 
 void MainWindow::onPlayerSelected(int /*index*/) {
@@ -290,7 +327,7 @@ void MainWindow::onAddPlayerClicked() {
 }
 
 void MainWindow::onEditPlayerClicked() {
-    if (playerCombo_->count() == 0) return;
+    if (currentPlayerId() == 0) return;
 
     bool ok = false;
     QString newName = QInputDialog::getText(this, "Edit Player", "Name:", QLineEdit::Normal, currentPlayerName(),
@@ -307,7 +344,7 @@ void MainWindow::onEditPlayerClicked() {
 }
 
 void MainWindow::onDeletePlayerClicked() {
-    if (playerCombo_->count() == 0) return;
+    if (currentPlayerId() == 0) return;
 
     int player_id = currentPlayerId();
     QString name = currentPlayerName();
@@ -320,17 +357,26 @@ void MainWindow::onDeletePlayerClicked() {
     if (QMessageBox::question(this, "Delete Player", message) != QMessageBox::Yes) return;
 
     repository_.delete_player(player_id);
+    playerCombo_->setCurrentIndex(0);  // back to "All players"
     reloadPlayers();
 }
 
 void MainWindow::onAddCharacterClicked() {
-    if (playerCombo_->count() == 0) {
-        QMessageBox::information(this, "Add Character", "Add a player first.");
-        return;
-    }
+    int playerId = playerForAction("Add Character");
+    if (playerId == 0) return;
 
-    CharacterCreationWizard wizard(repository_, currentPlayerId(), this);
-    if (wizard.exec() == QDialog::Accepted) reloadCharactersForCurrentPlayer();
+    int before = static_cast<int>(repository_.get_characters().size());
+    CharacterCreationWizard wizard(repository_, playerId, this);
+    if (wizard.exec() != QDialog::Accepted) return;
+    // In a campaign, a new character joins it, so it shows up and can play.
+    int campaign = repository_.active_campaign_id();
+    auto characters = repository_.get_characters();
+    if (campaign != 0 && static_cast<int>(characters.size()) > before) {
+        int newest = 0;
+        for (const auto& character : characters) newest = std::max(newest, character.character_id);
+        repository_.set_character_campaign(newest, campaign);
+    }
+    reloadCharactersForCurrentPlayer();
 }
 
 void MainWindow::onEditCharacterClicked() {
@@ -491,15 +537,17 @@ QString safeFileName(QString name) {
 }  // namespace
 
 void MainWindow::onExportClicked() {
-    if (playerCombo_->count() == 0) {
-        QMessageBox::information(this, "Export", "Add a player first.");
-        return;
+    int playerId = playerForAction("Export");
+    if (playerId == 0) return;
+    QString playerName;
+    for (const auto& player : repository_.get_players()) {
+        if (player.player_id == playerId) playerName = QString::fromStdString(player.player_name);
     }
-    int playerId = currentPlayerId();
-    QString playerName = currentPlayerName();
     const dnd::Character* selected = nullptr;
     QModelIndex index = characterTable_->currentIndex();
-    if (index.isValid()) selected = &characterModel_->characterAt(index.row());
+    if (index.isValid() && characterModel_->characterAt(index.row()).player_id == playerId) {
+        selected = &characterModel_->characterAt(index.row());
+    }
 
     // With a character selected, ask: the whole player, or just that character?
     bool justOne = false;

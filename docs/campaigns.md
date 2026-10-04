@@ -8,7 +8,10 @@ Status: **phases 1 (core) and 2 (UI) done.** The questions below were settled wi
   - The repository gains campaign CRUD, `active_campaign_id`, `set_active_campaign`, and `set_character_campaign`. `update_character` never changes a character's campaign.
   - `dnd/campaign` provides `characters_in_play`, `in_play`, `runs_in_play`, and `active_campaign_name`.
   - `give_coins`, `give_item`, and `raise_dead` refuse characters outside the active campaign.
-- **Main window:** a **Campaign** selector at the top ("No campaign (everyone plays)" or a campaign), a **Campaigns…** button, a Campaign column in the character table, and the campaign's name in the window title.
+- **Main window:**
+  - A **Campaign** selector at the top ("No campaign (everyone plays)" or a campaign), a **Campaigns…** button, and the campaign's name in the window title.
+  - The character table lists everyone in play, across players, with Player and Campaign columns. The player list is a filter that defaults to **All players** (added 2026-10-03, after playtesting).
+  - With All players selected, Add Character asks which player it's for, and Export uses the selected character's player. A character created while a campaign is active joins it.
 - **`CampaignDialog`:** a list of campaigns (New and Delete), and for the selected one its name, notes, and a roster checklist of every player's characters. Characters in another campaign are marked "— in Dragon Heist", and checking them moves them.
 - **Scoped play:**
   - Combat Encounter, the Initiative Tracker, and Solo Adventure use the campaign's living characters. The party is all of them by default, and difficulty ratings use the whole roster.

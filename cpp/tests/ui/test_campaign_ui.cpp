@@ -5,6 +5,7 @@
 
 #include <QLineEdit>
 #include <QListWidget>
+#include <QTableView>
 
 #include "CampaignDialog.hpp"
 #include "MainWindow.hpp"
@@ -62,4 +63,44 @@ TEST_CASE("campaigns: a roster from two players, then the active campaign", "[ui
 
     REQUIRE(choose(window, "No campaign"));
     REQUIRE(world.repo.active_campaign_id() == 0);
+}
+
+TEST_CASE("main window: everyone in play, with their players, filterable", "[ui][campaign]") {
+    World world;
+    auto clark = world.add("Clark", "Fighter", 2);
+    world.player = world.repo.add_player("you");
+    auto phi = world.add("phi", "Rogue", 2);
+    world.add("Loner", "Wizard", 2);
+    dnd::Campaign campaign;
+    campaign.name = "Lost Mine";
+    int mine = world.repo.add_campaign(campaign);
+    world.repo.set_character_campaign(clark.character_id, mine);
+    world.repo.set_character_campaign(phi.character_id, mine);
+
+    MainWindow window(world.repo);
+    window.show();
+    settle();
+    auto* table = window.findChild<QTableView*>();
+    auto names = [&] {
+        QStringList shown;
+        for (int row = 0; row < table->model()->rowCount(); ++row) {
+            shown << table->model()->index(row, 0).data().toString() + " / " +
+                         table->model()->index(row, 1).data().toString();
+        }
+        return shown;
+    };
+    REQUIRE(table->model()->headerData(1, Qt::Horizontal).toString() == "Player");
+    REQUIRE(names() == QStringList{"Clark / Adam", "phi / you", "Loner / you"});  // all players by default
+    REQUIRE_FALSE(button(window, "Edit Player")->isEnabled());
+
+    REQUIRE(choose(window, "Lost Mine"));
+    REQUIRE(names() == QStringList{"Clark / Adam", "phi / you"});  // the campaign's, across players
+
+    REQUIRE(choose(window, "you"));
+    REQUIRE(names() == QStringList{"phi / you"});
+    REQUIRE(button(window, "Edit Player")->isEnabled());
+
+    REQUIRE(choose(window, "All players"));
+    REQUIRE(choose(window, "No campaign"));
+    REQUIRE(names().size() == 3);
 }

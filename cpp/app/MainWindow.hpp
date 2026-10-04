@@ -57,6 +57,10 @@ private:
     void reloadLookupTables();
     // The campaign selector (and window title) from the database.
     void reloadCampaigns();
+    // The player a new character or export is for: the filter's, or with
+    // "All players", the selected character's or one the user picks. 0 if
+    // none (cancelled, or no players).
+    int playerForAction(const QString& action);
     void reloadCharactersForCurrentPlayer();
     void adjustCurrentCharacterHp(int delta);
     // The selected character, or nullptr (after telling the user to pick

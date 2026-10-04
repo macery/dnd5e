@@ -18,6 +18,7 @@ public:
     void setRaces(std::vector<dnd::LookupEntry> races);
     void setAlignments(std::vector<dnd::LookupEntry> alignments);
     void setCampaigns(std::vector<dnd::Campaign> campaigns);
+    void setPlayers(std::vector<dnd::Player> players);
     const dnd::Character& characterAt(int row) const;
 
     int rowCount(const QModelIndex& parent = QModelIndex()) const override;
@@ -31,4 +32,5 @@ private:
     std::vector<dnd::LookupEntry> races_;
     std::vector<dnd::LookupEntry> alignments_;
     std::vector<dnd::Campaign> campaigns_;
+    std::vector<dnd::Player> players_;
 };
