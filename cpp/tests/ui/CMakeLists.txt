@@ -14,6 +14,7 @@ add_executable(dnd_ui_tests
     test_magic_items_ui.cpp
     test_campaign_ui.cpp
     test_spellbook_ui.cpp
+    test_subclass_ui.cpp
 )
 target_link_libraries(dnd_ui_tests PRIVATE dnd_ui Catch2::Catch2)
 

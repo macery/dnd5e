@@ -43,6 +43,7 @@
 #include "LevelUpDialog.hpp"
 #include "MonsterListDialog.hpp"
 #include "SpellbookDialog.hpp"
+#include "SubclassDialog.hpp"
 #include "WindowSizing.hpp"
 
 #include "dnd/adventure.hpp"
@@ -54,6 +55,7 @@
 #include "dnd/level_up.hpp"
 #include "dnd/progression.hpp"
 #include "dnd/spellbook.hpp"
+#include "dnd/subclass.hpp"
 #include "dnd/spellcasting.hpp"
 
 MainWindow::MainWindow(dnd::Repository& repository, QWidget* parent)
@@ -145,6 +147,11 @@ MainWindow::MainWindow(dnd::Repository& repository, QWidget* parent)
                                "Improvements, new features, and new spells. The Level column shows \"3 → 4\" "
                                "when one is ready.");
     characterRow->addWidget(levelUpButton_);
+    subclassButton_ = new QPushButton("Choose Subclass…", central);
+    subclassButton_->setToolTip("Choose the selected character's subclass (Divine Domain, Martial Archetype, ...) "
+                                "once their class reaches it. The Status column says \"Subclass due\".");
+    characterRow->addWidget(subclassButton_);
+    connect(subclassButton_, &QPushButton::clicked, this, &MainWindow::onChooseSubclassClicked);
     rootLayout->addLayout(characterRow);
 
     auto* combatRow = new FlowLayout();
@@ -369,13 +376,16 @@ void MainWindow::onAddCharacterClicked() {
     int before = static_cast<int>(repository_.get_characters().size());
     CharacterCreationWizard wizard(repository_, playerId, this);
     if (wizard.exec() != QDialog::Accepted) return;
-    // In a campaign, a new character joins it, so it shows up and can play.
-    int campaign = repository_.active_campaign_id();
     auto characters = repository_.get_characters();
-    if (campaign != 0 && static_cast<int>(characters.size()) > before) {
-        int newest = 0;
-        for (const auto& character : characters) newest = std::max(newest, character.character_id);
-        repository_.set_character_campaign(newest, campaign);
+    if (static_cast<int>(characters.size()) > before) {
+        const dnd::Character* newest = &characters.front();
+        for (const auto& character : characters) {
+            if (character.character_id > newest->character_id) newest = &character;
+        }
+        // In a campaign, a new character joins it, so it shows up and can play.
+        int campaign = repository_.active_campaign_id();
+        if (campaign != 0) repository_.set_character_campaign(newest->character_id, campaign);
+        offerSubclass(*newest);  // Clerics, Sorcerers, and Warlocks choose at level 1
     }
     reloadCharactersForCurrentPlayer();
 }
@@ -523,7 +533,43 @@ void MainWindow::onLevelUpClicked() {
         LevelUpDialog dialog(repository_, character, classes_, this);
         if (dialog.exec() != QDialog::Accepted) break;
         character = dialog.character();
+        offerSubclass(character);  // the level that brings a subclass
+        for (const auto& fresh : repository_.get_characters()) {
+            if (fresh.character_id == character.character_id) character = fresh;
+        }
     }
+    reloadCharactersForCurrentPlayer();
+}
+
+bool MainWindow::offerSubclass(const dnd::Character& character) {
+    std::string className;
+    for (const auto& entry : classes_) {
+        if (entry.id == character.class_id) className = entry.name;
+    }
+    if (!dnd::subclass_due(character, className)) return false;
+    SubclassDialog dialog(repository_, character, classes_, this);
+    return dialog.exec() == QDialog::Accepted;
+}
+
+void MainWindow::onChooseSubclassClicked() {
+    const dnd::Character* selected = selectedCharacter("Choose Subclass");
+    if (!selected) return;
+    dnd::Character character = *selected;
+    std::string className;
+    for (const auto& entry : classes_) {
+        if (entry.id == character.class_id) className = entry.name;
+    }
+    if (!dnd::subclass_due(character, className)) {
+        int level = dnd::subclass_level(className);
+        QString message = !character.subclass.empty()
+            ? QString("%1 already follows %2.").arg(QString::fromStdString(character.character_name),
+                                                    QString::fromStdString(character.subclass))
+            : level == 0 ? QString("%1 has no subclasses yet.").arg(QString::fromStdString(className))
+                         : QString("%1s choose one at level %2.").arg(QString::fromStdString(className)).arg(level);
+        QMessageBox::information(this, "Choose Subclass", message);
+        return;
+    }
+    offerSubclass(character);
     reloadCharactersForCurrentPlayer();
 }
 

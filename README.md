@@ -271,7 +271,7 @@ Phases 1 (core and data) and 2 (UI) are done; see [docs/magic-system.md](docs/ma
   - Clerics, Druids, Paladins, and Wizards change prepared spells after a long rest, until their next fight. The Spellbook says when it's open.
   - Wizards keep a real spellbook (6 spells at level 1, plus 2 per level) and prepare INT + level spells from it. Combat offers only prepared spells.
 - [ ] **Copying spells into a spellbook**: from scrolls or another wizard's book (PHB: 50 gp and 2 hours per spell level).
-- [ ] **Effects that outlast combat**: *Mage Armor* (8 hours; AC 13 + DEX while unarmored, which also needs [armor & shields](#inventory--items)) and exhaustion levels. They need effects saved on the character; today every effect ends with the fight.
+- [ ] **Effects that outlast combat**: *Mage Armor* (8 hours; AC 13 + DEX while unarmored) and *Aid*. They need effects saved on the character; today every effect ends with the fight. (Exhaustion and temporary hit points are saved now; see subclasses.)
 - [ ] **More utility spells with real effects**: 18 utility spells (*Light*, *Detect Magic*, *Command*, *Sanctuary*, ...) still have no automated effect.
 - [x] **Magic items** ([docs/magic-items.md](docs/magic-items.md)): +1/+2/+3 weapons, armor, and shields; four healing potions; five wondrous items with attunement; spell scrolls with the DMG's reading rules; boss loot and the Shop.
 - [ ] **Charged magic items**: wands and staffs (a Wand of Magic Missiles), with charges saved per item and recharged each dawn.
@@ -304,7 +304,12 @@ Phases 1 (core and data) and 2 (UI) are done; see [docs/magic-system.md](docs/ma
 - [x] **Level-up choices** ([docs/level-up.md](docs/level-up.md)):
   - XP makes a level available, and **Level Up** on the main window walks through it: roll or average HP, Ability Score Improvements (with retroactive CON), Paladin and Ranger Fighting Styles, and new spells.
   - A summary shows every PHB feature gained, marked where it isn't automated yet.
-  - Feats, subclasses, and multiclassing are still to do.
+  - Feats and multiclassing are still to do.
+- [x] **Subclasses** ([docs/subclasses.md](docs/subclasses.md)):
+  - The twelve SRD subclasses, chosen at the class's level (in Level Up, after creation, or with **Choose Subclass…**), with their features through level 5.
+  - Champion crits, Frenzy (with exhaustion), Cutting Words, Colossus Slayer, Open Hand Technique, Fast Hands, Disciple of Life, Dark One's Blessing, Draconic Resilience, and Natural Recovery.
+  - Channel Divinity (Turn Undead, Destroy Undead, Preserve Life, Sacred Weapon, Turn the Unholy), and always-prepared domain, oath, and circle spells.
+- [ ] **More subclasses and higher-level subclass features**: the PHB's other 28 subclasses (not in the SRD), and subclass features above level 5.
 - [x] **Starting HP**: level-1 max HP is the class hit die plus CON, calculated by the wizard.
 - [x] **Keep level and XP in sync**: the editor edits XP, and Level is read-only; levels change only through Level Up.
 - [x] **Weapon proficiencies**: class (PHB ch. 3) and base-Dwarf weapon training. Proficiency is added only with trained weapons, and the wizard and Inventory warn about untrained ones. The Elf's training waits for subraces.
@@ -333,7 +338,7 @@ Phases 1 (core and data) and 2 (UI) are done; see [docs/magic-system.md](docs/ma
   - Resistance halves, vulnerability doubles, and immunity cancels. A skeleton takes double from a mace, and a zombie shrugs off Poison Spray.
   - Rage is resistance to bludgeoning, piercing, and slashing.
   - Monsters can be immune to conditions.
-- [ ] **Temporary hit points**: *Heroism*, *Armor of Agathys*, and similar effects that soak damage before HP.
+- [ ] **Temporary hit points from spells**: *Heroism*, *Armor of Agathys*, and similar. Temporary HP itself exists now (Dark One's Blessing): it soaks damage first and goes on a long rest.
 - [x] **Creature types**: on every monster. *Charm Person* targets humanoids only, and Divine Smite adds 1d8 against undead and fiends. (*Protection from Evil and Good* is still a utility spell.)
 - [ ] **Save log**: save the combat log or an encounter summary when the encounter ends.
 

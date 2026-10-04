@@ -1,8 +1,19 @@
 # Subclasses design
 
-Status: **decided; phase 1 in progress.** Decisions were settled on 2026-10-03: the twelve SRD subclasses, with every recommendation taken (1a, 2a, 3a, 4a, 5a, 6a, 7a).
+Status: **phases 1 (rules and combat) and 2 (UI) done.** Decisions were settled on 2026-10-03: the twelve SRD subclasses, with every recommendation taken (1a, 2a, 3a, 4a, 5a, 6a, 7a).
 
 Other PHB subclasses stay out because the SRD is the freely licensed part of the rules, and the repo is public. The design keeps subclasses as data plus feature code, so more can be added later.
+
+**Phase 2 as built:**
+- **`SubclassDialog`:** the class's subclasses, with features through level 5 (and later ones marked "not automated yet"), subclass spells, and the dragon or land choice. Accepting saves.
+- **Main window:**
+  - A **Choose Subclass…** button, and the chooser opens on its own after the Level Up that brings a subclass and after creating a level-1 Cleric, Sorcerer, or Warlock.
+  - The Status column says "Subclass due" (or "Exhaustion N").
+- **Character sheet:** a subclass row (with its choice; the features are in the tooltip), Exhaustion with its effects, and temporary HP after hit points.
+- **Combat:**
+  - A **Channel Divinity** row (an option list and **Channel**) when the current character has a use.
+  - Fast Hands lists the potions by name, and the HP column shows temporary HP.
+- **UI tests:** `tests/ui/test_subclass_ui.cpp`. The chooser is in the small-screen size test.
 
 **Phase 1 as built:**
 - **`dnd/subclass`:**

@@ -22,6 +22,7 @@
 #include "dnd/progression.hpp"
 #include "dnd/rules.hpp"
 #include "dnd/spellcasting.hpp"
+#include "dnd/subclass.hpp"
 
 namespace {
 
@@ -101,6 +102,27 @@ CharacterSheetDialog::CharacterSheetDialog(const dnd::Character& character,
     auto* summaryGroup = new QGroupBox("Summary", this);
     auto* summaryForm = new QFormLayout(summaryGroup);
     summaryForm->addRow("Class", new QLabel(nameFor(classes, character.class_id), summaryGroup));
+    {
+        std::string klass = nameFor(classes, character.class_id).toStdString();
+        QString kind = QString::fromStdString(dnd::subclass_kind(klass));
+        if (const dnd::SubclassInfo* sub = dnd::find_subclass(character.subclass)) {
+            QStringList features;
+            for (const auto& feature : sub->features) {
+                if (feature.level > character.level) continue;
+                features << QString("%1%2").arg(feature.name).arg(feature.automated ? "" : " (not automated yet)");
+            }
+            QString text = QString::fromStdString(character.subclass);
+            if (!character.subclass_choice.empty()) text += QString(" (%1)").arg(QString::fromStdString(character.subclass_choice));
+            addExplainedRow(summaryForm, kind, new QLabel(text, summaryGroup),
+                            QString::fromStdString(sub->summary) + "\n\n" + features.join("\n"));
+        } else if (dnd::subclass_due(character, klass)) {
+            addExplainedRow(summaryForm, kind,
+                            new QLabel("<b>due</b>: choose one with Choose Subclass on the main window", summaryGroup),
+                            QString("%1s choose a %2 at level %3.")
+                                .arg(QString::fromStdString(klass), kind)
+                                .arg(dnd::subclass_level(klass)));
+        }
+    }
     summaryForm->addRow("Race", new QLabel(nameFor(races, character.race), summaryGroup));
     summaryForm->addRow("Alignment", new QLabel(nameFor(alignments, character.alignment), summaryGroup));
     if (!character.background.empty()) {
@@ -120,7 +142,11 @@ CharacterSheetDialog::CharacterSheetDialog(const dnd::Character& character,
                      "damage. Proficiency is added only with weapons the class is trained in; with nothing "
                      "wielded, it's an unarmed strike (1 + STR).");
     addExplainedRow(summaryForm, "Hit Points",
-        new QLabel(QString("%1 / %2").arg(character.current_hp).arg(character.max_hp), summaryGroup),
+        new QLabel(QString("%1 / %2%3")
+                       .arg(character.current_hp)
+                       .arg(character.max_hp)
+                       .arg(character.temp_hp > 0 ? QString(" (+%1 temporary)").arg(character.temp_hp) : QString()),
+                   summaryGroup),
         "How much damage this character can take before falling unconscious. Current / maximum.");
     QString experienceText = character.level >= dnd::kMaxLevel
         ? QString("%1 (max level)").arg(character.experience)
@@ -131,6 +157,20 @@ CharacterSheetDialog::CharacterSheetDialog(const dnd::Character& character,
     if (dnd::pending_levels(character) > 0) {
         experienceText += QString(" — <b>ready to level up</b> (level %1): use Level Up on the main window")
                               .arg(dnd::level_for_xp(character.experience));
+    }
+    if (character.exhaustion > 0) {
+        static const char* kLevels[] = {"", "disadvantage on ability checks", "speed halved",
+                                        "disadvantage on attack rolls and saving throws", "hit point maximum halved",
+                                        "speed 0", "death"};
+        QStringList effects;
+        for (int level = 1; level <= std::min(character.exhaustion, 6); ++level) effects << kLevels[level];
+        addExplainedRow(summaryForm, "Exhaustion",
+            new QLabel(QString("<span style='color:#b00020'>Level %1</span>: %2")
+                           .arg(character.exhaustion)
+                           .arg(effects.join("; ")),
+                       summaryGroup),
+            "Exhaustion (PHB appendix A) builds up in levels; each long rest removes one. A Berserker's Frenzy "
+            "causes it. In combat, initiative counts as an ability check.");
     }
     if (character.revival_penalty > 0) {
         addExplainedRow(summaryForm, "Raised",

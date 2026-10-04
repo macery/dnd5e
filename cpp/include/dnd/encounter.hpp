@@ -359,6 +359,8 @@ public:
     // spells it's given: every spell a scroll might cast.
     void set_scroll_spells(std::vector<Spell> spells);
     const Spell* scroll_spell(const Item& scroll) const;
+    // A character's pack as the fight has left it (potions drunk, loot taken).
+    const std::vector<InventoryEntry>* pack_of(int character_id) const { return inventory_of(character_id); }
     // The current character's scrolls of known spells.
     std::vector<InventoryEntry> scrolls() const;
     // Whether the current character can read it, and how (dnd/magic_items.hpp).

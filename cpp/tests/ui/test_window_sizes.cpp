@@ -25,6 +25,7 @@
 #include "MonsterListDialog.hpp"
 #include "ShopDialog.hpp"
 #include "SpellbookDialog.hpp"
+#include "SubclassDialog.hpp"
 #include "dnd/character_io.hpp"
 #include "dnd/encounter_difficulty.hpp"
 #include "dnd/progression.hpp"
@@ -103,6 +104,10 @@ TEST_CASE("every window fits a small screen", "[ui][sizes]") {
     SECTION("inventory") {
         InventoryDialog inventory(repo, sera, classes, repo.get_races());
         requireFits(inventory, "InventoryDialog");
+    }
+    SECTION("subclass chooser") {
+        SubclassDialog subclass(repo, world.add("Fern", "Druid", 2), classes);
+        requireFits(subclass, "SubclassDialog");
     }
     SECTION("campaigns") {
         CampaignDialog campaigns(repo);

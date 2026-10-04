@@ -66,6 +66,7 @@ private slots:
     void onTakeActionClicked();
     void onBonusActionClicked();
     void onActionSurgeClicked();
+    void onChannelClicked();
 
 private:
     // Logs and persists everything the encounter reported since last time.
@@ -156,6 +157,9 @@ private:
     QComboBox* bonusTargetCombo_ = nullptr;
     QPushButton* bonusButton_ = nullptr;
     QPushButton* actionSurgeButton_ = nullptr;
+    QWidget* channelRow_ = nullptr;          // Channel Divinity: shown when the current character has a use
+    QComboBox* channelCombo_ = nullptr;
+    QPushButton* channelButton_ = nullptr;
     QCheckBox* recklessBox_ = nullptr;
     QComboBox* smiteCombo_ = nullptr;        // "No smite", then each slot level
     QComboBox* layOnHandsTargetCombo_ = nullptr;

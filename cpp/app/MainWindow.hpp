@@ -36,6 +36,9 @@ private slots:
     void onShopClicked();
     void onSpellbookClicked();
     void onLevelUpClicked();
+    void onChooseSubclassClicked();
+    // Opens the subclass chooser if the character has one due; true if one was chosen.
+    bool offerSubclass(const dnd::Character& character);
     void onExportClicked();
     void onImportClicked();
     void onBackupClicked();
@@ -90,6 +93,7 @@ private:
     QPushButton* deleteCharacterButton_ = nullptr;
     QPushButton* inventoryButton_ = nullptr;
     QPushButton* shopButton_ = nullptr;
+    QPushButton* subclassButton_ = nullptr;
     QPushButton* spellbookButton_ = nullptr;
     QPushButton* levelUpButton_ = nullptr;
     QPushButton* exportButton_ = nullptr;

@@ -243,6 +243,16 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
     attackForm->addRow(layOnHandsInfoLabel_);
     attackForm->addRow(actionRow);
     attackForm->addRow("Bonus action", bonusRow);
+    channelCombo_ = new QComboBox(attackGroup);
+    channelButton_ = new QPushButton("Channel", attackGroup);
+    channelButton_->setToolTip("Channel Divinity takes your action and one use (back on a short rest).");
+    channelRow_ = new QWidget(attackGroup);
+    auto* channelLayout = new QHBoxLayout(channelRow_);
+    channelLayout->setContentsMargins(0, 0, 0, 0);
+    channelLayout->addWidget(channelCombo_, 1);
+    channelLayout->addWidget(channelButton_);
+    attackForm->addRow("Channel Divinity", channelRow_);
+    connect(channelButton_, &QPushButton::clicked, this, &CombatEncounterDialog::onChannelClicked);
     attackForm->addRow(bonusActionLabel_);
 
     logView_ = new QPlainTextEdit(this);
@@ -687,6 +697,25 @@ void CombatEncounterDialog::refreshBonusControls() {
     bonusCombo_->blockSignals(false);
     refreshBonusTargets();
     actionSurgeButton_->setVisible(encounter_.can_action_surge());
+
+    // Channel Divinity options (an action): Turn Undead, Preserve Life, Sacred Weapon, ...
+    channelCombo_->clear();
+    for (const auto& option : encounter_.channel_divinity_options()) {
+        channelCombo_->addItem(q(option.label), static_cast<int>(option.kind));
+        channelCombo_->setItemData(channelCombo_->count() - 1, q(option.description), Qt::ToolTipRole);
+    }
+    bool channel = channelCombo_->count() > 0;
+    channelRow_->setVisible(channel);
+    if (auto* label = attackFormLayout_->labelForField(channelRow_)) label->setVisible(channel);
+}
+
+void CombatEncounterDialog::onChannelClicked() {
+    if (channelCombo_->count() == 0) return;
+    bool acted = encounter_.channel_divinity(static_cast<dnd::Encounter::Channel>(channelCombo_->currentData().toInt()));
+    processEvents();
+    if (acted) afterCharacterActed();
+    if (encounter_.status() != dnd::EncounterStatus::InProgress) onTurnStarted();
+    refreshState();
 }
 
 void CombatEncounterDialog::refreshBonusTargets() {
@@ -696,7 +725,19 @@ void CombatEncounterDialog::refreshBonusTargets() {
                        bonusTargets_[static_cast<size_t>(index)] != dnd::Encounter::BonusTarget::None;
     bonusTargetCombo_->setVisible(needsTarget);
     if (!needsTarget) return;
-    for (int target : encounter_.bonus_action_targets(bonusTargets_[static_cast<size_t>(index)])) {
+    auto kind = bonusTargets_[static_cast<size_t>(index)];
+    for (int target : encounter_.bonus_action_targets(kind)) {
+        if (kind == dnd::Encounter::BonusTarget::Potion) {  // item ids: name the potion
+            const dnd::Combatant* current = encounter_.current();
+            QString name = "Potion";
+            if (const auto* pack = current ? encounter_.pack_of(current->character_id) : nullptr) {
+                for (const auto& entry : *pack) {
+                    if (entry.item.item_id == target) name = QString("%1 (%2)").arg(q(entry.item.name)).arg(entry.quantity);
+                }
+            }
+            bonusTargetCombo_->addItem(name, target);
+            continue;
+        }
         bonusTargetCombo_->addItem(q(encounter_.combatants()[static_cast<size_t>(target)].name), target);
     }
 }
@@ -825,7 +866,11 @@ void CombatEncounterDialog::refreshParticipantTable() {
         participantTable_->setItem(row, 1, new QTableWidgetItem(QString::number(combatant.initiative)));
         participantTable_->setItem(row, 2, new QTableWidgetItem(QString::number(combatant.armor_class)));
         participantTable_->setItem(
-            row, 3, new QTableWidgetItem(QString("%1/%2").arg(combatant.current_hp).arg(combatant.max_hp)));
+            row, 3, new QTableWidgetItem(QString("%1/%2%3")
+                                             .arg(combatant.current_hp)
+                                             .arg(combatant.max_hp)
+                                             .arg(combatant.temp_hp > 0 ? QString(" +%1 temp").arg(combatant.temp_hp)
+                                                                        : QString())));
         int index = static_cast<int>(order[static_cast<size_t>(row)]);
         auto* status = new QTableWidgetItem(q(encounter_.status_text(index)));
         QStringList tooltip;

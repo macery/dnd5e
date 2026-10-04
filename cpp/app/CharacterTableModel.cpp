@@ -6,6 +6,7 @@
 
 #include "dnd/level_up.hpp"
 #include "dnd/progression.hpp"
+#include "dnd/subclass.hpp"
 
 namespace {
 
@@ -83,6 +84,9 @@ QVariant CharacterTableModel::data(const QModelIndex& index, int role) const {
         if (character.dead) return "Dead: failed three death saves or took massive damage. Only revival magic "
                                    "can bring them back: a temple's raise dead, in the Shop. They can't fight or rest.";
         if (character.current_hp <= 0) return "Unconscious at 0 HP (stable). Any healing wakes them.";
+        if (dnd::subclass_due(character, nameFor(classes_, character.class_id).toStdString())) {
+            return "A subclass is due: select this character and click Choose Subclass.";
+        }
         return {};
     }
     if (role == Qt::ToolTipRole && index.column() == LevelColumn && dnd::pending_levels(character) > 0) {
@@ -114,6 +118,8 @@ QVariant CharacterTableModel::data(const QModelIndex& index, int role) const {
         case StatusColumn:
             if (character.dead) return "Dead";
             if (character.current_hp <= 0) return "Unconscious";
+            if (dnd::subclass_due(character, nameFor(classes_, character.class_id).toStdString())) return "Subclass due";
+            if (character.exhaustion > 0) return QString("Exhaustion %1").arg(character.exhaustion);
             return "";
         case CampaignColumn:
             for (const auto& campaign : campaigns_) {
