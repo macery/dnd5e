@@ -27,6 +27,7 @@
 #include "dnd/character_creation.hpp"
 #include "dnd/class_features.hpp"
 #include "dnd/rules.hpp"
+#include "dnd/spellbook.hpp"
 #include "dnd/spellcasting.hpp"
 
 namespace {
@@ -323,7 +324,7 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
 
     encounter_.set_scroll_spells(repository_.get_spells());  // what scrolls in packs can cast
     for (const auto& character : characters) {
-        encounter_.add_character(character, repository_.get_character_spells(character.character_id),
+        encounter_.add_character(character, dnd::spells_ready(repository_, character),
                                  repository_.get_inventory(character.character_id));
     }
 

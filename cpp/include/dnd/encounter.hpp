@@ -62,6 +62,13 @@ struct Combatant {
     // Used its reaction since the start of its last turn (Shield, Uncanny
     // Dodge, Hellish Rebuke).
     bool reaction_used = false;
+    // Subclasses (docs/subclasses.md), exhaustion, and temporary HP.
+    std::string subclass;            // characters only
+    int exhaustion = 0;              // characters only: 1+ disadvantage on initiative, 3+ on attacks and saves
+    int temp_hp = 0;                 // lost before hit points
+    bool frenzied = false;           // a Berserker's Frenzy: exhaustion when the rage ends
+    bool frenzy_ready = false;       // Frenzy attacks start on the turn after the rage
+    double challenge_rating = 0;     // monsters only (Destroy Undead)
     // Characters only: the *raise dead* penalty (Character::revival_penalty),
     // taken off attack rolls, saving throws, and initiative.
     int roll_penalty = 0;
@@ -280,8 +287,11 @@ public:
         PatientDefense,         // Monk, 1 ki: Dodge
         StepOfTheWindDash,      // Monk, 1 ki: Dash (shown only)
         StepOfTheWindDisengage, // Monk, 1 ki: Disengage (shown only)
+        RageWithFrenzy,         // Berserker: Rage, and Frenzy (exhaustion when it ends)
+        FrenzyAttack,           // Berserker: one melee weapon attack while frenzied
+        FastHandsPotion,        // Thief: drink a potion (the target is the potion's item id)
     };
-    enum class BonusTarget { None, Ally, Enemy };
+    enum class BonusTarget { None, Ally, Enemy, Potion };
     struct BonusActionOption {
         BonusAction kind;
         std::string label;        // "Second Wind (1 left)"
@@ -295,6 +305,17 @@ public:
     // enemies are living monsters.
     std::vector<int> bonus_action_targets(BonusTarget target) const;
     bool use_bonus_action(BonusAction kind, int target = -1);
+
+    // Channel Divinity (Clerics from 2, Paladins from 3; docs/subclasses.md):
+    // one action, one use, back on a short rest.
+    enum class Channel { TurnUndead, PreserveLife, SacredWeapon, TurnTheUnholy };
+    struct ChannelOption {
+        Channel kind;
+        std::string label;        // "Channel Divinity: Turn Undead (1 left)"
+        std::string description;
+    };
+    std::vector<ChannelOption> channel_divinity_options() const;
+    bool channel_divinity(Channel kind);
     // Fighter Action Surge: one more action this turn.
     bool can_action_surge() const;
     bool action_surge();
@@ -366,7 +387,8 @@ private:
     // Fighting, a monster's rider), and logs it. `smite_slot` > 0 spends a
     // slot of that level on a hit for Divine Smite.
     // `monster_attack` adds a stat block attack's extra damage and on-hit save.
-    void weapon_attack(int attacker, int target, const WeaponAttack& attack, int smite_slot = 0,
+    // Returns true on a hit.
+    bool weapon_attack(int attacker, int target, const WeaponAttack& attack, int smite_slot = 0,
                        const MonsterAttack* monster_attack = nullptr);
     // `amount` of `type` damage to `target` after its resistances,
     // vulnerabilities, and immunities; appends " (halved: resistant to
@@ -403,6 +425,17 @@ private:
     int spend_lowest_slot(int index, const Spell& spell);
     // Hellish Rebuke back at `attacker` after `index` took damage from it.
     void hellish_rebuke(int index, int attacker);
+    // Cutting Words: a Lore bard subtracts an inspiration die from a monster's
+    // attack total against `target`; returns the amount subtracted (0: none).
+    int cutting_words(int target, int attack_total, int armor_class);
+    // Gains (or loses) exhaustion levels; dies at 6.
+    void add_exhaustion(int index, int levels, const std::string& why);
+    // A frenzied Berserker whose rage is over pays for it.
+    void settle_frenzy(int index);
+    // Drinks a healing potion from the character's pack (Drink Potion, Fast Hands).
+    bool drink(int index, int item_id);
+    // Disadvantage from exhaustion on attack rolls and saves (level 3+).
+    void exhaustion_mods(int index, RollModifiers& mods) const;
 
     // Effect bookkeeping at turn boundaries (durations, standing up, saves to end).
     void start_turn(int index);
@@ -467,6 +500,7 @@ private:
     std::vector<LootGrant> loot_;
     std::vector<Spell> scroll_spells_;
     bool auto_reactions_ = true;
+    std::vector<std::string> pending_reaction_lines_;  // logged after the attack they answered
     std::vector<LootGrant> pending_loot_;  // won, waiting for divide_loot
     int coins_cp_ = 0;
     std::vector<EncounterEvent> events_;

@@ -26,6 +26,7 @@ struct TurnState {
     bool action_surge_used = false;       // once per turn
     bool reckless = false;                // Reckless Attack: advantage on STR melee attacks this turn
     bool martial_advantage_used = false;  // a Hobgoblin's once-per-turn extra damage
+    bool colossus_slayer_used = false;    // a Hunter's once-per-turn extra damage
 };
 
 // Why `spell` can't be cast right now, or nullopt if it can. The spell's own

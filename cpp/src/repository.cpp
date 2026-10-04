@@ -24,7 +24,7 @@ constexpr const char* kCharacterColumns =
     "CharacterId, CharacterName, Class, Race, Alignment, PlayerID, Level, "
     "Strength, Dexterity, Constitution, Intelligence, Wisdom, Charisma, "
     "CurrentHP, MaxHP, SkillProficiencies, SaveProficiencies, "
-    "Experience, HitDiceUsed, Background, SpellSlotsUsed, Dead, FeatureUses, FightingStyle, Coins, RevivalPenalty, CampaignID, MayPrepare";
+    "Experience, HitDiceUsed, Background, SpellSlotsUsed, Dead, FeatureUses, FightingStyle, Coins, RevivalPenalty, CampaignID, MayPrepare, Subclass, SubclassChoice, Exhaustion, TempHP";
 // (Characters.ArmorClass and WeaponID still exist but are no longer used:
 // AC and weapons come from equipped inventory items since migration 15.)
 
@@ -112,6 +112,10 @@ Character read_character_row(sqlite3_stmt* stmt) {
     character.revival_penalty = sqlite3_column_int(stmt, 25);
     character.campaign_id = sqlite3_column_int(stmt, 26);
     character.may_prepare = sqlite3_column_int(stmt, 27) != 0;
+    character.subclass = column_text(stmt, 28);
+    character.subclass_choice = column_text(stmt, 29);
+    character.exhaustion = sqlite3_column_int(stmt, 30);
+    character.temp_hp = sqlite3_column_int(stmt, 31);
     return character;
 }
 
@@ -557,8 +561,9 @@ int Repository::add_character(const Character& character) {
         "INSERT INTO Characters (CharacterName, Class, Race, Alignment, PlayerID, Level, "
         "Strength, Dexterity, Constitution, Intelligence, Wisdom, Charisma, "
         "CurrentHP, MaxHP, SkillProficiencies, SaveProficiencies, "
-        "Experience, HitDiceUsed, Background, SpellSlotsUsed, Dead, FeatureUses, FightingStyle, Coins, RevivalPenalty, MayPrepare) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);");
+        "Experience, HitDiceUsed, Background, SpellSlotsUsed, Dead, FeatureUses, FightingStyle, Coins, RevivalPenalty, MayPrepare, "
+        "Subclass, SubclassChoice, Exhaustion, TempHP) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);");
     bind_text(stmt, 1, character.character_name);
     sqlite3_bind_int(stmt.get(), 2, character.class_id);
     sqlite3_bind_int(stmt.get(), 3, character.race);
@@ -585,6 +590,10 @@ int Repository::add_character(const Character& character) {
     bind_text(stmt, 24, serialize_coins(character.coins));
     sqlite3_bind_int(stmt.get(), 25, character.revival_penalty);
     sqlite3_bind_int(stmt.get(), 26, character.may_prepare ? 1 : 0);
+    bind_text(stmt, 27, character.subclass);
+    bind_text(stmt, 28, character.subclass_choice);
+    sqlite3_bind_int(stmt.get(), 29, character.exhaustion);
+    sqlite3_bind_int(stmt.get(), 30, character.temp_hp);
     detail::run_and_expect_done(stmt, "insert character");
     return static_cast<int>(sqlite3_last_insert_rowid(db_));
 }
@@ -622,7 +631,8 @@ void Repository::update_character(const Character& character) {
         "Strength = ?, Dexterity = ?, Constitution = ?, Intelligence = ?, Wisdom = ?, Charisma = ?, "
         "CurrentHP = ?, MaxHP = ?, SkillProficiencies = ?, SaveProficiencies = ?, "
         "Experience = ?, HitDiceUsed = ?, Background = ?, SpellSlotsUsed = ?, Dead = ?, FeatureUses = ?, "
-        "FightingStyle = ?, Coins = ?, RevivalPenalty = ?, MayPrepare = ? WHERE CharacterId = ?;");
+        "FightingStyle = ?, Coins = ?, RevivalPenalty = ?, MayPrepare = ?, Subclass = ?, SubclassChoice = ?, "
+        "Exhaustion = ?, TempHP = ? WHERE CharacterId = ?;");
     bind_text(stmt, 1, character.character_name);
     sqlite3_bind_int(stmt.get(), 2, character.class_id);
     sqlite3_bind_int(stmt.get(), 3, character.race);
@@ -648,7 +658,11 @@ void Repository::update_character(const Character& character) {
     bind_text(stmt, 23, serialize_coins(character.coins));
     sqlite3_bind_int(stmt.get(), 24, character.revival_penalty);
     sqlite3_bind_int(stmt.get(), 25, character.may_prepare ? 1 : 0);
-    sqlite3_bind_int(stmt.get(), 26, character.character_id);
+    bind_text(stmt, 26, character.subclass);
+    bind_text(stmt, 27, character.subclass_choice);
+    sqlite3_bind_int(stmt.get(), 28, character.exhaustion);
+    sqlite3_bind_int(stmt.get(), 29, character.temp_hp);
+    sqlite3_bind_int(stmt.get(), 30, character.character_id);
     detail::run_and_expect_done(stmt, "update character");
 }
 

@@ -54,6 +54,8 @@ enum class EffectKind {
     Raging,                       // Barbarian Rage: advantage on STR saves (the damage bonus and
                                   // resistance are applied by Encounter)
     InspirationDie,               // Bardic Inspiration: + 1d(amount) to the next attack roll or save
+    AttackBonusFlat,              // + amount to its weapon attack rolls (Sacred Weapon)
+    Turned,                       // Turn Undead: keeps away and doesn't attack; ends if it takes damage
 };
 
 // Stable text names for storing effect kinds (SpellEffects.Kind): the

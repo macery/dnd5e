@@ -25,6 +25,7 @@
 #include "dnd/rules.hpp"
 #include "dnd/spellbook.hpp"
 #include "dnd/spellcasting.hpp"
+#include "dnd/subclass.hpp"
 
 using dnd::Ability;
 
@@ -356,8 +357,7 @@ public:
             list->clear();
         }
         for (const auto& spell : context_.allSpells) {
-            const auto& classes = spell.class_names;
-            if (std::find(classes.begin(), classes.end(), context_.classInfo->name) == classes.end()) continue;
+            if (!dnd::on_spell_list(spell, context_.classInfo->name, context_.before)) continue;
             if (spell.level > allowance.max_spell_level) continue;
             bool known = std::any_of(context_.known.begin(), context_.known.end(),
                                      [&](const dnd::Spell& k) { return k.spell_id == spell.spell_id; });

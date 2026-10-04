@@ -18,7 +18,7 @@ using detail::Statement;
 // for future schema changes -- never edit an existing one, since a
 // migration's sql is exactly what already ran on every database that has it
 // recorded in SchemaMigrations.
-constexpr std::array<Migration, 27> kMigrations = {{
+constexpr std::array<Migration, 28> kMigrations = {{
     {1, "initial schema: Players, Classes, Characters", R"sql(
         CREATE TABLE IF NOT EXISTS Players (
             PlayerID INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -963,6 +963,58 @@ constexpr std::array<Migration, 27> kMigrations = {{
 
         WITH Pairs (ClassName, SpellName) AS (VALUES
             ('Sorcerer', 'Shield'), ('Wizard', 'Shield'), ('Warlock', 'Hellish Rebuke')
+        )
+        INSERT INTO ClassSpells (ClassID, SpellID)
+        SELECT Classes.ClassID, Spells.SpellID FROM Pairs
+        JOIN Classes ON Classes.ClassName = Pairs.ClassName
+        JOIN Spells ON Spells.Name = Pairs.SpellName;
+    )sql"},
+    // Subclasses (docs/subclasses.md): the choice, exhaustion and temporary
+    // HP they need, and the spells their lists name that weren't seeded yet.
+    {28, "add subclasses, exhaustion, and temporary hit points", R"sql(
+        ALTER TABLE Characters ADD COLUMN Subclass TEXT NOT NULL DEFAULT '';
+        ALTER TABLE Characters ADD COLUMN SubclassChoice TEXT NOT NULL DEFAULT '';
+        ALTER TABLE Characters ADD COLUMN Exhaustion INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE Characters ADD COLUMN TempHP INTEGER NOT NULL DEFAULT 0;
+
+        INSERT INTO Spells (Name, Level, School, Description, CastingTime, RangeText, DurationText, Concentration,
+                            Resolution, DiceCount, DiceSides) VALUES
+            ('Acid Arrow', 2, 'Evocation', 'A shimmering green arrow: 4d4 acid on a hit, and 2d4 more at the end of the target''s next turn. (No automated effect yet.)', 'Action', '90 feet', 'Instantaneous', 0, 'Utility', 0, 0),
+            ('Blur', 2, 'Illusion', 'Your body blurs: attackers have disadvantage against you. (No automated effect yet.)', 'Action', 'Self', 'Concentration, up to 1 minute', 1, 'Utility', 0, 0),
+            ('Darkness', 2, 'Evocation', 'Magical darkness fills a 15-foot sphere. (No automated effect yet.)', 'Action', '60 feet', 'Concentration, up to 10 minutes', 1, 'Utility', 0, 0),
+            ('Spider Climb', 2, 'Transmutation', 'A creature can climb walls and ceilings, hands free. (No automated effect yet.)', 'Action', 'Touch', 'Concentration, up to 1 hour', 1, 'Utility', 0, 0),
+            ('Web', 2, 'Conjuration', 'Thick, sticky webbing fills a 20-foot cube and restrains creatures caught in it (DEX save). (No automated effect yet.)', 'Action', '60 feet', 'Concentration, up to 1 hour', 1, 'Utility', 0, 0),
+            ('Zone of Truth', 2, 'Enchantment', 'Creatures in a 15-foot sphere can''t deliberately lie (CHA save). (No automated effect yet.)', 'Action', '60 feet', '10 minutes', 0, 'Utility', 0, 0),
+            ('Create Food and Water', 3, 'Conjuration', 'Enough food and water for fifteen humanoids or five steeds for a day. (No automated effect yet.)', 'Action', '30 feet', 'Instantaneous', 0, 'Utility', 0, 0),
+            ('Gaseous Form', 3, 'Transmutation', 'A willing creature becomes a misty cloud. (No automated effect yet.)', 'Action', 'Touch', 'Concentration, up to 1 hour', 1, 'Utility', 0, 0),
+            ('Meld into Stone', 3, 'Transmutation', 'You step into a stone object or surface large enough to hold you. (No automated effect yet.)', 'Action', 'Touch', '8 hours', 0, 'Utility', 0, 0),
+            ('Plant Growth', 3, 'Transmutation', 'Plants in a 100-foot radius become thick and overgrown. (No automated effect yet.)', 'Action', '150 feet', 'Instantaneous', 0, 'Utility', 0, 0),
+            ('Protection from Energy', 3, 'Abjuration', 'A willing creature has resistance to one damage type you choose. (No automated effect yet.)', 'Action', 'Touch', 'Concentration, up to 1 hour', 1, 'Utility', 0, 0),
+            ('Sleet Storm', 3, 'Conjuration', 'Freezing rain and sleet fall in a 40-foot cylinder. (No automated effect yet.)', 'Action', '150 feet', 'Concentration, up to 1 minute', 1, 'Utility', 0, 0),
+            ('Slow', 3, 'Transmutation', 'Up to six creatures are slowed: half speed, -2 AC and DEX saves, no reactions (WIS save). (No automated effect yet.)', 'Action', '120 feet', 'Concentration, up to 1 minute', 1, 'Utility', 0, 0),
+            ('Stinking Cloud', 3, 'Conjuration', 'A 20-foot sphere of nauseating gas: creatures that fail a CON save waste their action. (No automated effect yet.)', 'Action', '90 feet', 'Concentration, up to 1 minute', 1, 'Utility', 0, 0),
+            ('Water Breathing', 3, 'Transmutation', 'Up to ten willing creatures can breathe underwater. (No automated effect yet.)', 'Action', '30 feet', '24 hours', 0, 'Utility', 0, 0),
+            ('Water Walk', 3, 'Transmutation', 'Up to ten willing creatures can walk on liquid. (No automated effect yet.)', 'Action', '30 feet', '1 hour', 0, 'Utility', 0, 0);
+
+        WITH Pairs (ClassName, SpellName) AS (VALUES
+            ('Wizard', 'Acid Arrow'),
+            ('Sorcerer', 'Blur'), ('Wizard', 'Blur'),
+            ('Sorcerer', 'Darkness'), ('Warlock', 'Darkness'), ('Wizard', 'Darkness'),
+            ('Sorcerer', 'Spider Climb'), ('Warlock', 'Spider Climb'), ('Wizard', 'Spider Climb'),
+            ('Sorcerer', 'Web'), ('Wizard', 'Web'),
+            ('Bard', 'Zone of Truth'), ('Cleric', 'Zone of Truth'), ('Paladin', 'Zone of Truth'),
+            ('Cleric', 'Create Food and Water'), ('Paladin', 'Create Food and Water'),
+            ('Sorcerer', 'Gaseous Form'), ('Warlock', 'Gaseous Form'), ('Wizard', 'Gaseous Form'),
+            ('Cleric', 'Meld into Stone'), ('Druid', 'Meld into Stone'),
+            ('Bard', 'Plant Growth'), ('Druid', 'Plant Growth'), ('Ranger', 'Plant Growth'),
+            ('Cleric', 'Protection from Energy'), ('Druid', 'Protection from Energy'), ('Ranger', 'Protection from Energy'),
+            ('Sorcerer', 'Protection from Energy'), ('Wizard', 'Protection from Energy'),
+            ('Druid', 'Sleet Storm'), ('Sorcerer', 'Sleet Storm'), ('Wizard', 'Sleet Storm'),
+            ('Sorcerer', 'Slow'), ('Wizard', 'Slow'),
+            ('Bard', 'Stinking Cloud'), ('Sorcerer', 'Stinking Cloud'), ('Wizard', 'Stinking Cloud'),
+            ('Druid', 'Water Breathing'), ('Ranger', 'Water Breathing'), ('Sorcerer', 'Water Breathing'),
+            ('Wizard', 'Water Breathing'),
+            ('Cleric', 'Water Walk'), ('Druid', 'Water Walk'), ('Ranger', 'Water Walk'), ('Sorcerer', 'Water Walk')
         )
         INSERT INTO ClassSpells (ClassID, SpellID)
         SELECT Classes.ClassID, Spells.SpellID FROM Pairs

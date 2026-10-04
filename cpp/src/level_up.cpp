@@ -5,6 +5,7 @@
 #include <stdexcept>
 
 #include "dnd/progression.hpp"
+#include "dnd/subclass.hpp"
 
 namespace dnd {
 
@@ -25,7 +26,7 @@ const std::map<std::string, std::vector<ClassFeatureName>>& feature_tables() {
     static const std::map<std::string, std::vector<ClassFeatureName>> tables = {
         {"Barbarian",
          {{1, "Rage", kAuto}, {1, "Unarmored Defense", kAuto}, {2, "Reckless Attack", kAuto},
-          {2, "Danger Sense", kShown}, {3, "Primal Path", kShown}, {5, "Extra Attack", kAuto},
+          {2, "Danger Sense", kShown}, {3, "Primal Path", kAuto}, {5, "Extra Attack", kAuto},
           {5, "Fast Movement", kShown}, {6, "Primal Path feature", kShown}, {7, "Feral Instinct", kShown},
           {9, "Brutal Critical (1 die)", kShown}, {10, "Primal Path feature", kShown},
           {11, "Relentless Rage", kShown}, {13, "Brutal Critical (2 dice)", kShown},
@@ -34,7 +35,7 @@ const std::map<std::string, std::vector<ClassFeatureName>>& feature_tables() {
           {20, "Primal Champion", kShown}}},
         {"Bard",
          {{1, "Spellcasting", kAuto}, {1, "Bardic Inspiration (d6)", kAuto}, {2, "Jack of All Trades", kShown},
-          {2, "Song of Rest (d6)", kShown}, {3, "Bard College", kShown}, {3, "Expertise", kShown},
+          {2, "Song of Rest (d6)", kShown}, {3, "Bard College", kAuto}, {3, "Expertise", kShown},
           {5, "Bardic Inspiration (d8)", kAuto}, {5, "Font of Inspiration", kAuto}, {6, "Countercharm", kShown},
           {6, "Bard College feature", kShown}, {9, "Song of Rest (d8)", kShown},
           {10, "Bardic Inspiration (d10)", kAuto}, {10, "Expertise", kShown}, {10, "Magical Secrets", kShown},
@@ -43,23 +44,23 @@ const std::map<std::string, std::vector<ClassFeatureName>>& feature_tables() {
           {17, "Song of Rest (d12)", kShown}, {18, "Magical Secrets", kShown},
           {20, "Superior Inspiration", kShown}}},
         {"Cleric",
-         {{1, "Spellcasting", kAuto}, {1, "Divine Domain", kShown}, {2, "Channel Divinity (1/rest)", kShown},
-          {2, "Divine Domain feature", kShown}, {5, "Destroy Undead (CR 1/2)", kShown},
-          {6, "Channel Divinity (2/rest)", kShown}, {6, "Divine Domain feature", kShown},
+         {{1, "Spellcasting", kAuto}, {1, "Divine Domain", kAuto}, {2, "Channel Divinity (1/rest)", kAuto},
+          {2, "Divine Domain feature", kShown}, {5, "Destroy Undead (CR 1/2)", kAuto},
+          {6, "Channel Divinity (2/rest)", kAuto}, {6, "Divine Domain feature", kShown},
           {8, "Destroy Undead (CR 1)", kShown}, {8, "Divine Domain feature", kShown},
           {10, "Divine Intervention", kShown}, {11, "Destroy Undead (CR 2)", kShown},
           {14, "Destroy Undead (CR 3)", kShown}, {17, "Destroy Undead (CR 4)", kShown},
-          {17, "Divine Domain feature", kShown}, {18, "Channel Divinity (3/rest)", kShown},
+          {17, "Divine Domain feature", kShown}, {18, "Channel Divinity (3/rest)", kAuto},
           {20, "Divine Intervention improvement", kShown}}},
         {"Druid",
          {{1, "Druidic", kShown}, {1, "Spellcasting", kAuto}, {2, "Wild Shape", kShown},
-          {2, "Druid Circle", kShown}, {4, "Wild Shape improvement", kShown}, {6, "Druid Circle feature", kShown},
+          {2, "Druid Circle", kAuto}, {4, "Wild Shape improvement", kShown}, {6, "Druid Circle feature", kShown},
           {8, "Wild Shape improvement", kShown}, {10, "Druid Circle feature", kShown},
           {14, "Druid Circle feature", kShown}, {18, "Timeless Body", kShown}, {18, "Beast Spells", kShown},
           {20, "Archdruid", kShown}}},
         {"Fighter",
          {{1, "Fighting Style", kAuto}, {1, "Second Wind", kAuto}, {2, "Action Surge (one use)", kAuto},
-          {3, "Martial Archetype", kShown}, {5, "Extra Attack", kAuto}, {7, "Martial Archetype feature", kShown},
+          {3, "Martial Archetype", kAuto}, {5, "Extra Attack", kAuto}, {7, "Martial Archetype feature", kShown},
           {9, "Indomitable (one use)", kShown}, {10, "Martial Archetype feature", kShown},
           {11, "Extra Attack (2)", kAuto}, {13, "Indomitable (two uses)", kShown},
           {15, "Martial Archetype feature", kShown}, {17, "Action Surge (two uses)", kAuto},
@@ -67,7 +68,7 @@ const std::map<std::string, std::vector<ClassFeatureName>>& feature_tables() {
           {20, "Extra Attack (3)", kAuto}}},
         {"Monk",
          {{1, "Unarmored Defense", kAuto}, {1, "Martial Arts", kAuto}, {2, "Ki", kAuto},
-          {2, "Unarmored Movement", kShown}, {3, "Monastic Tradition", kShown}, {3, "Deflect Missiles", kShown},
+          {2, "Unarmored Movement", kShown}, {3, "Monastic Tradition", kAuto}, {3, "Deflect Missiles", kShown},
           {4, "Slow Fall", kShown}, {5, "Extra Attack", kAuto}, {5, "Stunning Strike", kShown},
           {6, "Ki-Empowered Strikes", kShown}, {6, "Monastic Tradition feature", kShown}, {7, "Evasion", kShown},
           {7, "Stillness of Mind", kShown}, {9, "Unarmored Movement improvement", kShown},
@@ -77,14 +78,14 @@ const std::map<std::string, std::vector<ClassFeatureName>>& feature_tables() {
         {"Paladin",
          {{1, "Divine Sense", kShown}, {1, "Lay on Hands", kAuto}, {2, "Fighting Style", kAuto},
           {2, "Spellcasting", kAuto}, {2, "Divine Smite", kAuto}, {3, "Divine Health", kShown},
-          {3, "Sacred Oath", kShown}, {5, "Extra Attack", kAuto}, {6, "Aura of Protection", kShown},
+          {3, "Sacred Oath", kAuto}, {5, "Extra Attack", kAuto}, {6, "Aura of Protection", kShown},
           {7, "Sacred Oath feature", kShown}, {10, "Aura of Courage", kShown},
           {11, "Improved Divine Smite", kShown}, {14, "Cleansing Touch", kShown},
           {15, "Sacred Oath feature", kShown}, {18, "Aura improvements", kShown},
           {20, "Sacred Oath feature", kShown}}},
         {"Ranger",
          {{1, "Favored Enemy", kShown}, {1, "Natural Explorer", kShown}, {2, "Fighting Style", kAuto},
-          {2, "Spellcasting", kAuto}, {3, "Ranger Archetype", kShown}, {3, "Primeval Awareness", kShown},
+          {2, "Spellcasting", kAuto}, {3, "Ranger Archetype", kAuto}, {3, "Primeval Awareness", kShown},
           {5, "Extra Attack", kAuto}, {6, "Favored Enemy and Natural Explorer improvements", kShown},
           {7, "Ranger Archetype feature", kShown}, {8, "Land's Stride", kShown},
           {10, "Natural Explorer improvement", kShown}, {10, "Hide in Plain Sight", kShown},
@@ -93,25 +94,25 @@ const std::map<std::string, std::vector<ClassFeatureName>>& feature_tables() {
           {20, "Foe Slayer", kShown}}},
         {"Rogue",
          {{1, "Expertise", kShown}, {1, "Sneak Attack", kAuto}, {1, "Thieves' Cant", kShown},
-          {2, "Cunning Action", kAuto}, {3, "Roguish Archetype", kShown}, {5, "Uncanny Dodge", kShown},
+          {2, "Cunning Action", kAuto}, {3, "Roguish Archetype", kAuto}, {5, "Uncanny Dodge", kAuto},
           {6, "Expertise", kShown}, {7, "Evasion", kShown}, {9, "Roguish Archetype feature", kShown},
           {11, "Reliable Talent", kShown}, {13, "Roguish Archetype feature", kShown}, {14, "Blindsense", kShown},
           {15, "Slippery Mind", kShown}, {17, "Roguish Archetype feature", kShown}, {18, "Elusive", kShown},
           {20, "Stroke of Luck", kShown}}},
         {"Sorcerer",
-         {{1, "Spellcasting", kAuto}, {1, "Sorcerous Origin", kShown}, {2, "Font of Magic", kShown},
+         {{1, "Spellcasting", kAuto}, {1, "Sorcerous Origin", kAuto}, {2, "Font of Magic", kShown},
           {3, "Metamagic", kShown}, {6, "Sorcerous Origin feature", kShown}, {10, "Metamagic", kShown},
           {14, "Sorcerous Origin feature", kShown}, {17, "Metamagic", kShown},
           {18, "Sorcerous Origin feature", kShown}, {20, "Sorcerous Restoration", kShown}}},
         {"Warlock",
-         {{1, "Otherworldly Patron", kShown}, {1, "Pact Magic", kAuto}, {2, "Eldritch Invocations", kShown},
+         {{1, "Otherworldly Patron", kAuto}, {1, "Pact Magic", kAuto}, {2, "Eldritch Invocations", kShown},
           {3, "Pact Boon", kShown}, {6, "Otherworldly Patron feature", kShown},
           {10, "Otherworldly Patron feature", kShown}, {11, "Mystic Arcanum (6th level)", kShown},
           {13, "Mystic Arcanum (7th level)", kShown}, {14, "Otherworldly Patron feature", kShown},
           {15, "Mystic Arcanum (8th level)", kShown}, {17, "Mystic Arcanum (9th level)", kShown},
           {20, "Eldritch Master", kShown}}},
         {"Wizard",
-         {{1, "Spellcasting", kAuto}, {1, "Arcane Recovery", kAuto}, {2, "Arcane Tradition", kShown},
+         {{1, "Spellcasting", kAuto}, {1, "Arcane Recovery", kAuto}, {2, "Arcane Tradition", kAuto},
           {6, "Arcane Tradition feature", kShown}, {10, "Arcane Tradition feature", kShown},
           {14, "Arcane Tradition feature", kShown}, {18, "Spell Mastery", kShown},
           {20, "Signature Spells", kShown}}},
@@ -227,6 +228,16 @@ LevelUpPlan level_up_plan(const Character& character, const ClassInfo& class_inf
     plan.fighting_style = fighting_style_level(class_info.name) == plan.new_level;
     if (plan.fighting_style) plan.fighting_style_options = fighting_styles_for(class_info.name);
     plan.features = class_features_at(class_info.name, plan.new_level);
+    if (!character.subclass.empty()) {
+        // The subclass's own features replace the table's "Divine Domain feature" placeholders.
+        std::string placeholder = subclass_kind(class_info.name) + " feature";
+        plan.features.erase(std::remove_if(plan.features.begin(), plan.features.end(),
+                                           [&](const ClassFeatureName& f) { return placeholder == f.name; }),
+                            plan.features.end());
+        for (const auto& feature : subclass_features_at(character.subclass, plan.new_level)) {
+            plan.features.push_back(feature);
+        }
+    }
 
     Character after = character;
     after.level = plan.new_level;
@@ -295,6 +306,10 @@ void apply_level_up(Character& character, const LevelUpPlan& plan, const LevelUp
     if (plan.fighting_style) character.fighting_style = choices.fighting_style;
     character.level = plan.new_level;
     character.max_hp += hp;
+    if (character.subclass == "Draconic Bloodline") {  // Draconic Resilience: +1 HP per sorcerer level
+        character.max_hp += 1;
+        character.current_hp += 1;
+    }
     character.current_hp += hp;
 }
 

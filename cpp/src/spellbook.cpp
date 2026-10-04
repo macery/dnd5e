@@ -1,8 +1,26 @@
 #include "dnd/spellbook.hpp"
 
+#include <algorithm>
+
 #include "dnd/spellcasting.hpp"
+#include "dnd/subclass.hpp"
 
 namespace dnd {
+
+std::vector<Spell> spells_ready(const Repository& repo, const Character& character) {
+    auto spells = repo.get_character_spells(character.character_id);
+    auto always = always_prepared_spell_names(character);
+    if (always.empty()) return spells;
+    for (const auto& spell : repo.get_spells()) {
+        if (std::find(always.begin(), always.end(), spell.name) == always.end()) continue;
+        bool known = std::any_of(spells.begin(), spells.end(), [&](const Spell& s) { return s.spell_id == spell.spell_id; });
+        if (!known) spells.push_back(spell);  // prepared, and free
+    }
+    std::stable_sort(spells.begin(), spells.end(), [](const Spell& a, const Spell& b) {
+        return a.level != b.level ? a.level < b.level : a.name < b.name;
+    });
+    return spells;
+}
 
 void add_known_spell(Repository& repo, const Character& character, const ClassInfo& class_info, int spell_id) {
     auto known = repo.get_character_spells(character.character_id);

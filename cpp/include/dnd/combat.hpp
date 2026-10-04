@@ -25,8 +25,9 @@ struct AttackResult {
 // unconscious target, PHB Appendix A). `reroll_low_damage` rerolls each
 // damage die that comes up 1 or 2, once, keeping the new roll (Great Weapon
 // Fighting).
+// `critical_threshold` is the lowest natural roll that crits (19 for a Champion).
 AttackResult resolve_attack(const Dice& dice, int attack_bonus, int target_ac, int damage_dice_count,
                              int damage_dice_sides, int damage_bonus, RollMode mode = RollMode::Normal,
-                             bool critical_on_hit = false, bool reroll_low_damage = false);
+                             bool critical_on_hit = false, bool reroll_low_damage = false, int critical_threshold = 20);
 
 }  // namespace dnd

@@ -66,6 +66,10 @@ ExportedCharacter export_one(const Repository& repo, const Character& c, const s
     out.hit_dice_used = c.hit_dice_used;
     out.dead = c.dead;
     out.revival_penalty = c.revival_penalty;
+    out.subclass = c.subclass;
+    out.subclass_choice = c.subclass_choice;
+    out.exhaustion = c.exhaustion;
+    out.temp_hp = c.temp_hp;
     for (int a = 0; a < kAbilityCount; ++a) {
         if (c.save_proficiencies & (1u << a)) out.saving_throws.push_back(ability_name(static_cast<Ability>(a)));
     }
@@ -131,6 +135,10 @@ std::string to_json(const CharacterExport& file) {
             {"hit_dice_used", c.hit_dice_used},
             {"dead", c.dead},
             {"revival_penalty", c.revival_penalty},
+            {"subclass", c.subclass},
+            {"subclass_choice", c.subclass_choice},
+            {"exhaustion", c.exhaustion},
+            {"temp_hp", c.temp_hp},
             {"saving_throws", c.saving_throws},
             {"skills", c.skills},
             {"fighting_style", c.fighting_style},
@@ -203,6 +211,10 @@ ParseResult parse_character_file(const std::string& text) {
             out.hit_dice_used = c.value("hit_dice_used", 0);
             out.dead = c.value("dead", false);
             out.revival_penalty = c.value("revival_penalty", 0);  // optional, like coins
+            out.subclass = c.value("subclass", std::string());
+            out.subclass_choice = c.value("subclass_choice", std::string());
+            out.exhaustion = c.value("exhaustion", 0);
+            out.temp_hp = c.value("temp_hp", 0);
             out.saving_throws = c.value("saving_throws", std::vector<std::string>{});
             out.skills = c.value("skills", std::vector<std::string>{});
             out.fighting_style = c.value("fighting_style", std::string());
@@ -392,6 +404,10 @@ ImportResult apply_import(Repository& repo, const ImportPlan& plan, const Import
             c.hit_dice_used = source.hit_dice_used;
             c.dead = source.dead;
             c.revival_penalty = source.revival_penalty;
+            c.subclass = source.subclass;
+            c.subclass_choice = source.subclass_choice;
+            c.exhaustion = source.exhaustion;
+            c.temp_hp = source.temp_hp;
             for (const auto& ability : source.saving_throws) {
                 for (int a = 0; a < kAbilityCount; ++a) {
                     if (ability == ability_name(static_cast<Ability>(a))) c.save_proficiencies |= 1u << a;

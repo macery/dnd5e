@@ -53,6 +53,7 @@
 #include "dnd/class_features.hpp"
 #include "dnd/level_up.hpp"
 #include "dnd/progression.hpp"
+#include "dnd/spellbook.hpp"
 #include "dnd/spellcasting.hpp"
 
 MainWindow::MainWindow(dnd::Repository& repository, QWidget* parent)
@@ -399,6 +400,11 @@ void MainWindow::onEditCharacterClicked() {
         updated.feature_uses_spent = existing.feature_uses_spent;
         updated.dead = existing.dead;
         updated.revival_penalty = existing.revival_penalty;
+        updated.may_prepare = existing.may_prepare;
+        updated.subclass = existing.subclass;
+        updated.subclass_choice = existing.subclass_choice;
+        updated.exhaustion = existing.exhaustion;
+        updated.temp_hp = existing.temp_hp;
         updated.coins = existing.coins;
         repository_.update_character(updated);
         reloadCharactersForCurrentPlayer();
@@ -428,7 +434,7 @@ void MainWindow::onCharacterActivated(const QModelIndex& index) {
     const dnd::Character& character = characterModel_->characterAt(index.row());
     CharacterSheetDialog dialog(character, classes_, races_, alignments_,
                                 repository_.get_inventory(character.character_id),
-                                repository_.get_character_spells(character.character_id), this);
+                                dnd::spells_ready(repository_, character), this);
     dialog.exec();
 }
 

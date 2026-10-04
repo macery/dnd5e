@@ -7,6 +7,8 @@
 #include "dnd/combat.hpp"
 #include "dnd/rules.hpp"
 
+#include "dnd/subclass.hpp"
+
 namespace dnd {
 
 namespace {
@@ -222,6 +224,7 @@ int prepared_spell_count(const Character& character, const ClassInfo& class_info
 SpellAllowance spell_allowance(const Character& character, const ClassInfo& class_info) {
     SpellAllowance allowance;
     allowance.cantrips = cantrips_known(class_info, character.level);
+    if (character.subclass == "Circle of the Land" && character.level >= 2) ++allowance.cantrips;  // Bonus Cantrip
     switch (class_info.spellcasting.preparation) {
         case SpellPreparation::Known: allowance.spells = spells_known(class_info, character.level); break;
         case SpellPreparation::Spellbook: allowance.spells = spellbook_size(character.level); break;
@@ -271,8 +274,7 @@ std::optional<std::string> validate_spell_selection(const Character& character, 
     int spells = 0;
     for (size_t i = 0; i < chosen.size(); ++i) {
         const Spell& spell = chosen[i];
-        const auto& classes = spell.class_names;
-        if (std::find(classes.begin(), classes.end(), class_info.name) == classes.end()) {
+        if (!on_spell_list(spell, class_info.name, character)) {  // the class's list, or a patron's expanded one
             return spell.name + " isn't on the " + class_info.name + " spell list.";
         }
         if (spell.level > allowance.max_spell_level) {

@@ -47,6 +47,7 @@ add_library(dndcore
     src/magic_items.cpp
     src/campaign.cpp
     src/spellbook.cpp
+    src/subclass.cpp
     src/damage.cpp
     src/dice.cpp
     src/effects.cpp

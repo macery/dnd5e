@@ -32,7 +32,9 @@ std::string ability_tag(Ability ability) {
 }
 
 std::string hp_text(const Combatant& combatant) {
-    return std::to_string(combatant.current_hp) + "/" + std::to_string(combatant.max_hp);
+    std::string text = std::to_string(combatant.current_hp) + "/" + std::to_string(combatant.max_hp);
+    if (combatant.temp_hp > 0) text += " (+" + std::to_string(combatant.temp_hp) + " temp)";
+    return text;
 }
 
 // "miss" / "hit for N" / "CRITICAL HIT for N".
@@ -126,7 +128,7 @@ void Encounter::add_character(const Character& character, std::vector<Spell> kno
     combatant.damage_dice_sides = weapon.damage_dice_sides;
     combatant.damage_bonus = weapon.damage_bonus;
     combatant.melee_attack = weapon.melee;
-    combatant.armor_not_proficient = wearing_armor_without_proficiency(class_name, inventory);
+    combatant.armor_not_proficient = wearing_armor_without_proficiency(class_name, inventory, character.subclass);
     combatant.attacks_per_action = attacks_per_attack_action(class_name, character.level);
     combatant.attack_uses_strength = weapon.uses_strength;
     combatant.attack_finesse_or_ranged = weapon.finesse_or_ranged;
@@ -151,6 +153,13 @@ void Encounter::add_character(const Character& character, std::vector<Spell> kno
     }
     combatant.death_saves.dead = character.dead;
     combatant.roll_penalty = character.revival_penalty;
+    combatant.subclass = character.subclass;
+    combatant.exhaustion = character.exhaustion;
+    combatant.temp_hp = character.temp_hp;
+    if (character.exhaustion >= 4) {  // exhaustion 4: hit point maximum halved
+        combatant.max_hp = std::max(1, character.max_hp / 2);
+        combatant.current_hp = std::min(combatant.current_hp, combatant.max_hp);
+    }
     combatants_.push_back(combatant);
     inventories_[character.character_id] = std::move(inventory);
 
@@ -195,6 +204,7 @@ void Encounter::add_monsters(const Monster& monster, int count) {
         combatant.multiattack = monster.multiattack;
         combatant.traits = monster.traits;
         combatant.xp = xp_for_challenge_rating(monster.challenge_rating);
+        combatant.challenge_rating = monster.challenge_rating;
         combatant.ability_scores = {monster.strength,     monster.dexterity, monster.constitution,
                                     monster.intelligence, monster.wisdom,    monster.charisma};
         combatants_.push_back(combatant);
@@ -407,6 +417,7 @@ void Encounter::roll_initiative() {
     }
     for (auto& combatant : combatants_) {
         int d20 = dice_.roll(20, 1).front();
+        if (combatant.exhaustion >= 1) d20 = std::min(d20, dice_.roll(20, 1).front());  // exhaustion: disadvantage
         combatant.initiative = d20 + combatant.dex_modifier - combatant.roll_penalty;
     }
 
@@ -491,6 +502,13 @@ void Encounter::start_turn(int index) {
     // fire or acid damage since its last one.
     Combatant& self = combatants_[static_cast<size_t>(index)];
     self.reaction_used = false;  // a reaction comes back at the start of each turn
+    if (self.frenzied) {
+        if (is_raging(index)) {
+            self.frenzy_ready = true;  // Frenzy attacks start the turn after the rage
+        } else {
+            settle_frenzy(index);
+        }
+    }
     if (has_trait(index, "Regeneration") && self.current_hp > 0) {
         if (self.regeneration_blocked) {
             log(self.name + " doesn't regenerate (fire or acid).");
@@ -728,6 +746,10 @@ void Encounter::stabilize_dying() {
 
 void Encounter::resolve_monster_turn(Combatant& monster) {
     int monster_index = static_cast<int>(&monster - combatants_.data());
+    if (has_effect(effects_, monster_index, EffectKind::Turned)) {
+        log(monster.name + " is turned and keeps its distance.");
+        return;
+    }
 
     // Monsters go after characters who are still up, ignoring anyone dying,
     // and can't attack whoever charmed them.
@@ -819,7 +841,7 @@ DamageTraits Encounter::damage_traits(int index) const {
     return traits;
 }
 
-void Encounter::weapon_attack(int attacker_index, int target_index, const WeaponAttack& attack, int smite_slot,
+bool Encounter::weapon_attack(int attacker_index, int target_index, const WeaponAttack& attack, int smite_slot,
                               const MonsterAttack* monster_attack) {
     Combatant& attacker = combatants_[static_cast<size_t>(attacker_index)];
     Combatant& target = combatants_[static_cast<size_t>(target_index)];
@@ -833,18 +855,39 @@ void Encounter::weapon_attack(int attacker_index, int target_index, const Weapon
     if (has_trait(attacker_index, "PackTactics") && ally_fighting(attacker_index)) {
         mods.advantage.push_back("Pack Tactics");
     }
+    exhaustion_mods(attacker_index, mods);
     std::vector<int> bonus_rolls;
     for (int sides : mods.bonus_dice) bonus_rolls.push_back(dice_.roll(sides, 1).front());
+    // Flat bonuses to weapon attack rolls (Sacred Weapon).
+    std::string flat_note;
+    for (const auto& effect : effects_) {
+        if (effect.target != attacker_index || effect.kind != EffectKind::AttackBonusFlat) continue;
+        attack_bonus += effect.amount;
+        flat_note += " " + format_modifier(effect.amount) + " (" + effect.label + ")";
+    }
+    // Improved Critical (Champion 3): crits on 19-20.
+    int crit_on = attacker.subclass == "Champion" && attacker.level >= 3 ? 19 : 20;
 
     auto result = resolve_attack(dice_, attack_bonus + sum(bonus_rolls), armor_class(target_index),
                                  attack.damage_dice_count, attack.damage_dice_sides, attack.damage_bonus, mods.mode(),
-                                 mods.auto_crit, attack.great_weapon_fighting);
+                                 mods.auto_crit, attack.great_weapon_fighting, crit_on);
+    int hp_before_hit = target.current_hp;
     use_effects(mods.used_effects);
 
     // Reactions against a monster's hit (automatic; docs/reactions.md).
-    std::vector<std::string> reaction_lines;
+    std::vector<std::string>& reaction_lines = pending_reaction_lines_;
+    reaction_lines.clear();
     bool reacting = auto_reactions_ && monster_attack && target.is_character && !target.reaction_used &&
                     target.current_hp > 0;
+    if (monster_attack && target.is_character && result.hit && !result.critical && auto_reactions_) {
+        // Cutting Words (a Lore bard's reaction, for anyone in the party).
+        int total = result.attack_roll + attack_bonus + sum(bonus_rolls);
+        int cut = cutting_words(target_index, total, armor_class(target_index));
+        if (cut > 0 && total - cut < armor_class(target_index)) {
+            result.hit = false;
+            result.damage_total = 0;
+        }
+    }
     if (reacting && result.hit && !result.critical) {
         // Shield: +5 AC until the start of its next turn, if that makes this attack miss.
         int total = result.attack_roll + attack_bonus + sum(bonus_rolls);
@@ -920,6 +963,14 @@ void Encounter::weapon_attack(int attacker_index, int target_index, const Weapon
             result.damage_total += sum(extra);
             extra_note += " (+" + std::to_string(sum(extra)) + " Martial Advantage)";
         }
+        // Colossus Slayer (Hunter 3): +1d8 once per turn against a creature already hurt.
+        if (attacker.subclass == "Hunter" && attacker.level >= 3 && !turn_.colossus_slayer_used &&
+            hp_before_hit < target.max_hp && attacker_index == current_index()) {
+            turn_.colossus_slayer_used = true;
+            auto extra = dice_.roll(8, result.critical ? 2 : 1);
+            result.damage_total += sum(extra);
+            extra_note += " (+" + std::to_string(sum(extra)) + " Colossus Slayer)";
+        }
         // Divine Smite: a slot for 2d8 radiant, +1d8 per slot level above 1st (max 5d8).
         if (smite_slot > 0) {
             Character* paladin = character_mut(attacker.character_id);
@@ -959,7 +1010,7 @@ void Encounter::weapon_attack(int attacker_index, int target_index, const Weapon
                                 : std::vector<std::string>{};
 
     log(attacker.name + " attacks " + target.name + ": d20(" + std::to_string(result.attack_roll) + ") " +
-        format_modifier(attack.attack_bonus) + penalty_note(attacker.roll_penalty) +
+        format_modifier(attack.attack_bonus) + penalty_note(attacker.roll_penalty) + flat_note +
         bonus_note(mods.bonus_dice, bonus_rolls) + mode_note(mods) + " -> " + attack_outcome(result.hit, result.critical, result.damage_total) + extra_note + ". " + target.name +
         " is now " + hp_text(target) + " HP.");
     for (const auto& line : reaction_lines) log(line);
@@ -997,6 +1048,7 @@ void Encounter::weapon_attack(int attacker_index, int target_index, const Weapon
             add_effect(effect);
         }
     }
+    return result.hit;
 }
 
 std::vector<std::string> Encounter::apply_spell_effects(const Spell& spell, SpellEffectTrigger trigger, int caster,
@@ -1053,6 +1105,27 @@ std::vector<std::string> Encounter::apply_damage(int target_index, int amount, b
     Combatant& target = combatants_[static_cast<size_t>(target_index)];
     if (amount <= 0 || target.death_saves.dead) return followups;
 
+    // Any damage ends being turned.
+    auto turned = std::remove_if(effects_.begin(), effects_.end(), [&](const ActiveEffect& e) {
+        return e.target == target_index && e.kind == EffectKind::Turned;
+    });
+    if (turned != effects_.end()) {
+        effects_.erase(turned, effects_.end());
+        followups.push_back("    " + target.name + " is no longer turned.");
+    }
+    // Temporary hit points go first.
+    if (target.temp_hp > 0) {
+        int absorbed = std::min(target.temp_hp, amount);
+        target.temp_hp -= absorbed;
+        amount -= absorbed;
+        followups.push_back("    " + std::to_string(absorbed) + " of it comes off " + target.name +
+                            "'s temporary hit points.");
+        if (amount == 0) {
+            sync_character_hp(target);
+            return followups;
+        }
+    }
+
     // Undead Fortitude (Zombie): damage that would drop it to 0 allows a CON
     // save (DC 5 + the damage) to stay at 1 HP -- not against radiant damage
     // or a critical hit.
@@ -1103,6 +1176,20 @@ std::vector<std::string> Encounter::apply_damage(int target_index, int amount, b
     target.current_hp = std::max(0, target.current_hp - amount);
     target.rage_kept_up = true;  // taking damage keeps a rage going
 
+    if (target.current_hp == 0 && !target.is_character && source >= 0) {
+        // Dark One's Blessing (Fiend warlock): temporary HP for dropping a foe.
+        Combatant& killer = combatants_[static_cast<size_t>(source)];
+        const Character* warlock = character(killer.character_id);
+        if (killer.is_character && killer.subclass == "The Fiend" && warlock) {
+            int gained = std::max(1, ability_modifier(warlock->charisma) + warlock->level);
+            if (gained > killer.temp_hp) {
+                killer.temp_hp = gained;
+                sync_character_hp(killer);
+                followups.push_back("    Dark One's Blessing: " + killer.name + " gains " + std::to_string(gained) +
+                                    " temporary hit points.");
+            }
+        }
+    }
     if (target.current_hp == 0) {
         if (target.is_character) {
             if (is_massive_damage(hp_before, amount, target.max_hp)) {
@@ -1168,6 +1255,7 @@ std::vector<std::string> Encounter::apply_healing(int target_index, int amount, 
 
 bool Encounter::roll_save(int target_index, Ability ability, int dc, std::string& detail) {
     RollModifiers mods = saving_throw_modifiers(effects_, target_index, ability);
+    exhaustion_mods(target_index, mods);
     use_effects(mods.used_effects);  // e.g. a Bardic Inspiration die
     int roll = dice_.roll_d20(mods.mode()).result;
     std::vector<int> bonus_rolls;
@@ -1246,6 +1334,9 @@ void Encounter::check_for_victory_or_defeat() {
         award_coins();
     }
     if (status_ != EncounterStatus::InProgress) {
+        for (int i = 0; i < static_cast<int>(combatants_.size()); ++i) {
+            if (combatants_[static_cast<size_t>(i)].frenzied) settle_frenzy(i);  // the rage ends with the fight
+        }
         effects_.clear();  // combat effects end with the fight
         for (auto& combatant : combatants_) combatant.concentration.clear();
     }
@@ -1650,6 +1741,22 @@ std::vector<Encounter::BonusActionOption> Encounter::bonus_action_options() cons
     if (uses(Feature::Rage) > 0 && !is_raging(index) && !actor.wearing_heavy_armor) {
         options.push_back({BonusAction::Rage, "Rage" + left(uses(Feature::Rage)), feature_info(Feature::Rage).description,
                            BonusTarget::None});
+        if (actor.subclass == "Path of the Berserker" && actor.level >= 3) {
+            options.push_back({BonusAction::RageWithFrenzy, "Rage with Frenzy" + left(uses(Feature::Rage)),
+                               "Rage, and go into a frenzy: from your next turn, one melee weapon attack as a bonus "
+                               "action each turn. When the rage ends, you gain a level of exhaustion.",
+                               BonusTarget::None});
+        }
+    }
+    if (actor.frenzied && actor.frenzy_ready && is_raging(index) && actor.melee_attack &&
+        !bonus_action_targets(BonusTarget::Enemy).empty()) {
+        options.push_back({BonusAction::FrenzyAttack, "Frenzy: melee attack (" + actor.attack_name + ")",
+                           "While frenzied, one melee weapon attack as a bonus action.", BonusTarget::Enemy});
+    }
+    if (actor.subclass == "Thief" && actor.level >= 3 && !bonus_action_targets(BonusTarget::Potion).empty()) {
+        options.push_back({BonusAction::FastHandsPotion, "Fast Hands: drink a potion",
+                           "Cunning Action with Fast Hands: drink a healing potion as a bonus action.",
+                           BonusTarget::Potion});
     }
     if (actor.class_name == "Rogue" && actor.level >= 2) {
         options.push_back({BonusAction::CunningDash, "Cunning Action: Dash",
@@ -1698,6 +1805,15 @@ std::vector<Encounter::BonusActionOption> Encounter::bonus_action_options() cons
 std::vector<int> Encounter::bonus_action_targets(BonusTarget target) const {
     std::vector<int> targets;
     int actor = current_index();
+    if (target == BonusTarget::Potion) {  // item ids of the healing potions carried
+        const Combatant* current = this->current();
+        auto inventory = current ? inventories_.find(current->character_id) : inventories_.end();
+        if (inventory == inventories_.end()) return targets;
+        for (const auto& entry : inventory->second) {
+            if (is_healing_item(entry.item) && entry.quantity > 0) targets.push_back(entry.item.item_id);
+        }
+        return targets;
+    }
     for (int i = 0; i < static_cast<int>(combatants_.size()); ++i) {
         const auto& candidate = combatants_[static_cast<size_t>(i)];
         if (candidate.current_hp <= 0) continue;
@@ -1740,6 +1856,7 @@ bool Encounter::use_bonus_action(BonusAction kind, int target) {
             for (const auto& line : followups) log(line);
             break;
         }
+        case BonusAction::RageWithFrenzy:
         case BonusAction::Rage: {
             spend_feature(character, Feature::Rage, actor.class_name);
             changed(actor.character_id);
@@ -1754,10 +1871,27 @@ bool Encounter::use_bonus_action(BonusAction kind, int target) {
             actor.rage_kept_up = false;
             log(actor.name + " flies into a rage! (+" + std::to_string(rage_damage_bonus(actor.level)) +
                 " damage on STR melee attacks, advantage on STR saves, physical damage halved)");
+            if (kind == BonusAction::RageWithFrenzy) {
+                actor.frenzied = true;
+                actor.frenzy_ready = false;
+                log("    " + actor.name + " goes into a frenzy: a bonus-action attack each turn from the next, and "
+                    "a level of exhaustion when the rage ends.");
+            }
             std::string concentration = drop_concentration(index, "raging");
             if (!concentration.empty()) log(concentration);
             break;
         }
+        case BonusAction::FrenzyAttack: {
+            const Character* self = this->character(actor.character_id);
+            WeaponAttack weapon = dnd::weapon_attack(*self, actor.class_name, actor.race_name,
+                                                     inventories_[actor.character_id]);
+            log(actor.name + " attacks in a frenzy:");
+            weapon_attack(index, target, weapon);
+            break;
+        }
+        case BonusAction::FastHandsPotion:
+            drink(index, target);
+            break;
         case BonusAction::CunningDash:
             log(actor.name + " takes the Dash action as a bonus action (Cunning Action).");
             break;
@@ -1789,13 +1923,35 @@ bool Encounter::use_bonus_action(BonusAction kind, int target) {
             spend_feature(character, Feature::Ki, actor.class_name);
             changed(actor.character_id);
             log(actor.name + " spends 1 ki on Flurry of Blows.");
-            weapon_attack(index, target, *actor.unarmed_strike);
+            // Open Hand Technique (3): each hit can knock the target prone (DEX save vs the ki DC).
+            auto open_hand = [&](int struck) {
+                Combatant& foe = combatants_[static_cast<size_t>(struck)];
+                if (actor.subclass != "Way of the Open Hand" || actor.level < 3 || foe.current_hp <= 0) return;
+                const Character* monk = this->character(actor.character_id);
+                int dc = 8 + proficiency_bonus(actor.level) + ability_modifier(monk ? monk->wisdom : 10);
+                std::string detail;
+                if (roll_save(struck, Ability::Dexterity, dc, detail)) {
+                    log("    Open Hand Technique: " + foe.name + " " + detail + " vs DC " + std::to_string(dc) +
+                        " -> stays standing.");
+                    return;
+                }
+                ActiveEffect prone;
+                prone.kind = EffectKind::Condition;
+                prone.condition = Condition::Prone;
+                prone.target = struck;
+                prone.source = index;
+                prone.label = "Prone";
+                add_effect(prone);
+                log("    Open Hand Technique: " + foe.name + " " + detail + " vs DC " + std::to_string(dc) +
+                    " -> knocked prone.");
+            };
+            if (weapon_attack(index, target, *actor.unarmed_strike)) open_hand(target);
             int second = target;
             if (combatants_[static_cast<size_t>(target)].current_hp <= 0) {
                 auto others = bonus_action_targets(BonusTarget::Enemy);
                 second = others.empty() ? -1 : others.front();
             }
-            if (second >= 0) weapon_attack(index, second, *actor.unarmed_strike);
+            if (second >= 0 && weapon_attack(index, second, *actor.unarmed_strike)) open_hand(second);
             break;
         }
         case BonusAction::PatientDefense: {
@@ -1994,7 +2150,13 @@ bool Encounter::dodge() {
 
 bool Encounter::drink_potion(int item_id) {
     if (!can_take_action()) return false;
-    int index = current_index();
+    if (!drink(current_index(), item_id)) return false;
+    use_action();
+    check_for_victory_or_defeat();
+    return true;
+}
+
+bool Encounter::drink(int index, int item_id) {
     Combatant& actor = combatants_[static_cast<size_t>(index)];
 
     auto& inventory = inventories_[actor.character_id];
@@ -2022,8 +2184,6 @@ bool Encounter::drink_potion(int item_id) {
     log(actor.name + " drinks a " + item.name + " and regains " + std::to_string(healed) + " HP (now " +
         hp_text(actor) + ").");
     for (const auto& line : followups) log(line);
-    use_action();
-    check_for_victory_or_defeat();
     return true;
 }
 
@@ -2161,11 +2321,13 @@ void Encounter::resolve_spell(int actor_index, const Spell& spell, const CasterS
         RollModifiers mods;
         if (spell.resolution == SpellResolution::Attack) {
             mods = attack_roll_modifiers(effects_, actor_index, index, spell.melee_attack, alive);
+            exhaustion_mods(actor_index, mods);
             spell_target.attack_mode = mods.mode();
             spell_target.critical_on_hit = mods.auto_crit;
             spell_target.attack_bonus_dice = mods.bonus_dice;
         } else if (spell.resolution == SpellResolution::Save) {
             mods = saving_throw_modifiers(effects_, index, spell.save_ability);
+            exhaustion_mods(index, mods);
             if (spell.combat_save_advantage) mods.advantage.push_back("in combat with the caster");
             spell_target.save_mode = mods.mode();
             spell_target.save_auto_fail = mods.auto_fail;
@@ -2255,7 +2417,9 @@ void Encounter::resolve_spell(int actor_index, const Spell& spell, const CasterS
                 break;
             case SpellResolution::Heal: {
                 int healed = 0;
-                followups = apply_healing(target_index, effect.amount, healed);
+                int amount = effect.amount;
+                if (actor.subclass == "Life Domain" && spell.level > 0) amount += 2 + slot;  // Disciple of Life
+                followups = apply_healing(target_index, amount, healed);
                 outcome = "regains " + std::to_string(healed) + " HP";
                 break;
             }
@@ -2270,6 +2434,195 @@ void Encounter::resolve_spell(int actor_index, const Spell& spell, const CasterS
     }
 
     check_for_victory_or_defeat();
+}
+
+// --- Subclass mechanics (docs/subclasses.md) ------------------------------------
+
+void Encounter::exhaustion_mods(int index, RollModifiers& mods) const {
+    if (combatants_.at(static_cast<size_t>(index)).exhaustion >= 3) mods.disadvantage.push_back("exhaustion");
+}
+
+void Encounter::add_exhaustion(int index, int levels, const std::string& why) {
+    Combatant& combatant = combatants_[static_cast<size_t>(index)];
+    Character* character = character_mut(combatant.character_id);
+    if (!character) return;
+    character->exhaustion = std::clamp(character->exhaustion + levels, 0, 6);
+    combatant.exhaustion = character->exhaustion;
+    changed(character->character_id);
+    log("    " + combatant.name + " gains a level of exhaustion (" + why + "): now level " +
+        std::to_string(combatant.exhaustion) + ".");
+    if (combatant.exhaustion >= 6 && !combatant.death_saves.dead) {
+        for (const auto& line : mark_dead(index, "dies of exhaustion")) log(line);
+    }
+}
+
+void Encounter::settle_frenzy(int index) {
+    Combatant& combatant = combatants_[static_cast<size_t>(index)];
+    if (!combatant.frenzied) return;
+    combatant.frenzied = false;
+    combatant.frenzy_ready = false;
+    add_exhaustion(index, 1, "the frenzy is over");
+}
+
+int Encounter::cutting_words(int target, int attack_total, int armor_class) {
+    // Any conscious Lore bard (level 3+) with a reaction and an inspiration use left.
+    for (int i = 0; i < static_cast<int>(combatants_.size()); ++i) {
+        Combatant& bard = combatants_[static_cast<size_t>(i)];
+        if (!bard.is_character || bard.subclass != "College of Lore" || bard.level < 3) continue;
+        if (bard.current_hp <= 0 || bard.reaction_used) continue;
+        Character* character = character_mut(bard.character_id);
+        if (!character || feature_uses_left(Feature::BardicInspiration, *character, bard.class_name) <= 0) continue;
+        int die = bardic_inspiration_die(bard.level);
+        if (attack_total - die >= armor_class) continue;  // even the best roll couldn't save it
+        int roll = dice_.roll(die, 1).front();
+        spend_feature(*character, Feature::BardicInspiration, bard.class_name);
+        changed(character->character_id);
+        bard.reaction_used = true;
+        bool saved = attack_total - roll < armor_class;
+        pending_reaction_lines_.push_back("    " + bard.name + " uses Cutting Words (d" + std::to_string(die) + ": " +
+                                          std::to_string(roll) + "): the attack total drops to " +
+                                          std::to_string(attack_total - roll) + " vs AC " +
+                                          std::to_string(armor_class) +
+                                          (saved ? ", and it misses " + combatants_[static_cast<size_t>(target)].name +
+                                                       "."
+                                                 : ", still a hit."));
+        return roll;
+    }
+    return 0;
+}
+
+std::vector<Encounter::ChannelOption> Encounter::channel_divinity_options() const {
+    std::vector<ChannelOption> options;
+    if (!awaiting_action() || turn_.actions_left <= 0 || !current() || !current()->is_character) return options;
+    const Combatant& actor = combatants_[static_cast<size_t>(current_index())];
+    const Character* character = this->character(actor.character_id);
+    if (!character) return options;
+    int left = feature_uses_left(Feature::ChannelDivinity, *character, actor.class_name);
+    if (left <= 0) return options;
+    std::string uses = " (" + std::to_string(left) + " left)";
+    if (actor.class_name == "Cleric") {
+        options.push_back({Channel::TurnUndead, "Channel Divinity: Turn Undead" + uses,
+                           "Each undead foe makes a WIS save against your spell save DC. On a failure it's turned for "
+                           "a minute: it keeps away and doesn't attack, until it takes damage. From level 5, weak "
+                           "undead are destroyed outright (Destroy Undead)."});
+        if (actor.subclass == "Life Domain") {
+            options.push_back({Channel::PreserveLife, "Channel Divinity: Preserve Life" + uses,
+                               "Restore " + std::to_string(5 * actor.level) +
+                                   " hit points, divided among the party: no one above half their maximum. The "
+                                   "most hurt come first."});
+        }
+    }
+    if (actor.class_name == "Paladin" && actor.subclass == "Oath of Devotion") {
+        options.push_back({Channel::SacredWeapon, "Channel Divinity: Sacred Weapon" + uses,
+                           "For 1 minute, add your CHA modifier (at least +1) to weapon attack rolls."});
+        options.push_back({Channel::TurnTheUnholy, "Channel Divinity: Turn the Unholy" + uses,
+                           "Each fiend or undead foe makes a WIS save against your spell save DC. On a failure it's "
+                           "turned for a minute, until it takes damage."});
+    }
+    return options;
+}
+
+bool Encounter::channel_divinity(Channel kind) {
+    if (!can_take_action()) return false;
+    auto options = channel_divinity_options();
+    if (std::none_of(options.begin(), options.end(), [kind](const ChannelOption& o) { return o.kind == kind; })) {
+        return false;
+    }
+    int index = current_index();
+    Combatant& actor = combatants_[static_cast<size_t>(index)];
+    Character& character = *character_mut(actor.character_id);
+    const ClassInfo* info = find_class_info_by_id(classes_, character.class_id);
+    spend_feature(character, Feature::ChannelDivinity, actor.class_name);
+    changed(actor.character_id);
+    use_action();
+
+    switch (kind) {
+        case Channel::TurnUndead:
+        case Channel::TurnTheUnholy: {
+            bool unholy = kind == Channel::TurnTheUnholy;
+            int dc = info ? caster_stats(character, *info).spell_save_dc : 10;
+            log(actor.name + (unholy ? " presents a holy symbol: Turn the Unholy (DC " : " turns undead (DC ") +
+                std::to_string(dc) + ").");
+            // Destroy Undead (Cleric 5+): CR 1/2 or lower at 5, 1 at 8, 2 at 11, 3 at 14, 4 at 17.
+            double destroy = actor.class_name != "Cleric" ? -1
+                             : actor.level >= 17          ? 4
+                             : actor.level >= 14          ? 3
+                             : actor.level >= 11          ? 2
+                             : actor.level >= 8           ? 1
+                             : actor.level >= 5           ? 0.5
+                                                          : -1;
+            bool any = false;
+            for (int i = 0; i < static_cast<int>(combatants_.size()); ++i) {
+                Combatant& foe = combatants_[static_cast<size_t>(i)];
+                bool fits = foe.creature_type == "Undead" || (unholy && foe.creature_type == "Fiend");
+                if (foe.is_character || foe.current_hp <= 0 || !fits) continue;
+                any = true;
+                std::string detail;
+                bool saved = roll_save(i, Ability::Wisdom, dc, detail);
+                if (saved) {
+                    log("    " + foe.name + ": " + detail + " -> resists.");
+                } else if (foe.challenge_rating <= destroy) {
+                    foe.current_hp = 0;
+                    log("    " + foe.name + ": " + detail + " -> destroyed!");
+                } else {
+                    ActiveEffect effect;
+                    effect.kind = EffectKind::Turned;
+                    effect.target = i;
+                    effect.source = index;
+                    effect.duration.kind = DurationKind::Rounds;
+                    effect.duration.rounds = 10;
+                    effect.label = "Turned";
+                    add_effect(effect);
+                    log("    " + foe.name + ": " + detail + " -> turned.");
+                }
+            }
+            if (!any) log("    Nothing here is affected.");
+            break;
+        }
+        case Channel::PreserveLife: {
+            int pool = 5 * actor.level;
+            log(actor.name + " channels divinity: Preserve Life (" + std::to_string(pool) + " hit points).");
+            std::vector<int> hurt;
+            for (int i = 0; i < static_cast<int>(combatants_.size()); ++i) {
+                const Combatant& c = combatants_[static_cast<size_t>(i)];
+                if (c.is_character && !c.death_saves.dead && c.current_hp < c.max_hp / 2) hurt.push_back(i);
+            }
+            std::stable_sort(hurt.begin(), hurt.end(), [&](int a, int b) {
+                const Combatant& x = combatants_[static_cast<size_t>(a)];
+                const Combatant& y = combatants_[static_cast<size_t>(b)];
+                return static_cast<long long>(x.current_hp) * y.max_hp < static_cast<long long>(y.current_hp) * x.max_hp;
+            });
+            for (int i : hurt) {
+                if (pool <= 0) break;
+                const Combatant& c = combatants_[static_cast<size_t>(i)];
+                int give = std::min(pool, c.max_hp / 2 - c.current_hp);
+                int healed = 0;
+                auto lines = apply_healing(i, give, healed);
+                pool -= healed;
+                log("    " + c.name + " regains " + std::to_string(healed) + " HP (now " + hp_text(c) + ").");
+                for (const auto& line : lines) log(line);
+            }
+            if (hurt.empty()) log("    No one is below half their hit points.");
+            break;
+        }
+        case Channel::SacredWeapon: {
+            int bonus = std::max(1, ability_modifier(character.charisma));
+            ActiveEffect effect;
+            effect.kind = EffectKind::AttackBonusFlat;
+            effect.amount = bonus;
+            effect.target = index;
+            effect.source = index;
+            effect.duration.kind = DurationKind::Rounds;
+            effect.duration.rounds = 10;
+            effect.label = "Sacred Weapon";
+            add_effect(effect);
+            log(actor.name + " channels divinity: Sacred Weapon (+" + std::to_string(bonus) +
+                " to weapon attack rolls for 1 minute).");
+            break;
+        }
+    }
+    check_for_victory_or_defeat();
+    return true;
 }
 
 // --- Spell scrolls -----------------------------------------------------------
@@ -2390,6 +2743,7 @@ void Encounter::sync_character_hp(const Combatant& combatant) {
     if (!combatant.is_character) return;
     if (Character* character = character_mut(combatant.character_id)) {
         character->current_hp = combatant.current_hp;
+        character->temp_hp = combatant.temp_hp;
         changed(combatant.character_id);
     }
 }

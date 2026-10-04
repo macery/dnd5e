@@ -41,6 +41,10 @@ struct ExportedCharacter {
     int hit_dice_used = 0;
     bool dead = false;
     int revival_penalty = 0;  // optional in files, like coins
+    std::string subclass;          // optional in files (added after version 1 shipped)
+    std::string subclass_choice;
+    int exhaustion = 0;
+    int temp_hp = 0;
     std::vector<std::string> saving_throws;  // ability names
     std::vector<std::string> skills;         // skill names
     std::string fighting_style;

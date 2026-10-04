@@ -16,6 +16,7 @@
 #include "WindowSizing.hpp"
 #include "dnd/spellbook.hpp"
 #include "dnd/spellcasting.hpp"
+#include "dnd/subclass.hpp"
 
 namespace {
 
@@ -127,7 +128,9 @@ SpellbookDialog::SpellbookDialog(dnd::Repository& repository, dnd::Character cha
 }
 
 void SpellbookDialog::reload() {
-    known_ = repository_.get_character_spells(character_.character_id);
+    // The character's spells, plus subclass spells that are always prepared (shown, never counted).
+    known_ = dnd::spells_ready(repository_, character_);
+    subclassSpells_ = dnd::always_prepared_spell_names(character_);
     const auto& info = *classInfo_;
     auto allowance = dnd::spell_allowance(character_, info);
 
@@ -150,7 +153,9 @@ void SpellbookDialog::reload() {
 
     int cantrips = 0;
     int spells = 0;
-    for (const auto& spell : known_) (spell.level == 0 ? cantrips : spells) += 1;
+    for (const auto& spell : known_) {
+        if (!isSubclassSpell(spell)) (spell.level == 0 ? cantrips : spells) += 1;
+    }
     QString spellsWord = info.spellcasting.preparation == dnd::SpellPreparation::Known ? "Spells known"
                          : isWizard()                                                  ? "Spellbook"
                                                                                        : "Spells prepared";
@@ -191,6 +196,11 @@ void SpellbookDialog::reload() {
                                                                               : "Reaction";
         table_->setItem(row, 3, new QTableWidgetItem(time));
         table_->setItem(row, 4, new QTableWidgetItem(spell.level == 0 ? "always" : spell.prepared ? "✓" : ""));
+        if (isSubclassSpell(spell)) {
+            name->setText(q(spell.name) + QString(" (%1)").arg(q(character_.subclass)));
+            name->setToolTip(tooltipFor(spell) + "<br><i>Always prepared by your subclass; it doesn't count against "
+                                                 "your spells.</i>");
+        }
     }
     if (selectedRow >= 0 && selectedRow < table_->rowCount()) table_->selectRow(selectedRow);
 
@@ -199,8 +209,7 @@ void SpellbookDialog::reload() {
         bool alreadyKnown = std::any_of(known_.begin(), known_.end(),
                                         [&](const dnd::Spell& k) { return k.spell_id == spell.spell_id; });
         if (alreadyKnown) continue;
-        const auto& classes = spell.class_names;
-        if (std::find(classes.begin(), classes.end(), info.name) == classes.end()) continue;
+        if (!dnd::on_spell_list(spell, info.name, character_)) continue;  // a patron's expanded list too
         if (spell.level > allowance.max_spell_level) continue;
         learnCombo_->addItem(QString("%1 (%2) — %3")
                                  .arg(q(spell.name), spell.level == 0 ? "cantrip" : ordinal(spell.level),
@@ -222,7 +231,10 @@ const dnd::Spell* SpellbookDialog::selectedSpell() const {
 }
 
 std::vector<dnd::Spell> SpellbookDialog::knownPlus(const dnd::Spell& extra) const {
-    auto spells = known_;
+    std::vector<dnd::Spell> spells;
+    for (const auto& spell : known_) {
+        if (!isSubclassSpell(spell)) spells.push_back(spell);  // subclass spells don't count
+    }
     spells.push_back(extra);
     return spells;
 }
@@ -231,7 +243,7 @@ void SpellbookDialog::onSelectionChanged() {
     const dnd::Spell* spell = selectedSpell();
     std::string refusal = dnd::preparation_refusal(character_, *classInfo_);
     bool listLocked = preparesFromList() && !refusal.empty();
-    forgetButton_->setEnabled(spell != nullptr && !listLocked);
+    forgetButton_->setEnabled(spell != nullptr && !listLocked && !isSubclassSpell(*spell));
     forgetButton_->setToolTip(listLocked ? q(refusal) : QString());
     prepareButton_->setVisible(isWizard());
     prepareButton_->setText(spell && spell->prepared && spell->level > 0 ? "Unprepare" : "Prepare");
@@ -282,7 +294,9 @@ void SpellbookDialog::onCastClicked() {
     QString slotText = slotLevel > 0 ? QString(" with a %1-level slot").arg(ordinal(slotLevel)) : "";
     if (spell.resolution == dnd::SpellResolution::Heal) {
         int before = character_.current_hp;
-        character_.current_hp = std::min(character_.max_hp, character_.current_hp + result.effects.front().amount);
+        int amount = result.effects.front().amount;
+        if (character_.subclass == "Life Domain" && spell.level > 0) amount += 2 + slotLevel;  // Disciple of Life
+        character_.current_hp = std::min(character_.max_hp, character_.current_hp + amount);
         messageLabel_->setText(QString("Cast %1%2: regained %3 HP (now %4/%5).")
                                    .arg(q(spell.name), slotText)
                                    .arg(character_.current_hp - before)
@@ -293,6 +307,10 @@ void SpellbookDialog::onCastClicked() {
     }
     repository_.update_character(character_);
     reload();
+}
+
+bool SpellbookDialog::isSubclassSpell(const dnd::Spell& spell) const {
+    return std::find(subclassSpells_.begin(), subclassSpells_.end(), spell.name) != subclassSpells_.end();
 }
 
 bool SpellbookDialog::isWizard() const {

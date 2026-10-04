@@ -85,8 +85,10 @@ bool is_proficient_with_weapon(const std::string& class_name, const std::string&
     return contains(info->weapons.weapons, name);
 }
 
-bool is_proficient_with_armor(const std::string& class_name, const Item& armor) {
+bool is_proficient_with_armor(const std::string& class_name, const Item& armor, const std::string& subclass) {
     if (!armor.armor) return false;
+    // Life Domain clerics also train with heavy armor.
+    if (subclass == "Life Domain" && armor.armor->type == ArmorType::Heavy) return true;
     const ClassEquipment* info = class_equipment(class_name);
     if (!info) return false;
     switch (armor.armor->type) {
@@ -158,6 +160,12 @@ ArmorClassBreakdown calculate_armor_class(const Character& stored, const std::st
             if (10 + dex + con > best_total) {
                 best = {{"Unarmored Defense", 10}, {"DEX", dex}, {"CON", con}};
                 best_total = 10 + dex + con;
+            }
+        } else if (class_name == "Sorcerer" && character.subclass == "Draconic Bloodline") {
+            // Draconic Resilience: 13 + DEX unarmored (a shield is fine).
+            if (13 + dex > best_total) {
+                best = {{"Draconic Resilience", 13}, {"DEX", dex}};
+                best_total = 13 + dex;
             }
         } else if (class_name == "Monk" && !shield) {
             int wis = ability_modifier(character.wisdom);
@@ -273,9 +281,10 @@ WeaponAttack weapon_attack(const Character& stored, const std::string& class_nam
 
 // --- Wearing armor ---------------------------------------------------------------
 
-bool wearing_armor_without_proficiency(const std::string& class_name, const std::vector<InventoryEntry>& inventory) {
+bool wearing_armor_without_proficiency(const std::string& class_name, const std::vector<InventoryEntry>& inventory,
+                                       const std::string& subclass) {
     for (const InventoryEntry* worn : {equipped_armor(inventory), equipped_shield(inventory)}) {
-        if (worn && !is_proficient_with_armor(class_name, worn->item)) return true;
+        if (worn && !is_proficient_with_armor(class_name, worn->item, subclass)) return true;
     }
     return false;
 }
@@ -303,7 +312,7 @@ std::vector<std::string> equipment_warnings(const Character& character, const st
                            ": attacks with it won't add the proficiency bonus.");
     }
     if ((category == ItemCategory::Armor || category == ItemCategory::Shield) &&
-        !is_proficient_with_armor(class_name, item)) {
+        !is_proficient_with_armor(class_name, item, character.subclass)) {
         warnings.push_back("Not proficient with " + item.name +
                            ": while wearing it, attacks, ability checks, and saves using STR or DEX have "
                            "disadvantage, and no spells can be cast.");

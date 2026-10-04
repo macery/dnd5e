@@ -45,6 +45,7 @@ private:
     const dnd::ClassInfo* classInfo_ = nullptr;
     std::vector<dnd::Spell> allSpells_;
     std::vector<dnd::Spell> known_;
+    std::vector<std::string> subclassSpells_;
 
     dnd::SystemRandomSource randomSource_;
     dnd::Dice dice_{randomSource_};
@@ -61,6 +62,7 @@ private:
     QComboBox* learnCombo_ = nullptr;
     QPushButton* learnButton_ = nullptr;
     bool isWizard() const;
+    bool isSubclassSpell(const dnd::Spell& spell) const;  // always prepared by the subclass
     bool preparesFromList() const;  // Cleric, Druid, Paladin: the list is what's prepared
     QLabel* messageLabel_ = nullptr;
 };

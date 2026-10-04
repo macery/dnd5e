@@ -18,7 +18,17 @@ int attacks_per_attack_action(const std::string& class_name, int level);
 
 // --- Features with limited uses ------------------------------------------------
 
-enum class Feature { SecondWind, ActionSurge, Rage, BardicInspiration, ArcaneRecovery, Ki, LayOnHands };
+enum class Feature {
+    SecondWind,
+    ActionSurge,
+    Rage,
+    BardicInspiration,
+    ArcaneRecovery,
+    Ki,
+    LayOnHands,
+    ChannelDivinity,  // Cleric 2 (1 use, 2 at 6, 3 at 18), Paladin 3 (1 use); short rest
+    NaturalRecovery,  // Circle of the Land druids: Arcane Recovery's twin
+};
 
 enum class Recovery { ShortRest, LongRest };
 
@@ -34,7 +44,9 @@ struct FeatureInfo {
 const std::vector<FeatureInfo>& limited_features();
 const FeatureInfo& feature_info(Feature feature);
 
-// True if a character of this class and level has the feature.
+// True if a character of this class and level has the feature (Channel
+// Divinity: Clerics and Paladins). Subclass-only features (Natural Recovery)
+// are true for the class; their uses are 0 without the subclass.
 bool has_feature(Feature feature, const std::string& class_name, int level);
 
 // Uses per rest (0 without the feature). Rage is effectively unlimited at

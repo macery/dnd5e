@@ -40,6 +40,14 @@ struct Character {
     // Prepared casters may change their prepared spells: after a long rest,
     // until their next fight (docs/preparing-spells.md).
     bool may_prepare = true;
+    // The subclass (dnd/subclass.hpp; "" until chosen) and its choice: a
+    // Draconic sorcerer's dragon, a Land druid's land.
+    std::string subclass;
+    std::string subclass_choice;
+    // Exhaustion levels, 0-6 (PHB appendix A); a long rest removes one.
+    int exhaustion = 0;
+    // Temporary hit points, lost first and gone after a long rest.
+    int temp_hp = 0;
     // Class feature uses spent since they last came back, by feature key
     // ("SecondWind", "Rage", ...). Maximums come from class and level
     // (dnd/class_features.hpp); rests clear them.

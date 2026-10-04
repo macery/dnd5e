@@ -167,7 +167,7 @@ CharacterSheetDialog::CharacterSheetDialog(const dnd::Character& character,
         new QLabel(QString("%1 ft.").arg(dnd::walking_speed(character, raceName, inventory)), summaryGroup),
         "How far this character can move in a turn, from their race. Heavy armor without enough STR costs 10 ft. "
         "(Movement isn't tracked in combat yet.)");
-    if (dnd::wearing_armor_without_proficiency(className, inventory)) {
+    if (dnd::wearing_armor_without_proficiency(className, inventory, character.subclass)) {
         auto* warning = new QLabel("Wearing armor this class isn't proficient with: disadvantage on STR and DEX "
                                    "attacks, checks, and saves, and no spellcasting.",
                                    summaryGroup);

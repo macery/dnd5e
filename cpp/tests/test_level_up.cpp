@@ -87,7 +87,8 @@ TEST_CASE("every class has a PHB feature table for levels 1-20", "[level_up]") {
     REQUIRE(fifth.size() == 1);
     REQUIRE(std::string(fifth[0].name) == "Extra Attack");
     REQUIRE(fifth[0].automated);
-    REQUIRE_FALSE(dnd::class_features_at("Rogue", 5).front().automated);  // Uncanny Dodge: shown only
+    REQUIRE(dnd::class_features_at("Rogue", 5).front().automated);  // Uncanny Dodge: a reaction now
+    REQUIRE_FALSE(dnd::class_features_at("Rogue", 7).front().automated);  // Evasion: shown only
 }
 
 TEST_CASE("a level-up plan says what the next level brings", "[level_up]") {

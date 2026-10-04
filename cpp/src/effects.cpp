@@ -60,7 +60,7 @@ Condition condition_from_name(const std::string& name) {
 }
 
 namespace {
-constexpr std::array<std::pair<EffectKind, const char*>, 14> kEffectKindNames = {{
+constexpr std::array<std::pair<EffectKind, const char*>, 16> kEffectKindNames = {{
     {EffectKind::Condition, "Condition"},
     {EffectKind::Dodging, "Dodging"},
     {EffectKind::AttackBonusDice, "AttackBonusDice"},
@@ -75,6 +75,8 @@ constexpr std::array<std::pair<EffectKind, const char*>, 14> kEffectKindNames = 
     {EffectKind::ArmorNotProficient, "ArmorNotProficient"},
     {EffectKind::Raging, "Raging"},
     {EffectKind::InspirationDie, "InspirationDie"},
+    {EffectKind::AttackBonusFlat, "AttackBonusFlat"},
+    {EffectKind::Turned, "Turned"},
 }};
 }  // namespace
 
@@ -116,6 +118,9 @@ std::string effect_description(const ActiveEffect& effect) {
                    "resistance to bludgeoning, piercing, and slashing damage. Can't cast spells or concentrate.";
         case EffectKind::InspirationDie:
             return "Inspired: adds 1d" + amount + " to its next attack roll or saving throw.";
+        case EffectKind::AttackBonusFlat: return "+" + amount + " to its weapon attack rolls.";
+        case EffectKind::Turned:
+            return "Turned: it spends its turns keeping away and doesn't attack. Taking any damage ends it.";
         case EffectKind::ArmorNotProficient:
             return "Wearing armor it isn't proficient with: disadvantage on attacks, ability checks, and saves that use "
                    "STR or DEX, and it can't cast spells.";

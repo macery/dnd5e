@@ -44,6 +44,12 @@ const std::vector<FeatureInfo>& limited_features() {
         {Feature::LayOnHands, "LayOnHands", "Lay on Hands", "Paladin", 1,
          "Action: touch a creature and restore hit points from a pool of 5 x your paladin level, back on a "
          "long rest."},
+        {Feature::ChannelDivinity, "ChannelDivinity", "Channel Divinity", "Cleric", 2,
+         "Action: channel divine energy -- Turn Undead (undead that fail a WIS save are turned for a minute), or "
+         "your domain's or oath's option. Back on a short rest."},
+        {Feature::NaturalRecovery, "NaturalRecovery", "Natural Recovery", "Druid", 2,
+         "Circle of the Land: once per day, on a short rest, recover spell slots with combined levels up to half "
+         "your druid level (rounded up), none of 6th level or higher."},
     };
     return features;
 }
@@ -56,6 +62,9 @@ const FeatureInfo& feature_info(Feature feature) {
 }
 
 bool has_feature(Feature feature, const std::string& class_name, int level) {
+    if (feature == Feature::ChannelDivinity) {
+        return (class_name == "Cleric" && level >= 2) || (class_name == "Paladin" && level >= 3);
+    }
     const FeatureInfo& info = feature_info(feature);
     return class_name == info.class_name && level >= info.min_level;
 }
@@ -77,6 +86,10 @@ int feature_max_uses(Feature feature, const Character& character, const std::str
         case Feature::ArcaneRecovery: return 1;
         case Feature::Ki: return level;
         case Feature::LayOnHands: return 5 * level;
+        case Feature::ChannelDivinity:
+            if (class_name == "Paladin") return 1;
+            return level >= 18 ? 3 : level >= 6 ? 2 : 1;
+        case Feature::NaturalRecovery: return character.subclass == "Circle of the Land" ? 1 : 0;
     }
     return 0;
 }
@@ -91,10 +104,12 @@ Recovery feature_recovery(Feature feature, int level) {
     switch (feature) {
         case Feature::SecondWind:
         case Feature::ActionSurge:
+        case Feature::ChannelDivinity:
         case Feature::Ki: return Recovery::ShortRest;
         case Feature::BardicInspiration: return level >= 5 ? Recovery::ShortRest : Recovery::LongRest;
         case Feature::Rage:
         case Feature::ArcaneRecovery:
+        case Feature::NaturalRecovery:
         case Feature::LayOnHands: return Recovery::LongRest;
     }
     return Recovery::LongRest;
@@ -159,7 +174,9 @@ int divine_smite_dice(int slot_level) {
 
 std::array<int, 9> use_arcane_recovery(Character& character, const std::string& class_name) {
     std::array<int, 9> recovered{};
-    if (feature_uses_left(Feature::ArcaneRecovery, character, class_name) <= 0) return recovered;
+    // A Land druid's Natural Recovery works the same way.
+    Feature feature = class_name == "Druid" ? Feature::NaturalRecovery : Feature::ArcaneRecovery;
+    if (feature_uses_left(feature, character, class_name) <= 0) return recovered;
 
     int budget = arcane_recovery_budget(character.level);
     bool any = false;
@@ -172,7 +189,7 @@ std::array<int, 9> use_arcane_recovery(Character& character, const std::string& 
             any = true;
         }
     }
-    if (any) spend_feature(character, Feature::ArcaneRecovery, class_name);
+    if (any) spend_feature(character, feature, class_name);
     return recovered;
 }
 

@@ -37,7 +37,7 @@ std::vector<std::string> race_weapon_proficiencies(const std::string& race_name)
 
 bool is_proficient_with_weapon(const std::string& class_name, const std::string& race_name, const Item& weapon);
 // Armor or a shield. Unknown classes are proficient with nothing.
-bool is_proficient_with_armor(const std::string& class_name, const Item& armor);
+bool is_proficient_with_armor(const std::string& class_name, const Item& armor, const std::string& subclass = "");
 
 // The equipped entry of each kind in an inventory, or nullptr.
 const InventoryEntry* equipped_weapon(const std::vector<InventoryEntry>& inventory);
@@ -104,7 +104,8 @@ WeaponAttack weapon_attack(const Character& character, const std::string& class_
 
 // True if the worn armor or shield is one the class isn't proficient with
 // (PHB ch. 5: disadvantage on STR/DEX attacks, checks, and saves; no spellcasting).
-bool wearing_armor_without_proficiency(const std::string& class_name, const std::vector<InventoryEntry>& inventory);
+bool wearing_armor_without_proficiency(const std::string& class_name, const std::vector<InventoryEntry>& inventory,
+                                       const std::string& subclass = "");
 
 // The race's speed, minus 10 ft in heavy armor whose STR requirement the
 // character doesn't meet.

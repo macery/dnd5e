@@ -103,6 +103,8 @@ void take_long_rest(Character& character) {
     restore_all_features(character);
     character.revival_penalty = std::max(0, character.revival_penalty - 1);
     character.may_prepare = true;  // prepared spells can change now (docs/preparing-spells.md)
+    character.exhaustion = std::max(0, character.exhaustion - 1);  // a long rest removes one level
+    character.temp_hp = 0;
 }
 
 void take_short_rest(Character& character, const ClassInfo& class_info) {

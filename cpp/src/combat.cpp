@@ -6,13 +6,13 @@ namespace dnd {
 
 AttackResult resolve_attack(const Dice& dice, int attack_bonus, int target_ac, int damage_dice_count,
                              int damage_dice_sides, int damage_bonus, RollMode mode, bool critical_on_hit,
-                             bool reroll_low_damage) {
+                             bool reroll_low_damage, int critical_threshold) {
     AttackResult result;
     result.attack_roll = dice.roll_d20(mode).result;
 
     if (result.attack_roll == 1) {
         result.hit = false;
-    } else if (result.attack_roll == 20) {
+    } else if (result.attack_roll >= critical_threshold) {
         result.hit = true;
         result.critical = true;
     } else {
