@@ -7,6 +7,8 @@
 #include <QStringList>
 #include <QVBoxLayout>
 
+#include <algorithm>
+
 #include "WindowSizing.hpp"
 #include "dnd/adventure.hpp"
 #include "dnd/currency.hpp"
@@ -50,7 +52,11 @@ AdventurePickerDialog::AdventurePickerDialog(std::vector<int> party_levels, std:
                            .arg(fights == 1 ? QString("1 fight") : QString("%1 fights").arg(fights))
                            .arg(adventure.suggested_level));
     }
-    list_->setMinimumWidth(list_->sizeHintForColumn(0) + 24);
+    // Wide enough for most entries, but never so wide the window outgrows a
+    // small screen (long titles end in "..."; the tooltip has the full text).
+    for (int row = 0; row < list_->count(); ++row) list_->item(row)->setToolTip(list_->item(row)->text());
+    list_->setTextElideMode(Qt::ElideRight);
+    list_->setMinimumWidth(std::min(list_->sizeHintForColumn(0) + 24, 320));
 
     detailsLabel_ = new QLabel(this);
     detailsLabel_->setWordWrap(true);
