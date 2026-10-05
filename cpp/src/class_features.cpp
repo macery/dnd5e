@@ -52,6 +52,10 @@ const std::vector<FeatureInfo>& limited_features() {
         {Feature::SorceryPoints, "SorceryPoints", "Sorcery Points", "Sorcerer", 2,
          "Font of Magic: points equal to your sorcerer level, back on a long rest. Spend them on Metamagic, or to "
          "create spell slots; turn unused slots back into points."},
+        {Feature::WildShape, "WildShape", "Wild Shape", "Druid", 2,
+         "Action: become a beast you've seen (CR 1/4, 1/2 at level 4, 1 at 8; no flying or swimming forms). Its HP, "
+         "AC, and attacks replace yours; at 0 HP you change back, and extra damage carries over. Two uses per short "
+         "rest; no spellcasting while in beast form."},
         {Feature::NaturalRecovery, "NaturalRecovery", "Natural Recovery", "Druid", 2,
          "Circle of the Land: once per day, on a short rest, recover spell slots with combined levels up to half "
          "your druid level (rounded up), none of 6th level or higher."},
@@ -96,6 +100,7 @@ int feature_max_uses(Feature feature, const Character& character, const std::str
             return level >= 18 ? 3 : level >= 6 ? 2 : 1;
         case Feature::NaturalRecovery: return character.subclass == "Circle of the Land" ? 1 : 0;
         case Feature::SorceryPoints: return level;
+        case Feature::WildShape: return 2;
     }
     return 0;
 }
@@ -111,6 +116,7 @@ Recovery feature_recovery(Feature feature, int level) {
         case Feature::SecondWind:
         case Feature::ActionSurge:
         case Feature::ChannelDivinity:
+        case Feature::WildShape:
         case Feature::Ki: return Recovery::ShortRest;
         case Feature::BardicInspiration: return level >= 5 ? Recovery::ShortRest : Recovery::LongRest;
         case Feature::Rage:
@@ -256,6 +262,13 @@ int metamagic_cost(Metamagic metamagic, int spell_level) {
         case Metamagic::Twinned: return std::max(1, spell_level);
         default: return 1;
     }
+}
+
+double wild_shape_max_cr(int druid_level) {
+    if (druid_level >= 8) return 1;
+    if (druid_level >= 4) return 0.5;
+    if (druid_level >= 2) return 0.25;
+    return 0;
 }
 
 int metamagic_known(int sorcerer_level) {

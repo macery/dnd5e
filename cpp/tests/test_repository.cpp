@@ -47,7 +47,7 @@ TEST_CASE("get_monsters returns the seeded sample enemies", "[repository]") {
     dnd::Repository repo(":memory:");
 
     auto monsters = repo.get_monsters();
-    REQUIRE(monsters.size() == 19);
+    REQUIRE(monsters.size() == 24);  // 19 foes + 5 beasts for Wild Shape
 
     const dnd::Monster* goblin = nullptr;
     for (const auto& monster : monsters) {

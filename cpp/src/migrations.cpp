@@ -18,7 +18,7 @@ using detail::Statement;
 // for future schema changes -- never edit an existing one, since a
 // migration's sql is exactly what already ran on every database that has it
 // recorded in SchemaMigrations.
-constexpr std::array<Migration, 29> kMigrations = {{
+constexpr std::array<Migration, 30> kMigrations = {{
     {1, "initial schema: Players, Classes, Characters", R"sql(
         CREATE TABLE IF NOT EXISTS Players (
             PlayerID INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1025,6 +1025,33 @@ constexpr std::array<Migration, 29> kMigrations = {{
     // invocations, Pact Boon, Expertise, ...
     {29, "add Characters.ClassOptions", R"sql(
         ALTER TABLE Characters ADD COLUMN ClassOptions TEXT NOT NULL DEFAULT '';
+    )sql"},
+    // Beasts for a druid's Wild Shape (docs/class-features-1-5.md), from the
+    // SRD 5.1: walkers of CR 1/4 and 1/2. They fight as monsters too.
+    {30, "add beasts for Wild Shape", R"sql(
+        INSERT INTO Monsters (Name, ArmorClass, HitPoints, Strength, Dexterity, Constitution, Intelligence, Wisdom,
+                              Charisma, ChallengeRating, CreatureType, DamageImmunities, ConditionImmunities,
+                              Multiattack, Traits) VALUES
+            ('Boar',         11, 11, 13, 11, 12, 2, 9,  5, 0.25, 'Beast', '', '', '', ''),
+            ('Panther',      12, 13, 14, 15, 10, 3, 14, 7, 0.25, 'Beast', '', '', '', ''),
+            ('Giant Badger', 10, 13, 13, 10, 15, 2, 12, 5, 0.25, 'Beast', '', '', 'A bite attack and a claws attack', ''),
+            ('Black Bear',   11, 19, 15, 10, 14, 2, 12, 7, 0.5,  'Beast', '', '', 'A bite attack and a claws attack', ''),
+            ('Ape',          12, 19, 16, 14, 14, 6, 12, 7, 0.5,  'Beast', '', '', 'Two fist attacks', '');
+
+        INSERT INTO MonsterAttacks (MonsterID, Position, Name, AttackBonus, DamageDiceCount, DamageDiceSides,
+                                    DamageBonus, DamageType, Count)
+        SELECT MonsterID, a.Position, a.Name, a.Bonus, a.DiceCount, a.DiceSides, a.DamageBonus, a.Type, a.Count
+        FROM Monsters JOIN (
+            SELECT 'Boar' AS Monster, 1 AS Position, 'Tusk' AS Name, 3 AS Bonus, 1 AS DiceCount, 6 AS DiceSides,
+                   1 AS DamageBonus, 'slashing' AS Type, 1 AS Count
+            UNION ALL SELECT 'Panther',      1, 'Bite',   4, 1, 6, 2, 'piercing',    1
+            UNION ALL SELECT 'Panther',      2, 'Claw',   4, 1, 4, 2, 'slashing',    1
+            UNION ALL SELECT 'Giant Badger', 1, 'Bite',   3, 1, 6, 1, 'piercing',    1
+            UNION ALL SELECT 'Giant Badger', 2, 'Claws',  3, 2, 4, 1, 'slashing',    1
+            UNION ALL SELECT 'Black Bear',   1, 'Bite',   3, 1, 6, 2, 'piercing',    1
+            UNION ALL SELECT 'Black Bear',   2, 'Claws',  3, 2, 4, 2, 'slashing',    1
+            UNION ALL SELECT 'Ape',          1, 'Fist',   5, 1, 6, 3, 'bludgeoning', 2
+        ) AS a ON a.Monster = Monsters.Name;
     )sql"},
 }};
 

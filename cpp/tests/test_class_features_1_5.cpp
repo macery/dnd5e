@@ -356,3 +356,84 @@ TEST_CASE("class choices: what's due, and choosing", "[class_features_1_5][class
         REQUIRE(encounter.combatants()[1].current_hp == 59 - (5 + 3));  // 1d10 5 + CHA 3
     }
 }
+
+TEST_CASE("Druid: Wild Shape", "[class_features_1_5][wild_shape]") {
+    Party p;
+    auto setup = [&](dnd::Encounter& encounter, int level, const std::string& foe = "Goblin") {
+        auto druid = p.hero("Druid", level);
+        druid.max_hp = 20;
+        druid.current_hp = 20;
+        encounter.set_wild_shape_beasts(p.repo.get_monsters());
+        encounter.add_character(druid, {p.spell("Produce Flame")}, {});
+        encounter.add_monsters(p.monster(foe), 1);
+        encounter.roll_initiative();
+        encounter.take_events();
+    };
+    auto names = [](const std::vector<dnd::Monster>& forms) {
+        std::vector<std::string> list;
+        for (const auto& m : forms) list.push_back(m.name);
+        std::sort(list.begin(), list.end());
+        return list;
+    };
+
+    SECTION("forms by level") {
+        ScriptedRandomSource rolls({20, 1});
+        dnd::Dice dice(rolls);
+        auto two = p.fight(dice);
+        setup(two, 2);
+        REQUIRE(names(two.wild_shape_forms()) ==
+                std::vector<std::string>{"Boar", "Giant Badger", "Panther", "Wolf"});
+        auto four = p.fight(dice);
+        setup(four, 4);
+        auto forms = names(four.wild_shape_forms());
+        REQUIRE(std::find(forms.begin(), forms.end(), "Black Bear") != forms.end());
+        REQUIRE(std::find(forms.begin(), forms.end(), "Dire Wolf") == forms.end());  // CR 1
+    }
+    SECTION("becoming a black bear, and the damage carrying over") {
+        // Druid first; Wild Shape. Then the ogre: target 1, d20 19 hits, 2d8 = 8 + 8 (+4).
+        ScriptedRandomSource rolls({20, 1, 1, 19, 8});
+        dnd::Dice dice(rolls);
+        auto encounter = p.fight(dice);
+        setup(encounter, 4, "Ogre");
+        REQUIRE(encounter.wild_shape("Black Bear"));
+        const auto& bear = encounter.combatants()[0];
+        REQUIRE(bear.druid_form.has_value());
+        REQUIRE(bear.current_hp == 19);
+        REQUIRE(bear.armor_class == 11);
+        REQUIRE_FALSE(encounter.awaiting_action());
+        REQUIRE(encounter.castable_spells().empty());
+        REQUIRE(dnd::feature_uses_left(dnd::Feature::WildShape, *encounter.character(1), "Druid") == 1);
+        auto text = text_of(encounter.take_events());
+        REQUIRE(has(text, "uses Wild Shape and becomes a Black Bear (19 HP, AC 11)"));
+        REQUIRE(encounter.character(1)->current_hp == 20);  // the druid's own HP, kept aside
+
+        // The ogre's turn: its greatclub (2d8 + 4 = 20) drops the bear's 19 HP; 1 carries over.
+        encounter.next_turn();
+        auto hit = text_of(encounter.take_events());
+        INFO(hit);
+        REQUIRE(has(hit, "returns to druid form (the beast form drops to 0 HP)"));
+        REQUIRE_FALSE(encounter.combatants()[0].druid_form.has_value());
+        REQUIRE(encounter.combatants()[0].current_hp == 19);
+        REQUIRE(encounter.character(1)->current_hp == 19);
+    }
+    SECTION("the beast attacks with its Multiattack, and the druid comes back at the end") {
+        ScriptedRandomSource rolls({20, 1, 15});
+        dnd::Dice dice(rolls);
+        auto encounter = p.fight(dice);
+        setup(encounter, 4, "Zombie");
+        REQUIRE(encounter.wild_shape("Black Bear"));
+        encounter.take_events();
+        encounter.next_turn();  // the zombie, then the druid-bear again
+        encounter.take_events();
+        const auto& bear = encounter.combatants()[0];
+        encounter.attack(1, bear.attack_bonus, bear.damage_dice_count, bear.damage_dice_sides, bear.damage_bonus);
+        auto text = text_of(encounter.take_events());
+        INFO(text);
+        REQUIRE(has(text, "(Black Bear) uses Multiattack"));
+        REQUIRE(has(text, "Druid attacks Zombie"));
+        REQUIRE(encounter.use_bonus_action(dnd::Encounter::BonusAction::RevertWildShape));
+        REQUIRE(has(text_of(encounter.take_events()), "returns to druid form (a bonus action)"));
+        REQUIRE_FALSE(encounter.combatants()[0].druid_form.has_value());
+        REQUIRE(encounter.combatants()[0].max_hp == 20);
+    }
+}

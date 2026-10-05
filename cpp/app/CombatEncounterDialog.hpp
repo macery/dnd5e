@@ -67,6 +67,7 @@ private slots:
     void onBonusActionClicked();
     void onActionSurgeClicked();
     void onChannelClicked();
+    void onWildShapeClicked();
 
 private:
     // Logs and persists everything the encounter reported since last time.
@@ -161,6 +162,8 @@ private:
     QWidget* channelRow_ = nullptr;          // Channel Divinity: shown when the current character has a use
     QComboBox* channelCombo_ = nullptr;
     QPushButton* channelButton_ = nullptr;
+    QWidget* wildShapeRow_ = nullptr;        // Wild Shape: shown when the current druid can transform
+    QComboBox* wildShapeCombo_ = nullptr;
     QCheckBox* recklessBox_ = nullptr;
     QCheckBox* stunningBox_ = nullptr;     // Monk 5: Stunning Strike on the next hit
     QComboBox* metamagicCombo_ = nullptr;  // Sorcerer 3: Metamagic for the spell being cast

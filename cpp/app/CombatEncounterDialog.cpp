@@ -262,6 +262,18 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
     channelLayout->addWidget(channelButton_);
     attackForm->addRow("Channel Divinity", channelRow_);
     connect(channelButton_, &QPushButton::clicked, this, &CombatEncounterDialog::onChannelClicked);
+    wildShapeCombo_ = new QComboBox(attackGroup);
+    auto* wildShapeButton = new QPushButton("Transform", attackGroup);
+    wildShapeButton->setToolTip("Wild Shape takes your action and a use (two per short rest). The beast's HP, AC, and "
+                                "attacks replace yours; at 0 HP you change back and extra damage carries over. A bonus "
+                                "action changes you back sooner. No spellcasting in beast form.");
+    wildShapeRow_ = new QWidget(attackGroup);
+    auto* wildShapeLayout = new QHBoxLayout(wildShapeRow_);
+    wildShapeLayout->setContentsMargins(0, 0, 0, 0);
+    wildShapeLayout->addWidget(wildShapeCombo_, 1);
+    wildShapeLayout->addWidget(wildShapeButton);
+    attackForm->addRow("Wild Shape", wildShapeRow_);
+    connect(wildShapeButton, &QPushButton::clicked, this, &CombatEncounterDialog::onWildShapeClicked);
     attackForm->addRow(bonusActionLabel_);
 
     logView_ = new QPlainTextEdit(this);
@@ -345,6 +357,7 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
             });
 
     encounter_.set_scroll_spells(repository_.get_spells());  // what scrolls in packs can cast
+    encounter_.set_wild_shape_beasts(monsters_);             // what druids can become
     for (const auto& character : characters) {
         encounter_.add_character(character, dnd::spells_ready(repository_, character),
                                  repository_.get_inventory(character.character_id));
@@ -669,6 +682,7 @@ void CombatEncounterDialog::onTakeActionClicked() {
 }
 
 void CombatEncounterDialog::afterCharacterActed() {
+    updateAttackFieldsForCurrentTurn();  // Wild Shape swaps the attack
     refreshFeatureControls();
     refreshTargetCombo();
     refreshPotionCombo();
@@ -722,6 +736,30 @@ void CombatEncounterDialog::refreshBonusControls() {
     bool channel = channelCombo_->count() > 0;
     channelRow_->setVisible(channel);
     if (auto* label = attackFormLayout_->labelForField(channelRow_)) label->setVisible(channel);
+
+    wildShapeCombo_->clear();
+    for (const auto& beast : encounter_.wild_shape_forms()) {
+        QString cr = beast.challenge_rating == 0.25 ? "1/4" : beast.challenge_rating == 0.5 ? "1/2"
+                                                                                              : QString::number(beast.challenge_rating);
+        wildShapeCombo_->addItem(QString("%1 (CR %2, %3 HP, AC %4)")
+                                     .arg(q(beast.name), cr)
+                                     .arg(beast.hit_points)
+                                     .arg(beast.armor_class),
+                                 q(beast.name));
+    }
+    bool shapes = wildShapeCombo_->count() > 0;
+    wildShapeRow_->setVisible(shapes);
+    if (auto* label = attackFormLayout_->labelForField(wildShapeRow_)) label->setVisible(shapes);
+}
+
+void CombatEncounterDialog::onWildShapeClicked() {
+    if (wildShapeCombo_->count() == 0) return;
+    bool acted = encounter_.wild_shape(wildShapeCombo_->currentData().toString().toStdString());
+    processEvents();
+    if (acted) afterCharacterActed();
+    if (encounter_.status() != dnd::EncounterStatus::InProgress) onTurnStarted();
+    updateAttackFieldsForCurrentTurn();
+    refreshState();
 }
 
 void CombatEncounterDialog::onChannelClicked() {
@@ -889,7 +927,9 @@ void CombatEncounterDialog::refreshParticipantTable() {
     participantTable_->setRowCount(static_cast<int>(order.size()));
     for (int row = 0; row < static_cast<int>(order.size()); ++row) {
         const auto& combatant = combatants[order[static_cast<size_t>(row)]];
-        participantTable_->setItem(row, 0, new QTableWidgetItem(q(combatant.name)));
+        participantTable_->setItem(row, 0, new QTableWidgetItem(
+            combatant.druid_form ? QString("%1 (%2)").arg(q(combatant.name), q(combatant.druid_form->beast))
+                                 : q(combatant.name)));
         participantTable_->setItem(row, 1, new QTableWidgetItem(QString::number(combatant.initiative)));
         participantTable_->setItem(row, 2, new QTableWidgetItem(QString::number(combatant.armor_class)));
         participantTable_->setItem(

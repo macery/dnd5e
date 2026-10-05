@@ -1,6 +1,19 @@
 # Core class features, levels 1–5
 
-Status: **phases 1 and 2 done; phase 3 (Wild Shape) in progress.** Every recommendation was taken on 2026-10-05.
+Status: **all three phases done.** Every recommendation was taken on 2026-10-05.
+
+**Phase 3 as built (Wild Shape):**
+- **Migration 30** seeds five SRD beasts that walk: Boar, Panther, Giant Badger, Black Bear, and Ape. They join the Wolf and Dire Wolf, and fight as monsters too.
+- **Rules:** `Feature::WildShape` (two uses per short rest) and `wild_shape_max_cr` (1/4, 1/2 at 4, 1 at 8).
+- **Engine:**
+  - `set_wild_shape_beasts`, `wild_shape_forms`, `wild_shape`, and `revert_wild_shape`.
+  - The beast's HP, AC, DEX, and attacks replace the druid's. The druid's own are kept in `Combatant::druid_form`.
+  - The Attack action uses the beast's attacks, Multiattack included.
+  - Physical saves use the beast's scores plus the druid's proficiencies.
+  - No spellcasting in beast form. Character HP isn't synced while shaped.
+  - At 0 HP the druid reverts and extra damage carries over. A bonus action reverts sooner, and the fight's end reverts too.
+- **Combat UI:** a **Wild Shape** row (forms with CR, HP, and AC, and **Transform**). The participant table shows "Fern (Black Bear)".
+- **Tests:** Wild Shape in `tests/test_class_features_1_5.cpp` and `tests/ui/test_class_options_ui.cpp`.
 
 **Phase 2 as built:**
 - **`dnd/class_options`:**

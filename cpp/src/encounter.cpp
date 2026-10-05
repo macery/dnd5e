@@ -1187,6 +1187,16 @@ std::vector<std::string> Encounter::apply_damage(int target_index, int amount, b
         return followups;
     }
 
+    if (target.druid_form && amount >= target.current_hp) {
+        // The beast drops: back to druid form, and the rest of the damage carries over.
+        int overflow = amount - target.current_hp;
+        followups.push_back("    " + revert_wild_shape(target_index, "the beast form drops to 0 HP"));
+        if (overflow > 0) {
+            auto more = apply_damage(target_index, overflow, critical, source, damage_type);
+            followups.insert(followups.end(), more.begin(), more.end());
+        }
+        return followups;
+    }
     int hp_before = target.current_hp;
     target.current_hp = std::max(0, target.current_hp - amount);
     target.rage_kept_up = true;  // taking damage keeps a rage going
@@ -1287,6 +1297,13 @@ bool Encounter::roll_save(int target_index, Ability ability, int dc, std::string
 
 int Encounter::save_bonus(int index, Ability ability) const {
     const Combatant& combatant = combatants_.at(static_cast<size_t>(index));
+    bool physical = ability == Ability::Strength || ability == Ability::Dexterity || ability == Ability::Constitution;
+    if (combatant.druid_form && physical) {  // the beast's body, the druid's training
+        const Character* druid = character(combatant.character_id);
+        int bonus = ability_modifier(combatant.ability_scores[static_cast<size_t>(ability)]);
+        if (druid && has_save_proficiency(*druid, ability)) bonus += proficiency_bonus(druid->level);
+        return bonus - combatant.roll_penalty;
+    }
     if (combatant.is_character) {
         if (const Character* character = this->character(combatant.character_id)) {
             auto inventory = inventories_.find(combatant.character_id);
@@ -1351,6 +1368,7 @@ void Encounter::check_for_victory_or_defeat() {
     if (status_ != EncounterStatus::InProgress) {
         for (int i = 0; i < static_cast<int>(combatants_.size()); ++i) {
             if (combatants_[static_cast<size_t>(i)].frenzied) settle_frenzy(i);  // the rage ends with the fight
+            if (combatants_[static_cast<size_t>(i)].druid_form) log(revert_wild_shape(i, "the fight is over"));
         }
         effects_.clear();  // combat effects end with the fight
         for (auto& combatant : combatants_) combatant.concentration.clear();
@@ -1633,6 +1651,7 @@ std::vector<Spell> Encounter::castable_spells() const {
     const Combatant* actor = current_character();
     if (actor && actor->armor_not_proficient) return spells;  // PHB ch. 5: no spellcasting
     if (actor && is_raging(current_index())) return spells;   // Rage: no spellcasting
+    if (actor && actor->druid_form) return spells;            // Wild Shape: no spellcasting
     const Character* caster = actor ? character(actor->character_id) : nullptr;
     const ClassInfo* info = caster ? find_class_info_by_id(classes_, caster->class_id) : nullptr;
     if (!caster || !info) return spells;
@@ -1767,6 +1786,10 @@ std::vector<Encounter::BonusActionOption> Encounter::bonus_action_options() cons
         !bonus_action_targets(BonusTarget::Enemy).empty()) {
         options.push_back({BonusAction::FrenzyAttack, "Frenzy: melee attack (" + actor.attack_name + ")",
                            "While frenzied, one melee weapon attack as a bonus action.", BonusTarget::Enemy});
+    }
+    if (actor.druid_form) {
+        options.push_back({BonusAction::RevertWildShape, "Wild Shape: back to druid form",
+                           "Leave the beast form as a bonus action, at your own hit points.", BonusTarget::None});
     }
     if (uses(Feature::SorceryPoints) >= slot_creation_cost(1)) {
         options.push_back({BonusAction::CreateSpellSlot,
@@ -1924,6 +1947,9 @@ bool Encounter::use_bonus_action(BonusAction kind, int target) {
         }
         case BonusAction::FastHandsPotion:
             drink(index, target);
+            break;
+        case BonusAction::RevertWildShape:
+            log(revert_wild_shape(index, "a bonus action"));
             break;
         case BonusAction::CreateSpellSlot:
             create_spell_slot(character, actor.class_name, target);
@@ -2120,6 +2146,37 @@ bool Encounter::attack(int target_index, int attack_bonus, int damage_dice_count
 
     int actor = current_index();
     const Combatant& attacker = combatants_[static_cast<size_t>(actor)];
+    if (attacker.druid_form && !attacker.monster_attacks.empty()) {
+        // In beast form: the beast's attacks (its Multiattack, all at this target while it stands).
+        turn_.actions_left -= 1;
+        turn_.attacks_left = 0;
+        turn_.attack_action_taken = true;
+        if (!attacker.multiattack.empty()) log(attacker.name + " (" + attacker.druid_form->beast + ") uses Multiattack: " +
+                                               attacker.multiattack + ".");
+        std::vector<MonsterAttack> sequence;
+        if (attacker.multiattack.empty()) {
+            sequence.push_back(attacker.monster_attacks.front());
+        } else {
+            for (const auto& stat : attacker.monster_attacks) {
+                for (int n = 0; n < stat.count; ++n) sequence.push_back(stat);
+            }
+        }
+        for (const auto& stat : sequence) {
+            if (combatants_[static_cast<size_t>(target_index)].current_hp <= 0) break;
+            WeaponAttack beast;
+            beast.name = stat.name;
+            beast.attack_bonus = stat.attack_bonus;
+            beast.damage_dice_count = stat.damage_dice_count;
+            beast.damage_dice_sides = stat.damage_dice_sides;
+            beast.damage_bonus = stat.damage_bonus;
+            beast.damage_type = stat.damage_type;
+            beast.melee = !stat.ranged;
+            weapon_attack(actor, target_index, beast, 0, &stat);
+            if (status_ != EncounterStatus::InProgress) break;
+        }
+        check_for_victory_or_defeat();
+        return true;
+    }
     if (options.reckless && can_attack_recklessly()) {
         turn_.reckless = true;
         ActiveEffect exposed;
@@ -2608,6 +2665,107 @@ void Encounter::stunning_strike(int monk_index, int target_index) {
         " -> stunned until the end of " + monk.name + "'s next turn.");
 }
 
+// --- Wild Shape ------------------------------------------------------------------
+
+void Encounter::set_wild_shape_beasts(std::vector<Monster> monsters) {
+    beasts_.clear();
+    for (auto& monster : monsters) {
+        if (monster.creature_type == "Beast" && !monster.attacks.empty()) beasts_.push_back(std::move(monster));
+    }
+}
+
+std::vector<Monster> Encounter::wild_shape_forms() const {
+    std::vector<Monster> forms;
+    const Combatant* actor = current();
+    if (!actor || !actor->is_character || actor->class_name != "Druid" || actor->druid_form) return forms;
+    if (!awaiting_action() || turn_.actions_left <= 0) return forms;
+    const Character* druid = character(actor->character_id);
+    if (!druid || feature_uses_left(Feature::WildShape, *druid, actor->class_name) <= 0) return forms;
+    double max_cr = wild_shape_max_cr(actor->level);
+    for (const auto& beast : beasts_) {
+        if (beast.challenge_rating <= max_cr) forms.push_back(beast);
+    }
+    return forms;
+}
+
+bool Encounter::wild_shape(const std::string& beast_name) {
+    if (!can_take_action()) return false;
+    auto forms = wild_shape_forms();
+    auto beast = std::find_if(forms.begin(), forms.end(), [&](const Monster& m) { return m.name == beast_name; });
+    if (beast == forms.end()) {
+        log(beast_name + " isn't a form this druid can take now.");
+        return false;
+    }
+    int index = current_index();
+    Combatant& druid = combatants_[static_cast<size_t>(index)];
+    Character& character = *character_mut(druid.character_id);
+    spend_feature(character, Feature::WildShape, druid.class_name);
+    changed(druid.character_id);
+    use_action();
+
+    Combatant::DruidForm form;
+    form.beast = beast->name;
+    form.armor_class = druid.armor_class;
+    form.current_hp = druid.current_hp;
+    form.max_hp = druid.max_hp;
+    form.dex_modifier = druid.dex_modifier;
+    form.attack_bonus = druid.attack_bonus;
+    form.damage_dice_count = druid.damage_dice_count;
+    form.damage_dice_sides = druid.damage_dice_sides;
+    form.damage_bonus = druid.damage_bonus;
+    form.melee_attack = druid.melee_attack;
+    form.attack_name = druid.attack_name;
+    form.attack_damage_type = druid.attack_damage_type;
+    form.attacks_per_action = druid.attacks_per_action;
+    druid.druid_form = form;
+
+    druid.armor_class = beast->armor_class;
+    druid.current_hp = beast->hit_points;
+    druid.max_hp = beast->hit_points;
+    druid.dex_modifier = ability_modifier(beast->dexterity);
+    druid.monster_attacks = beast->attacks;
+    druid.multiattack = beast->multiattack;
+    druid.ability_scores = {beast->strength,     beast->dexterity, beast->constitution,
+                            beast->intelligence, beast->wisdom,    beast->charisma};
+    const MonsterAttack& first = beast->attacks.front();
+    druid.attack_name = first.name;
+    druid.attack_bonus = first.attack_bonus;
+    druid.damage_dice_count = first.damage_dice_count;
+    druid.damage_dice_sides = first.damage_dice_sides;
+    druid.damage_bonus = first.damage_bonus;
+    druid.melee_attack = !first.ranged;
+    druid.attack_damage_type = first.damage_type;
+    druid.attacks_per_action = 1;
+    log(druid.name + " uses Wild Shape and becomes a " + beast->name + " (" + std::to_string(beast->hit_points) +
+        " HP, AC " + std::to_string(beast->armor_class) + ").");
+    check_for_victory_or_defeat();
+    return true;
+}
+
+std::string Encounter::revert_wild_shape(int index, const std::string& reason) {
+    Combatant& druid = combatants_[static_cast<size_t>(index)];
+    if (!druid.druid_form) return "";
+    const Combatant::DruidForm form = *druid.druid_form;
+    druid.druid_form.reset();
+    druid.armor_class = form.armor_class;
+    druid.current_hp = form.current_hp;
+    druid.max_hp = form.max_hp;
+    druid.dex_modifier = form.dex_modifier;
+    druid.attack_bonus = form.attack_bonus;
+    druid.damage_dice_count = form.damage_dice_count;
+    druid.damage_dice_sides = form.damage_dice_sides;
+    druid.damage_bonus = form.damage_bonus;
+    druid.melee_attack = form.melee_attack;
+    druid.attack_name = form.attack_name;
+    druid.attack_damage_type = form.attack_damage_type;
+    druid.attacks_per_action = form.attacks_per_action;
+    druid.monster_attacks.clear();
+    druid.multiattack.clear();
+    druid.ability_scores = {10, 10, 10, 10, 10, 10};
+    sync_character_hp(druid);
+    return druid.name + " returns to druid form (" + reason + "), at " + hp_text(druid) + " HP.";
+}
+
 // --- Subclass mechanics (docs/subclasses.md) ------------------------------------
 
 void Encounter::exhaustion_mods(int index, RollModifiers& mods) const {
@@ -2913,6 +3071,7 @@ std::vector<EncounterEvent> Encounter::take_events() {
 
 void Encounter::sync_character_hp(const Combatant& combatant) {
     if (!combatant.is_character) return;
+    if (combatant.druid_form) return;  // the beast's HP; the druid's own is kept aside
     if (Character* character = character_mut(combatant.character_id)) {
         character->current_hp = combatant.current_hp;
         character->temp_hp = combatant.temp_hp;

@@ -305,6 +305,16 @@ Phases 1 (core and data) and 2 (UI) are done; see [docs/magic-system.md](docs/ma
   - XP makes a level available, and **Level Up** on the main window walks through it: roll or average HP, Ability Score Improvements (with retroactive CON), Paladin and Ranger Fighting Styles, and new spells.
   - A summary shows every PHB feature gained, marked where it isn't automated yet.
   - Feats and multiclassing are still to do.
+- [x] **Core class features, levels 1–5** ([docs/class-features-1-5.md](docs/class-features-1-5.md)):
+  - **Sorcerer:** sorcery points (Font of Magic) and Metamagic (Quickened, Twinned, Empowered, Heightened).
+  - **Warlock:** Eldritch Invocations (Agonizing Blast, Armor of Shadows, Thirsting Blade, ...) and Pact Boons (Blade, Chain, Tome).
+  - **Druid:** Wild Shape into seeded beasts.
+  - **Monk:** Stunning Strike and Deflect Missiles.
+  - **Barbarian:** Danger Sense.
+  - **Bard:** Jack of All Trades and Song of Rest.
+  - **Rogue and Bard:** Expertise.
+  - Chosen with **Class Options…**, offered after Level Up and creation.
+- [ ] **Feats**: skipped for now, since the SRD has only Grappler (docs/class-features-1-5.md, question 1).
 - [x] **Subclasses** ([docs/subclasses.md](docs/subclasses.md)):
   - The twelve SRD subclasses, chosen at the class's level (in Level Up, after creation, or with **Choose Subclass…**), with their features through level 5.
   - Champion crits, Frenzy (with exhaustion), Cutting Words, Colossus Slayer, Open Hand Technique, Fast Hands, Disciple of Life, Dark One's Blessing, Draconic Resilience, and Natural Recovery.

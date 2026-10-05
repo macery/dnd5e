@@ -71,6 +71,23 @@ struct Combatant {
     bool frenzy_ready = false;       // Frenzy attacks start on the turn after the rage
     double challenge_rating = 0;     // monsters only (Destroy Undead)
     int initiative_bonus = 0;        // characters only: Jack of All Trades
+    // Wild Shape: the druid's own numbers while in beast form; empty otherwise.
+    struct DruidForm {
+        std::string beast;
+        int armor_class = 10;
+        int current_hp = 0;
+        int max_hp = 0;
+        int dex_modifier = 0;
+        int attack_bonus = 0;
+        int damage_dice_count = 1;
+        int damage_dice_sides = 4;
+        int damage_bonus = 0;
+        bool melee_attack = true;
+        std::string attack_name;
+        std::string attack_damage_type;
+        int attacks_per_action = 1;
+    };
+    std::optional<DruidForm> druid_form;
     // Characters only: the *raise dead* penalty (Character::revival_penalty),
     // taken off attack rolls, saving throws, and initiative.
     int roll_penalty = 0;
@@ -297,6 +314,7 @@ public:
         FrenzyAttack,           // Berserker: one melee weapon attack while frenzied
         FastHandsPotion,        // Thief: drink a potion (the target is the potion's item id)
         CreateSpellSlot,        // Sorcerer: Font of Magic, sorcery points into a slot (the target is its level)
+        RevertWildShape,        // Druid: back to druid form
     };
     enum class BonusTarget { None, Ally, Enemy, Potion, SlotLevel };
     struct BonusActionOption {
@@ -332,6 +350,16 @@ public:
     // Everything that shapes a combatant's saving throw right now: effects,
     // exhaustion, Danger Sense, ...
     RollModifiers save_modifiers(int index, Ability ability) const;
+    // Wild Shape (Druid 2; docs/class-features-1-5.md). The encounter only
+    // knows the beasts it's given (every seeded monster will do; it picks the
+    // beasts).
+    void set_wild_shape_beasts(std::vector<Monster> monsters);
+    // Beasts the current druid can become now (CR limit, uses left, an action).
+    std::vector<Monster> wild_shape_forms() const;
+    // Become `beast` (an action and a use): its HP, AC, and attacks replace the druid's.
+    bool wild_shape(const std::string& beast);
+    // Back to druid form (a bonus action on the druid's turn, or at 0 HP).
+    std::string revert_wild_shape(int index, const std::string& reason);
     // Monk Stunning Strike (level 5) with ki left (see AttackOptions).
     bool can_stunning_strike() const;
     // Paladin Divine Smite (level 2): slot levels the current character could
@@ -523,6 +551,7 @@ private:
     std::string victory_text_;
     std::vector<LootGrant> loot_;
     std::vector<Spell> scroll_spells_;
+    std::vector<Monster> beasts_;  // Wild Shape forms
     bool auto_reactions_ = true;
     int heightened_target_ = -1;  // Heightened Spell: this target has disadvantage on its save
     std::vector<std::string> pending_reaction_lines_;  // logged after the attack they answered

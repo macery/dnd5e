@@ -29,6 +29,7 @@ enum class Feature {
     ChannelDivinity,  // Cleric 2 (1 use, 2 at 6, 3 at 18), Paladin 3 (1 use); short rest
     NaturalRecovery,  // Circle of the Land druids: Arcane Recovery's twin
     SorceryPoints,    // Sorcerer 2: points equal to the sorcerer level, back on a long rest
+    WildShape,        // Druid 2: two uses, back on a short rest
 };
 
 enum class Recovery { ShortRest, LongRest };
@@ -99,6 +100,10 @@ bool metamagic_automated(Metamagic metamagic);
 // Sorcery points it costs on `spell_level` (Twinned: the level, 1 for a cantrip).
 int metamagic_cost(Metamagic metamagic, int spell_level);
 int metamagic_known(int sorcerer_level);
+
+// Wild Shape (Druid 2): the highest beast CR a druid can become -- 1/4, 1/2
+// at 4, 1 at 8; 0 below level 2.
+double wild_shape_max_cr(int druid_level);
 
 // --- Formulas --------------------------------------------------------------------
 

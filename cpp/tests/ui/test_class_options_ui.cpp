@@ -1,12 +1,15 @@
-// Class Options: choosing a warlock's invocations and Pact Boon.
+// Class Options (a warlock's invocations and Pact Boon), and Wild Shape in combat.
 
 #include <catch2/catch_test_macros.hpp>
 
 #include <QGroupBox>
+#include <QPlainTextEdit>
+#include <QTableWidget>
 #include <QListWidget>
 #include <QTableView>
 
 #include "ClassOptionsDialog.hpp"
+#include "CombatEncounterDialog.hpp"
 #include "MainWindow.hpp"
 #include "ui_helpers.hpp"
 
@@ -53,4 +56,31 @@ TEST_CASE("class options: a level-3 warlock's invocations and pact", "[ui][class
     auto saved = world.get(warlock.character_id);
     REQUIRE(dnd::has_pact_blade(saved));
     REQUIRE(dnd::has_armor_of_shadows(saved));
+}
+
+TEST_CASE("combat: a druid wild shapes into a black bear", "[ui][wild_shape][combat]") {
+    World world;
+    auto druid = world.add("Fern", "Druid", 4);
+    druid.max_hp = 200;
+    druid.current_hp = 200;
+    world.repo.update_character(druid);
+    AdventureFight fight;
+    fight.title = "Test";
+    fight.scene.title = "Woods";
+    fight.scene.narration = "Wolves.";
+    fight.scene.monsters = {{"Zombie", 1}};
+    CombatEncounterDialog combat(world.repo, {world.get(druid.character_id)}, world.repo.get_monsters(), nullptr,
+                                 &fight);
+    combat.show();
+    button(combat, "Roll Initiative")->click();
+    settle();
+    REQUIRE(choose(combat, "Black Bear (CR 1/2, 19 HP, AC 11)"));
+    button(combat, "Transform")->click();
+    settle();
+    REQUIRE(combat.findChild<QPlainTextEdit*>()->toPlainText().contains("Fern uses Wild Shape and becomes a Black Bear"));
+    auto* table = combat.findChild<QTableWidget*>();
+    bool shown = false;
+    for (int row = 0; row < table->rowCount(); ++row) shown = shown || table->item(row, 0)->text() == "Fern (Black Bear)";
+    REQUIRE(shown);
+    REQUIRE(button(combat, "Transform") == nullptr);  // the action is spent
 }
