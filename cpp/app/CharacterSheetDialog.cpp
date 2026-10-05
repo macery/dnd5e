@@ -158,6 +158,20 @@ CharacterSheetDialog::CharacterSheetDialog(const dnd::Character& character,
         experienceText += QString(" — <b>ready to level up</b> (level %1): use Level Up on the main window")
                               .arg(dnd::level_for_xp(character.experience));
     }
+    {
+        // Class choices: Metamagic, Pact Boon, invocations, Tome cantrips, Expertise.
+        static const std::vector<std::pair<const char*, const char*>> kShown = {
+            {"Metamagic", "Metamagic"}, {"PactBoon", "Pact Boon"}, {"Invocations", "Invocations"},
+            {"TomeCantrips", "Book of Shadows"}, {"Expertise", "Expertise"}};
+        for (const auto& [key, label] : kShown) {
+            auto values = dnd::class_option(character, key);
+            if (values.empty()) continue;
+            QStringList names;
+            for (const auto& value : values) names << QString::fromStdString(value);
+            addExplainedRow(summaryForm, label, new QLabel(names.join(", "), summaryGroup),
+                            "Chosen with Class Options on the main window (docs/class-features-1-5.md).");
+        }
+    }
     if (character.exhaustion > 0) {
         static const char* kLevels[] = {"", "disadvantage on ability checks", "speed halved",
                                         "disadvantage on attack rolls and saving throws", "hit point maximum halved",

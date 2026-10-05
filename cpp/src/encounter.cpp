@@ -7,6 +7,7 @@
 
 #include "dnd/character_creation.hpp"
 #include "dnd/class_features.hpp"
+#include "dnd/class_options.hpp"
 #include "dnd/combat.hpp"
 #include "dnd/currency.hpp"
 #include "dnd/equipment.hpp"
@@ -130,6 +131,10 @@ void Encounter::add_character(const Character& character, std::vector<Spell> kno
     combatant.melee_attack = weapon.melee;
     combatant.armor_not_proficient = wearing_armor_without_proficiency(class_name, inventory, character.subclass);
     combatant.attacks_per_action = attacks_per_attack_action(class_name, character.level);
+    if (class_name == "Warlock" && character.level >= 5 && has_thirsting_blade(character) && weapon.melee &&
+        !weapon.unarmed) {
+        combatant.attacks_per_action = 2;  // Thirsting Blade
+    }
     combatant.attack_uses_strength = weapon.uses_strength;
     combatant.attack_finesse_or_ranged = weapon.finesse_or_ranged;
     combatant.attack_martial_arts = weapon.martial_arts;
@@ -2287,6 +2292,7 @@ bool Encounter::cast_spell(int spell_id, int slot_level, const std::vector<int>&
     }
     Spell spell = *chosen;
     Character& caster_character = *character_mut(actor.character_id);
+    if (spell.name == "Eldritch Blast" && has_agonizing_blast(caster_character)) spell.adds_modifier = true;  // +CHA
     const ClassInfo& info = *find_class_info_by_id(classes_, caster_character.class_id);
     CasterStats caster = caster_stats(caster_character, info);
     caster.spell_attack_bonus -= actor.roll_penalty;

@@ -5,9 +5,12 @@
 #include <vector>
 
 #include "dnd/class_features.hpp"
+#include "dnd/class_options.hpp"
 #include "dnd/encounter.hpp"
+#include "dnd/equipment.hpp"
 #include "dnd/progression.hpp"
 #include "dnd/repository.hpp"
+#include "dnd/spellbook.hpp"
 
 namespace {
 
@@ -253,5 +256,103 @@ TEST_CASE("Barbarian Danger Sense, Monk Stunning Strike and Deflect Missiles", "
         INFO(text);
         REQUIRE(has(text, "(Deflect Missiles: -16)"));
         REQUIRE(encounter.combatants()[0].current_hp == 40);
+    }
+}
+
+TEST_CASE("class choices: what's due, and choosing", "[class_features_1_5][class_options]") {
+    Party p;
+    dnd::SpellContext with_blast{{"Eldritch Blast", "Fire Bolt", "Light"}, {"Eldritch Blast"}};
+
+    SECTION("a sorcerer's Metamagic at 3") {
+        auto sorcerer = p.hero("Sorcerer", 3);
+        auto due = dnd::class_choices_due(sorcerer, "Sorcerer");
+        REQUIRE(due.size() == 1);
+        REQUIRE(due[0].key == "Metamagic");
+        REQUIRE(due[0].count == 2);
+        REQUIRE(dnd::apply_class_choice(sorcerer, "Sorcerer", "Metamagic", {"Quickened Spell"}) ==
+                "Choose 2 for Metamagic.");
+        REQUIRE(dnd::apply_class_choice(sorcerer, "Sorcerer", "Metamagic", {"Quickened Spell", "Twinned Spell"}).empty());
+        REQUIRE(dnd::class_choices_due(sorcerer, "Sorcerer").empty());
+    }
+    SECTION("a warlock's invocations need Eldritch Blast for Agonizing Blast") {
+        auto warlock = p.hero("Warlock", 2);
+        auto without = dnd::class_choices_due(warlock, "Warlock");
+        REQUIRE(without.at(0).key == "Invocations");
+        REQUIRE(std::find(without[0].options.begin(), without[0].options.end(), "Agonizing Blast") ==
+                without[0].options.end());
+        auto with = dnd::class_choices_due(warlock, "Warlock", with_blast);
+        REQUIRE(std::find(with[0].options.begin(), with[0].options.end(), "Agonizing Blast") != with[0].options.end());
+        REQUIRE(dnd::apply_class_choice(warlock, "Warlock", "Invocations", {"Agonizing Blast", "Armor of Shadows"},
+                                        with_blast)
+                    .empty());
+        REQUIRE(dnd::has_agonizing_blast(warlock));
+        REQUIRE(dnd::calculate_armor_class(warlock, "Warlock", {}).total == 16);  // 13 + DEX 3
+    }
+    SECTION("Pact of the Blade at 3, Thirsting Blade at 5") {
+        auto warlock = p.hero("Warlock", 5);
+        warlock.class_options["Invocations"] = {"Armor of Shadows", "Fiendish Vigor"};
+        auto due = dnd::class_choices_due(warlock, "Warlock");
+        REQUIRE(due.at(0).key == "PactBoon");
+        REQUIRE(dnd::apply_class_choice(warlock, "Warlock", "PactBoon", {"Pact of the Blade"}).empty());
+        REQUIRE(dnd::apply_class_choice(warlock, "Warlock", "Invocations", {"Thirsting Blade"}).empty());
+        REQUIRE(dnd::has_thirsting_blade(warlock));
+        // The pact weapon: proficient with a greataxe, and two attacks.
+        std::vector<dnd::InventoryEntry> axe;
+        for (const auto& item : p.repo.get_items()) {
+            if (item.name == "Greataxe") axe.push_back({item, 1, true});
+        }
+        REQUIRE(dnd::weapon_attack(warlock, "Warlock", "Human", axe).proficient);
+        ScriptedRandomSource rolls({20});
+        dnd::Dice dice(rolls);
+        auto encounter = p.fight(dice);
+        encounter.add_character(warlock, {}, axe);
+        REQUIRE(encounter.combatants()[0].attacks_per_action == 2);
+    }
+    SECTION("Pact of the Tome cantrips are always ready") {
+        auto warlock = p.hero("Warlock", 3);
+        warlock.player_id = p.repo.add_player("Adam");
+        warlock.race = p.repo.get_races().front().id;
+        warlock.alignment = p.repo.get_alignments().front().id;
+        warlock.class_options["PactBoon"] = {"Pact of the Tome"};
+        auto due = dnd::class_choices_due(warlock, "Warlock", with_blast);
+        auto tome = std::find_if(due.begin(), due.end(), [](const dnd::ClassChoice& c) { return c.key == "TomeCantrips"; });
+        REQUIRE(tome != due.end());
+        REQUIRE(tome->count == 3);
+        REQUIRE(dnd::apply_class_choice(warlock, "Warlock", "TomeCantrips", {"Fire Bolt", "Light", "Eldritch Blast"},
+                                        with_blast)
+                    .empty());
+        warlock.character_id = p.repo.add_character(warlock);
+        auto ready = dnd::spells_ready(p.repo, warlock);
+        REQUIRE(std::any_of(ready.begin(), ready.end(), [](const dnd::Spell& s) { return s.name == "Fire Bolt"; }));
+    }
+    SECTION("Expertise doubles proficiency; Lore bards' bonus skills") {
+        auto rogue = p.hero("Rogue", 1);
+        rogue.skill_proficiencies = (1u << static_cast<int>(dnd::Skill::Stealth)) |
+                                    (1u << static_cast<int>(dnd::Skill::Perception));
+        int before = dnd::skill_bonus(rogue, dnd::Skill::Stealth);
+        REQUIRE(dnd::apply_class_choice(rogue, "Rogue", "Expertise", {"Stealth", "Perception"}).empty());
+        REQUIRE(dnd::skill_bonus(rogue, dnd::Skill::Stealth) == before + 2);
+        REQUIRE(dnd::class_choices_due(rogue, "Rogue").empty());
+
+        auto bard = p.hero("Bard", 3);
+        bard.subclass = "College of Lore";
+        auto due = dnd::class_choices_due(bard, "Bard");
+        auto bonus = std::find_if(due.begin(), due.end(), [](const dnd::ClassChoice& c) { return c.key == "BonusSkills"; });
+        REQUIRE(bonus != due.end());
+        REQUIRE(dnd::apply_class_choice(bard, "Bard", "BonusSkills", {"Arcana", "History", "Nature"}).empty());
+        REQUIRE(dnd::has_skill_proficiency(bard, dnd::Skill::Arcana));
+    }
+    SECTION("Agonizing Blast adds CHA to each beam") {
+        auto warlock = p.hero("Warlock", 2);
+        warlock.class_options["Invocations"] = {"Agonizing Blast", "Armor of Shadows"};
+        ScriptedRandomSource rolls({20, 1, 15, 5});
+        dnd::Dice dice(rolls);
+        auto encounter = p.fight(dice);
+        encounter.add_character(warlock, {p.spell("Eldritch Blast")}, {});
+        encounter.add_monsters(p.monster("Ogre"), 1);
+        encounter.roll_initiative();
+        encounter.take_events();
+        REQUIRE(encounter.cast_spell(p.spell("Eldritch Blast").spell_id, 0, {1}));
+        REQUIRE(encounter.combatants()[1].current_hp == 59 - (5 + 3));  // 1d10 5 + CHA 3
     }
 }

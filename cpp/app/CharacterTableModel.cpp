@@ -6,6 +6,7 @@
 
 #include "dnd/level_up.hpp"
 #include "dnd/progression.hpp"
+#include "dnd/class_options.hpp"
 #include "dnd/subclass.hpp"
 
 namespace {
@@ -87,6 +88,10 @@ QVariant CharacterTableModel::data(const QModelIndex& index, int role) const {
         if (dnd::subclass_due(character, nameFor(classes_, character.class_id).toStdString())) {
             return "A subclass is due: select this character and click Choose Subclass.";
         }
+        if (!dnd::class_choices_due(character, nameFor(classes_, character.class_id).toStdString()).empty()) {
+            return "Class choices are due (Metamagic, invocations, Expertise, ...): select this character and click "
+                   "Class Options.";
+        }
         return {};
     }
     if (role == Qt::ToolTipRole && index.column() == LevelColumn && dnd::pending_levels(character) > 0) {
@@ -119,6 +124,9 @@ QVariant CharacterTableModel::data(const QModelIndex& index, int role) const {
             if (character.dead) return "Dead";
             if (character.current_hp <= 0) return "Unconscious";
             if (dnd::subclass_due(character, nameFor(classes_, character.class_id).toStdString())) return "Subclass due";
+            if (!dnd::class_choices_due(character, nameFor(classes_, character.class_id).toStdString()).empty()) {
+                return "Choices due";
+            }
             if (character.exhaustion > 0) return QString("Exhaustion %1").arg(character.exhaustion);
             return "";
         case CampaignColumn:

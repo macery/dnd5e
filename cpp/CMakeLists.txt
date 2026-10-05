@@ -49,6 +49,7 @@ add_library(dndcore
     src/campaign.cpp
     src/spellbook.cpp
     src/subclass.cpp
+    src/class_options.cpp
     src/damage.cpp
     src/dice.cpp
     src/effects.cpp

@@ -10,6 +10,7 @@ namespace dnd {
 std::vector<Spell> spells_ready(const Repository& repo, const Character& character) {
     auto spells = repo.get_character_spells(character.character_id);
     auto always = always_prepared_spell_names(character);
+    for (const auto& cantrip : class_option(character, "TomeCantrips")) always.push_back(cantrip);  // Pact of the Tome
     if (always.empty()) return spells;
     for (const auto& spell : repo.get_spells()) {
         if (std::find(always.begin(), always.end(), spell.name) == always.end()) continue;

@@ -134,6 +134,8 @@ int skill_bonus(const Character& character, Skill skill) {
     int modifier = ability_modifier(ability_score(character, ability_for_skill(skill)));
     if (has_skill_proficiency(character, skill)) {
         modifier += proficiency_bonus(character.level);
+        // Expertise (Rogue, Bard): proficiency counts twice.
+        if (has_class_option(character, "Expertise", skill_name(skill))) modifier += proficiency_bonus(character.level);
     }
     return modifier;
 }

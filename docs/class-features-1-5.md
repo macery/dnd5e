@@ -1,6 +1,24 @@
 # Core class features, levels 1–5
 
-Status: **phase 1 done; phase 2 (Warlock and the choices) in progress.** Every recommendation was taken on 2026-10-05.
+Status: **phases 1 and 2 done; phase 3 (Wild Shape) in progress.** Every recommendation was taken on 2026-10-05.
+
+**Phase 2 as built:**
+- **`dnd/class_options`:**
+  - Every SRD Eldritch Invocation with its level and prerequisite (Eldritch Blast, or a pact). `invocations_known` gives the count.
+  - Pact Boons and Expertise counts.
+  - `class_choices_due` (Metamagic, Pact Boon, Invocations, Pact of the Tome cantrips, Expertise, and Lore bonus skills) and `apply_class_choice`.
+- **Applied:**
+  - Expertise doubles proficiency in `skill_bonus`.
+  - Armor of Shadows gives unarmored AC 13 + DEX.
+  - Pact of the Blade makes a warlock proficient with their melee weapon.
+  - Thirsting Blade gives two attacks at level 5.
+  - Agonizing Blast adds +CHA per beam.
+  - Tome cantrips are always ready (`spells_ready`), and the Spellbook marks them.
+- **UI:**
+  - `ClassOptionsDialog` shows a checklist per due choice and checks the counts.
+  - The main window gets a **Class Options…** button, and the dialog opens on its own after Level Up and creation. The Status column says "Choices due".
+  - The sheet lists Metamagic, Pact Boon, Invocations, Book of Shadows, and Expertise.
+- **Tests:** class choices in `tests/test_class_features_1_5.cpp`, and `tests/ui/test_class_options_ui.cpp`.
 
 **Phase 1 as built:**
 - **Migration 29:** `Characters.ClassOptions` stores the class choices ("Metamagic", "Invocations", "PactBoon", "Expertise", ...), and exports carry them.

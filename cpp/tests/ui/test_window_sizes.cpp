@@ -14,6 +14,7 @@
 #include "AdventurePickerDialog.hpp"
 #include "CampaignDialog.hpp"
 #include "CharacterCreationWizard.hpp"
+#include "ClassOptionsDialog.hpp"
 #include "CharacterEditorDialog.hpp"
 #include "CharacterSheetDialog.hpp"
 #include "CombatEncounterDialog.hpp"
@@ -104,6 +105,10 @@ TEST_CASE("every window fits a small screen", "[ui][sizes]") {
     SECTION("inventory") {
         InventoryDialog inventory(repo, sera, classes, repo.get_races());
         requireFits(inventory, "InventoryDialog");
+    }
+    SECTION("class options") {
+        ClassOptionsDialog options(repo, world.add("Hex", "Warlock", 5), classes);
+        requireFits(options, "ClassOptionsDialog");
     }
     SECTION("subclass chooser") {
         SubclassDialog subclass(repo, world.add("Fern", "Druid", 2), classes);

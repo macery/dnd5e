@@ -5,6 +5,7 @@
 #include <map>
 
 #include "dnd/class_features.hpp"
+#include "dnd/class_options.hpp"
 #include "dnd/magic_items.hpp"
 #include "dnd/rules.hpp"
 
@@ -161,6 +162,12 @@ ArmorClassBreakdown calculate_armor_class(const Character& stored, const std::st
                 best = {{"Unarmored Defense", 10}, {"DEX", dex}, {"CON", con}};
                 best_total = 10 + dex + con;
             }
+        } else if (class_name == "Warlock" && has_armor_of_shadows(character)) {
+            // Armor of Shadows: Mage Armor at will, 13 + DEX.
+            if (13 + dex > best_total) {
+                best = {{"Armor of Shadows", 13}, {"DEX", dex}};
+                best_total = 13 + dex;
+            }
         } else if (class_name == "Sorcerer" && character.subclass == "Draconic Bloodline") {
             // Draconic Resilience: 13 + DEX unarmored (a shield is fine).
             if (13 + dex > best_total) {
@@ -241,7 +248,8 @@ WeaponAttack weapon_attack(const Character& stored, const std::string& class_nam
     attack.finesse_or_ranged = stats.finesse || stats.ranged;
     attack.martial_arts = monk_weapon;
     attack.name = wielded->item.name;
-    attack.proficient = is_proficient_with_weapon(class_name, race_name, wielded->item);
+    attack.proficient = is_proficient_with_weapon(class_name, race_name, wielded->item) ||
+                        (class_name == "Warlock" && has_pact_blade(character) && !stats.ranged);  // pact weapon
     attack.attack_bonus = ability + (attack.proficient ? proficiency : 0);
     attack.damage_dice_count = stats.damage_dice_count;
     attack.damage_dice_sides = stats.damage_dice_sides;

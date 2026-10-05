@@ -144,6 +144,7 @@ void SpellbookDialog::reload() {
     // The character's spells, plus subclass spells that are always prepared (shown, never counted).
     known_ = dnd::spells_ready(repository_, character_);
     subclassSpells_ = dnd::always_prepared_spell_names(character_);
+    for (const auto& cantrip : dnd::class_option(character_, "TomeCantrips")) subclassSpells_.push_back(cantrip);
     const auto& info = *classInfo_;
     auto allowance = dnd::spell_allowance(character_, info);
 
@@ -235,7 +236,8 @@ void SpellbookDialog::reload() {
         table_->setItem(row, 3, new QTableWidgetItem(time));
         table_->setItem(row, 4, new QTableWidgetItem(spell.level == 0 ? "always" : spell.prepared ? "✓" : ""));
         if (isSubclassSpell(spell)) {
-            name->setText(q(spell.name) + QString(" (%1)").arg(q(character_.subclass)));
+            bool tome = dnd::has_class_option(character_, "TomeCantrips", spell.name);
+            name->setText(q(spell.name) + QString(" (%1)").arg(tome ? QString("Pact of the Tome") : q(character_.subclass)));
             name->setToolTip(tooltipFor(spell) + "<br><i>Always prepared by your subclass; it doesn't count against "
                                                  "your spells.</i>");
         }

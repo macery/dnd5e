@@ -43,6 +43,7 @@
 #include "LevelUpDialog.hpp"
 #include "MonsterListDialog.hpp"
 #include "SpellbookDialog.hpp"
+#include "ClassOptionsDialog.hpp"
 #include "SubclassDialog.hpp"
 #include "WindowSizing.hpp"
 
@@ -152,6 +153,11 @@ MainWindow::MainWindow(dnd::Repository& repository, QWidget* parent)
                                 "once their class reaches it. The Status column says \"Subclass due\".");
     characterRow->addWidget(subclassButton_);
     connect(subclassButton_, &QPushButton::clicked, this, &MainWindow::onChooseSubclassClicked);
+    classOptionsButton_ = new QPushButton("Class Options…", central);
+    classOptionsButton_->setToolTip("Choices a class makes as it levels: Metamagic, Eldritch Invocations, Pact Boon, "
+                                    "Expertise, ... The Status column says \"Choices due\".");
+    characterRow->addWidget(classOptionsButton_);
+    connect(classOptionsButton_, &QPushButton::clicked, this, &MainWindow::onClassOptionsClicked);
     rootLayout->addLayout(characterRow);
 
     auto* combatRow = new FlowLayout();
@@ -386,6 +392,7 @@ void MainWindow::onAddCharacterClicked() {
         int campaign = repository_.active_campaign_id();
         if (campaign != 0) repository_.set_character_campaign(newest->character_id, campaign);
         offerSubclass(*newest);  // Clerics, Sorcerers, and Warlocks choose at level 1
+        offerClassOptions(reloaded(*newest));  // a Rogue's Expertise
     }
     reloadCharactersForCurrentPlayer();
 }
@@ -535,9 +542,9 @@ void MainWindow::onLevelUpClicked() {
         if (dialog.exec() != QDialog::Accepted) break;
         character = dialog.character();
         offerSubclass(character);  // the level that brings a subclass
-        for (const auto& fresh : repository_.get_characters()) {
-            if (fresh.character_id == character.character_id) character = fresh;
-        }
+        character = reloaded(character);
+        offerClassOptions(character);  // Metamagic, invocations, Expertise, ...
+        character = reloaded(character);
     }
     reloadCharactersForCurrentPlayer();
 }
@@ -550,6 +557,35 @@ bool MainWindow::offerSubclass(const dnd::Character& character) {
     if (!dnd::subclass_due(character, className)) return false;
     SubclassDialog dialog(repository_, character, classes_, this);
     return dialog.exec() == QDialog::Accepted;
+}
+
+dnd::Character MainWindow::reloaded(const dnd::Character& character) const {
+    for (const auto& fresh : repository_.get_characters()) {
+        if (fresh.character_id == character.character_id) return fresh;
+    }
+    return character;
+}
+
+bool MainWindow::offerClassOptions(const dnd::Character& character) {
+    std::string className;
+    for (const auto& entry : classes_) {
+        if (entry.id == character.class_id) className = entry.name;
+    }
+    auto spells = ClassOptionsDialog::spellContext(repository_, character);
+    if (dnd::class_choices_due(character, className, spells).empty()) return false;
+    ClassOptionsDialog dialog(repository_, character, classes_, this);
+    return dialog.exec() == QDialog::Accepted;
+}
+
+void MainWindow::onClassOptionsClicked() {
+    const dnd::Character* selected = selectedCharacter("Class Options");
+    if (!selected) return;
+    dnd::Character character = *selected;
+    if (!offerClassOptions(character)) {
+        QMessageBox::information(this, "Class Options",
+            QString("%1 has no class choices to make right now.").arg(QString::fromStdString(character.character_name)));
+    }
+    reloadCharactersForCurrentPlayer();
 }
 
 void MainWindow::onChooseSubclassClicked() {
