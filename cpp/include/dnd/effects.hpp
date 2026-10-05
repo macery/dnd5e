@@ -86,6 +86,9 @@ struct EffectDuration {
 struct SaveToEnd {
     Ability ability = Ability::Wisdom;
     int dc = 10;
+    // Gorgon's breath: failing this save turns the target to stone (petrified
+    // for the rest of the fight) instead of just continuing.
+    bool petrify_on_failure = false;
 };
 
 struct ActiveEffect {

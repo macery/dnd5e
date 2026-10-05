@@ -96,6 +96,8 @@ int spend_hit_die(Character& character, const Dice& dice, int hit_die) {
 
 void take_long_rest(Character& character) {
     if (character.dead) return;  // only revival magic brings the dead back
+    character.max_hp += character.max_hp_reduction;  // Life Drain wears off
+    character.max_hp_reduction = 0;
     character.current_hp = character.max_hp;
     int recovered = std::max(1, character.level / 2);
     character.hit_dice_used = std::max(0, character.hit_dice_used - recovered);

@@ -44,6 +44,7 @@ struct Combatant {
     bool attack_finesse_or_ranged = false;  // for Sneak Attack
     bool attack_martial_arts = false;       // an unarmed strike or monk weapon (Martial Arts)
     bool attack_great_weapon_fighting = false;  // Fighting Style: reroll 1s and 2s on damage dice
+    bool attack_magical = false;                // the weapon counts as magical (WeaponAttack::magical)
     std::string attack_damage_type;             // "slashing", ...
 
     // Characters only: class features (dnd/class_features.hpp).
@@ -70,6 +71,11 @@ struct Combatant {
     bool frenzied = false;           // a Berserker's Frenzy: exhaustion when the rage ends
     bool frenzy_ready = false;       // Frenzy attacks start on the turn after the rage
     double challenge_rating = 0;     // monsters only (Destroy Undead)
+    // Monsters only (docs/content-5-10.md): a recharging breath weapon, and
+    // spellcasting with the slots it has left.
+    std::optional<MonsterBreath> breath;
+    bool breath_ready = true;
+    std::optional<MonsterSpellcasting> spellcasting;
     int initiative_bonus = 0;        // characters only: Jack of All Trades
     // Wild Shape: the druid's own numbers while in beast form; empty otherwise.
     struct DruidForm {
@@ -441,7 +447,8 @@ private:
     // vulnerabilities, and immunities; appends " (halved: resistant to
     // slashing)"-style notes to `note`.
     // Fire or acid also stops a Troll's Regeneration on its next turn.
-    int typed_damage(int target, int amount, const std::string& type, std::string& note);
+    // `magical` is false for a nonmagical weapon (or a monster's attack).
+    int typed_damage(int target, int amount, const std::string& type, std::string& note, bool magical = true);
     bool has_trait(int index, const std::string& trait) const;
     // Another combatant on `index`'s side is up and not incapacitated (Pack
     // Tactics, Martial Advantage, Sneak Attack: with no map, "an ally within
@@ -470,6 +477,15 @@ private:
     const Spell* reaction_spell(int index, const std::string& name) const;
     // Spends the lowest slot that can cast `spell`; returns its level (0: none).
     int spend_lowest_slot(int index, const Spell& spell);
+    // Monster abilities (docs/content-5-10.md).
+    void use_breath(int monster, const std::vector<int>& candidates);
+    // A caster monster's turn: casts its best spell and returns true, or false
+    // to attack instead.
+    bool monster_cast(int monster, const std::vector<int>& candidates);
+    // A seeded spell by name (from set_scroll_spells), or nullptr.
+    const Spell* spell_named(const std::string& name) const;
+    // Life Drain after a hit: a CON save or max HP drops by `damage`.
+    void life_drain(int target, int dc, int damage);
     // Hellish Rebuke back at `attacker` after `index` took damage from it.
     void hellish_rebuke(int index, int attacker);
     // Cutting Words: a Lore bard subtracts an inspiration die from a monster's

@@ -13,8 +13,13 @@ struct DamageTraits {
     std::vector<std::string> resistances;
     std::vector<std::string> vulnerabilities;
     std::vector<std::string> immunities;
+    // Bludgeoning, piercing, and slashing from nonmagical attacks: "" (no
+    // special treatment), "resistant" (Wight), or "immune" (Werewolf).
+    std::string nonmagical_weapons;
 
-    bool empty() const { return resistances.empty() && vulnerabilities.empty() && immunities.empty(); }
+    bool empty() const {
+        return resistances.empty() && vulnerabilities.empty() && immunities.empty() && nonmagical_weapons.empty();
+    }
 };
 
 enum class DamageModifier { Normal, Resisted, Vulnerable, Immune };
@@ -22,7 +27,10 @@ enum class DamageModifier { Normal, Resisted, Vulnerable, Immune };
 // How `traits` take damage of `type` (case-insensitive). Immunity wins;
 // resistance and vulnerability together cancel out. An empty type (untyped
 // damage) is always Normal.
-DamageModifier damage_modifier(const DamageTraits& traits, const std::string& type);
+// `magical` is false for a nonmagical weapon attack, which
+// `nonmagical_weapons` then resists or ignores for bludgeoning, piercing,
+// and slashing damage.
+DamageModifier damage_modifier(const DamageTraits& traits, const std::string& type, bool magical = true);
 
 // Resistance halves (rounded down), vulnerability doubles, immunity is 0.
 int adjust_damage(int amount, DamageModifier modifier);

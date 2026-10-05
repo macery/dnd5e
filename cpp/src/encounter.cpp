@@ -139,6 +139,7 @@ void Encounter::add_character(const Character& character, std::vector<Spell> kno
     combatant.attack_finesse_or_ranged = weapon.finesse_or_ranged;
     combatant.attack_martial_arts = weapon.martial_arts;
     combatant.attack_great_weapon_fighting = weapon.great_weapon_fighting;
+    combatant.attack_magical = weapon.magical;
     combatant.attack_damage_type = weapon.damage_type;
     combatant.race_name = race_name;
     combatant.class_name = class_name;
@@ -159,6 +160,7 @@ void Encounter::add_character(const Character& character, std::vector<Spell> kno
     combatant.death_saves.dead = character.dead;
     combatant.roll_penalty = character.revival_penalty;
     combatant.subclass = character.subclass;
+    combatant.creature_type = "Humanoid";  // every PC race (Hold Person can target them)
     combatant.initiative_bonus = jack_of_all_trades(character, class_name);
     combatant.exhaustion = character.exhaustion;
     combatant.temp_hp = character.temp_hp;
@@ -211,6 +213,8 @@ void Encounter::add_monsters(const Monster& monster, int count) {
         combatant.traits = monster.traits;
         combatant.xp = xp_for_challenge_rating(monster.challenge_rating);
         combatant.challenge_rating = monster.challenge_rating;
+        combatant.breath = monster.breath;
+        combatant.spellcasting = monster.spellcasting;
         combatant.ability_scores = {monster.strength,     monster.dexterity, monster.constitution,
                                     monster.intelligence, monster.wisdom,    monster.charisma};
         combatants_.push_back(combatant);
@@ -603,7 +607,21 @@ void Encounter::end_turn(int index) {
         std::string what = effect.label.empty() ? "the effect" : effect.label;
         log(combatants_[static_cast<size_t>(index)].name + " tries to end " + what + ": " + detail + " -> " +
             (saved ? "success, it ends." : "failure."));
-        if (saved) remove_effect(effect.id);
+        if (saved) {
+            remove_effect(effect.id);
+        } else if (effect.save_to_end->petrify_on_failure) {
+            remove_effect(effect.id);
+            ActiveEffect stone;
+            stone.kind = EffectKind::Condition;
+            stone.condition = Condition::Petrified;
+            stone.target = index;
+            stone.source = effect.source;
+            stone.label = "Petrified";
+            add_effect(stone);
+            log("*** " + combatants_[static_cast<size_t>(index)].name +
+                " turns to stone, out of the fight until it ends. ***");
+            check_for_victory_or_defeat();
+        }
     }
 }
 
@@ -764,6 +782,7 @@ void Encounter::resolve_monster_turn(Combatant& monster) {
     for (int i = 0; i < static_cast<int>(combatants_.size()); ++i) {
         const auto& candidate = combatants_[static_cast<size_t>(i)];
         if (!candidate.is_character || candidate.current_hp <= 0) continue;
+        if (has_condition(effects_, i, Condition::Petrified)) continue;  // stone: out of the fight
         if (charmed_by(monster_index, i)) {
             charm_blocked = true;
             continue;
@@ -775,13 +794,35 @@ void Encounter::resolve_monster_turn(Combatant& monster) {
         return;
     }
 
+    // A breath weapon when it's ready (rolled to recharge at the start of the turn), then spells.
+    if (monster.breath && !monster.breath_ready) {
+        int roll = dice_.roll(6, 1).front();
+        if (roll >= monster.breath->recharge) {
+            monster.breath_ready = true;
+            log(monster.name + "'s " + monster.breath->name + " recharges (d6: " + std::to_string(roll) + ").");
+        }
+    }
+    if (monster.breath && monster.breath_ready) {
+        use_breath(monster_index, candidates);
+        return;
+    }
+    if (monster.spellcasting && monster_cast(monster_index, candidates)) return;
+
     int pick = dice_.roll(static_cast<int>(candidates.size()), 1).front() - 1;
     int target = candidates[static_cast<size_t>(pick)];
     if (monster.monster_attacks.empty()) return;
 
     // Multiattack: every attack, each `count` times; otherwise just the first.
     std::vector<const MonsterAttack*> sequence;
-    if (monster.multiattack.empty()) {
+    bool prefers = std::any_of(monster.monster_attacks.begin(), monster.monster_attacks.end(),
+                               [](const MonsterAttack& a) { return a.preferred; });
+    if (prefers) {
+        // Archers and rock-throwers: only their preferred attacks, each `count` times.
+        for (const auto& stat : monster.monster_attacks) {
+            if (!stat.preferred) continue;
+            for (int n = 0; n < (monster.multiattack.empty() ? 1 : stat.count); ++n) sequence.push_back(&stat);
+        }
+    } else if (monster.multiattack.empty()) {
         sequence.push_back(&monster.monster_attacks.front());
     } else {
         log(monster.name + " uses Multiattack: " + monster.multiattack + ".");
@@ -812,9 +853,13 @@ void Encounter::resolve_monster_turn(Combatant& monster) {
     }
 }
 
-int Encounter::typed_damage(int target, int amount, const std::string& type, std::string& note) {
-    DamageModifier modifier = damage_modifier(damage_traits(target), type);
-    if (modifier != DamageModifier::Normal && amount > 0) note += " (" + damage_modifier_note(modifier, type) + ")";
+int Encounter::typed_damage(int target, int amount, const std::string& type, std::string& note, bool magical) {
+    const DamageTraits traits = damage_traits(target);
+    DamageModifier modifier = damage_modifier(traits, type, magical);
+    if (modifier != DamageModifier::Normal && amount > 0) {
+        bool from_nonmagical = !magical && damage_modifier(traits, type, true) != modifier;
+        note += " (" + damage_modifier_note(modifier, type) + (from_nonmagical ? ", nonmagical" : "") + ")";
+    }
     int dealt = adjust_damage(amount, modifier);
     if (dealt > 0 && (type == "fire" || type == "acid")) {
         combatants_[static_cast<size_t>(target)].regeneration_blocked = true;
@@ -892,6 +937,31 @@ bool Encounter::weapon_attack(int attacker_index, int target_index, const Weapon
         if (cut > 0 && total - cut < armor_class(target_index)) {
             result.hit = false;
             result.damage_total = 0;
+        }
+    }
+    if (attacker.is_character && !target.is_character && target.spellcasting && !target.reaction_used &&
+        result.hit && !result.critical && target.current_hp > 0) {
+        // A caster monster's Shield (Mage): +5 AC when that turns the hit into a miss.
+        int total = result.attack_roll + attack_bonus + sum(bonus_rolls);
+        auto& magic = *target.spellcasting;
+        bool knows = std::find(magic.spells.begin(), magic.spells.end(), "Shield") != magic.spells.end();
+        auto slot = std::find_if(magic.spell_slots.begin(), magic.spell_slots.end(), [](int n) { return n > 0; });
+        if (knows && slot != magic.spell_slots.end() && total < armor_class(target_index) + 5) {
+            --*slot;
+            target.reaction_used = true;
+            ActiveEffect effect;
+            effect.kind = EffectKind::ArmorClassBonus;
+            effect.amount = 5;
+            effect.target = target_index;
+            effect.source = target_index;
+            effect.duration.kind = DurationKind::UntilStartOfTurn;
+            effect.duration.participant = target_index;
+            effect.label = "Shield (+5 AC)";
+            add_effect(effect);
+            result.hit = false;
+            result.damage_total = 0;
+            reaction_lines.push_back("    " + target.name + " casts Shield as a reaction: AC " +
+                                     std::to_string(armor_class(target_index)) + ", and the attack misses.");
         }
     }
     if (reacting && result.hit && !result.critical) {
@@ -997,7 +1067,8 @@ bool Encounter::weapon_attack(int attacker_index, int target_index, const Weapon
             }
         }
         // Resistance, vulnerability, immunity (Rage's resistance included).
-        result.damage_total = typed_damage(target_index, result.damage_total, attack.damage_type, extra_note) +
+        result.damage_total = typed_damage(target_index, result.damage_total, attack.damage_type, extra_note,
+                                           attack.magical) +
                               typed_damage(target_index, radiant, "radiant", extra_note) +
                               (monster_attack ? typed_damage(target_index, extra_damage,
                                                              monster_attack->extra_damage_type, extra_note)
@@ -1030,6 +1101,10 @@ bool Encounter::weapon_attack(int attacker_index, int target_index, const Weapon
         " is now " + hp_text(target) + " HP.");
     for (const auto& line : reaction_lines) log(line);
     for (const auto& line : followups) log(line);
+    if (result.hit && monster_attack && monster_attack->life_drain_dc > 0 && target.is_character &&
+        !target.death_saves.dead && result.damage_total > 0) {
+        life_drain(target_index, monster_attack->life_drain_dc, result.damage_total);
+    }
     // Hellish Rebuke: hit back at whoever just hurt them.
     if (reacting && result.hit && result.damage_total > 0 && !target.reaction_used && target.current_hp > 0) {
         hellish_rebuke(target_index, attacker_index);
@@ -1342,6 +1417,7 @@ void Encounter::check_for_victory_or_defeat() {
     for (const auto& combatant : combatants_) {
         bool down = combatant.current_hp <= 0;
         if (combatant.is_character) {
+            down = down || has_condition(effects_, static_cast<int>(&combatant - combatants_.data()), Condition::Petrified);
             has_characters = true;
             all_characters_down = all_characters_down && down;
         } else {
@@ -2209,6 +2285,7 @@ bool Encounter::attack(int target_index, int attack_bonus, int damage_dice_count
     attack.finesse_or_ranged = attacker.attack_finesse_or_ranged;
     attack.martial_arts = attacker.attack_martial_arts;
     attack.great_weapon_fighting = attacker.attack_great_weapon_fighting;
+    attack.magical = attacker.attack_magical;
     attack.damage_type = attacker.attack_damage_type;
     bool hit = weapon_attack(actor, target_index, attack, options.divine_smite_slot);
     if (hit && options.stunning_strike && can_stunning_strike() && attack.melee) stunning_strike(actor, target_index);
@@ -2663,6 +2740,173 @@ void Encounter::stunning_strike(int monk_index, int target_index) {
     add_effect(stunned);
     log("    Stunning Strike (1 ki): " + target.name + " " + detail + " vs DC " + std::to_string(dc) +
         " -> stunned until the end of " + monk.name + "'s next turn.");
+}
+
+// --- Monster abilities (docs/content-5-10.md) -----------------------------------
+
+const Spell* Encounter::spell_named(const std::string& name) const {
+    for (const auto& spell : scroll_spells_) {
+        if (spell.name == name) return &spell;
+    }
+    return nullptr;
+}
+
+void Encounter::use_breath(int monster_index, const std::vector<int>& candidates) {
+    Combatant& monster = combatants_[static_cast<size_t>(monster_index)];
+    const MonsterBreath breath = *monster.breath;
+    monster.breath_ready = false;
+    // Who's caught: up to max_targets of the characters still standing, at random.
+    std::vector<int> pool = candidates;
+    std::vector<int> caught;
+    while (!pool.empty() && static_cast<int>(caught.size()) < breath.max_targets) {
+        size_t pick = static_cast<size_t>(dice_.roll(static_cast<int>(pool.size()), 1).front() - 1);
+        caught.push_back(pool[pick]);
+        pool.erase(pool.begin() + static_cast<long>(pick));
+    }
+    int rolled = breath.dice_count > 0 ? sum(dice_.roll(breath.dice_sides, breath.dice_count)) : 0;
+    log(monster.name + " uses " + breath.name + "!" +
+        (breath.dice_count > 0 ? " (" + std::to_string(rolled) + " " + breath.damage_type + ")" : std::string()));
+    for (int index : caught) {
+        Combatant& target = combatants_[static_cast<size_t>(index)];
+        std::string detail;
+        bool saved = roll_save(index, breath.save_ability, breath.save_dc, detail);
+        if (breath.petrifying) {
+            log("    " + target.name + ": " + detail + " vs DC " + std::to_string(breath.save_dc) + " -> " +
+                (saved ? "resists." : "starts turning to stone (restrained; another failed save petrifies)."));
+            if (!saved) {
+                ActiveEffect stone;
+                stone.kind = EffectKind::Condition;
+                stone.condition = Condition::Restrained;
+                stone.target = index;
+                stone.source = monster_index;
+                stone.label = "Turning to stone";
+                SaveToEnd save{breath.save_ability, breath.save_dc};
+                save.petrify_on_failure = true;
+                stone.save_to_end = save;
+                add_effect(stone);
+            }
+            continue;
+        }
+        std::string note;
+        int dealt = typed_damage(index, saved ? rolled / 2 : rolled, breath.damage_type, note);
+        auto followups = apply_damage(index, dealt, false, monster_index, breath.damage_type);
+        log("    " + target.name + ": " + detail + " vs DC " + std::to_string(breath.save_dc) + " -> " +
+            (saved ? "half, " : "") + "takes " + std::to_string(dealt) + note + ". Now " + hp_text(target) + " HP.");
+        for (const auto& line : followups) log(line);
+    }
+    check_for_victory_or_defeat();
+}
+
+bool Encounter::monster_cast(int monster_index, const std::vector<int>& candidates) {
+    Combatant& monster = combatants_[static_cast<size_t>(monster_index)];
+    auto& magic = *monster.spellcasting;
+    auto lowest_slot = [&](int level) {
+        for (int l = std::max(1, level); l <= static_cast<int>(magic.spell_slots.size()); ++l) {
+            if (magic.spell_slots[static_cast<size_t>(l - 1)] > 0) return l;
+        }
+        return 0;
+    };
+    std::vector<const Spell*> known;
+    for (const auto& name : magic.spells) {
+        if (const Spell* spell = spell_named(name)) known.push_back(spell);
+    }
+    auto deals_damage = [](const Spell& s) {
+        return s.dice_count > 0 && !s.damage_type.empty() &&
+               (s.resolution == SpellResolution::Attack || s.resolution == SpellResolution::Save ||
+                s.resolution == SpellResolution::AutoHit);
+    };
+    const Spell* choice = nullptr;
+    std::vector<int> targets;
+    int slot = 0;
+    // 1. An area spell when two or more are standing.
+    if (candidates.size() >= 2) {
+        for (const Spell* spell : known) {
+            if (spell->level == 0 || !deals_damage(*spell) || spell->max_targets < 2 || lowest_slot(spell->level) == 0) {
+                continue;
+            }
+            if (!choice || spell->level > choice->level) choice = spell;
+        }
+        if (choice) {
+            slot = lowest_slot(choice->level);
+            targets = std::vector<int>(candidates.begin(),
+                                       candidates.begin() + std::min<long>(choice->max_targets, static_cast<long>(candidates.size())));
+        }
+    }
+    // 2. A control spell (Hold Person) at someone it doesn't hold yet, while not concentrating.
+    if (!choice && monster.concentration.empty()) {
+        for (const Spell* spell : known) {
+            bool control = spell->level > 0 && spell->resolution == SpellResolution::Save && spell->dice_count == 0 &&
+                           !spell->effects.empty();
+            if (!control || lowest_slot(spell->level) == 0) continue;
+            for (int index : candidates) {
+                if (!spell->target_creature_type.empty() &&
+                    combatants_[static_cast<size_t>(index)].creature_type != spell->target_creature_type) {
+                    continue;
+                }
+                bool held = std::any_of(effects_.begin(), effects_.end(), [&](const ActiveEffect& e) {
+                    return e.target == index && e.label == spell->effects.front().label;
+                });
+                if (held) continue;
+                choice = spell;
+                targets = {index};
+                slot = lowest_slot(spell->level);
+                break;
+            }
+            if (choice) break;
+        }
+    }
+    // 3. The strongest single-target damage spell it has a slot for, else a damage cantrip.
+    int pick = candidates.empty() ? -1 : candidates[static_cast<size_t>(dice_.roll(static_cast<int>(candidates.size()), 1).front() - 1)];
+    if (!choice && pick >= 0) {
+        for (const Spell* spell : known) {
+            if (!deals_damage(*spell) || (spell->level > 0 && lowest_slot(spell->level) == 0)) continue;
+            if (!choice || spell->level > choice->level) choice = spell;
+        }
+        if (choice) {
+            slot = choice->level == 0 ? 0 : lowest_slot(choice->level);
+            int count = std::min(spell_max_targets(*choice, magic.caster_level, std::max(slot, choice->level)),
+                                 static_cast<int>(candidates.size()));
+            targets = {pick};
+            for (int index : candidates) {  // Magic Missile's darts can spread
+                if (static_cast<int>(targets.size()) >= count) break;
+                if (index != pick) targets.push_back(index);
+            }
+        }
+    }
+    if (!choice) return false;
+    if (slot > 0) --magic.spell_slots[static_cast<size_t>(slot - 1)];
+    CasterStats caster;
+    caster.level = magic.caster_level;
+    caster.spell_attack_bonus = magic.attack_bonus;
+    caster.spell_save_dc = magic.save_dc;
+    caster.spellcasting_modifier = magic.ability_modifier;
+    resolve_spell(monster_index, *choice, caster, slot, targets,
+                  monster.name + " casts " + choice->name + (slot > 0 ? " (" + ordinal(slot) + "-level slot)" : "") + ".");
+    return true;
+}
+
+void Encounter::life_drain(int target_index, int dc, int damage) {
+    Combatant& target = combatants_[static_cast<size_t>(target_index)];
+    std::string detail;
+    if (roll_save(target_index, Ability::Constitution, dc, detail)) {
+        log("    Life Drain: " + target.name + " " + detail + " vs DC " + std::to_string(dc) + " -> resists.");
+        return;
+    }
+    Character* character = character_mut(target.character_id);
+    int reduced = std::min(damage, target.max_hp);
+    target.max_hp -= reduced;
+    target.current_hp = std::min(target.current_hp, target.max_hp);
+    if (character) {
+        character->max_hp -= reduced;
+        character->max_hp_reduction += reduced;
+        character->current_hp = std::min(character->current_hp, character->max_hp);
+        changed(character->character_id);
+    }
+    log("    Life Drain: " + target.name + " " + detail + " vs DC " + std::to_string(dc) + " -> max HP drops by " +
+        std::to_string(reduced) + " until a long rest (now " + hp_text(target) + ").");
+    if (target.max_hp <= 0) {
+        for (const auto& line : mark_dead(target_index, "has the life drained out of them")) log(line);
+    }
 }
 
 // --- Wild Shape ------------------------------------------------------------------

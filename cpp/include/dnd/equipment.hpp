@@ -85,6 +85,9 @@ struct WeaponAttack {
     bool unarmed = false;
     bool martial_arts = false;       // a Monk's unarmed strike or monk weapon (Martial Arts applies)
     bool great_weapon_fighting = false;  // reroll 1s and 2s on the damage dice (Fighting Style)
+    // Counts as magical against creatures that resist nonmagical weapons: a +N
+    // weapon, a warlock's pact weapon, or a monk's unarmed strike from level 6.
+    bool magical = false;
 };
 
 // The attack with the wielded weapon, or an unarmed strike (1 + STR

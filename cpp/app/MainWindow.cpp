@@ -423,6 +423,7 @@ void MainWindow::onEditCharacterClicked() {
         updated.exhaustion = existing.exhaustion;
         updated.temp_hp = existing.temp_hp;
         updated.class_options = existing.class_options;
+        updated.max_hp_reduction = existing.max_hp_reduction;
         updated.coins = existing.coins;
         repository_.update_character(updated);
         reloadCharactersForCurrentPlayer();

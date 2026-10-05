@@ -222,6 +222,7 @@ WeaponAttack weapon_attack(const Character& stored, const std::string& class_nam
         attack.unarmed = true;
         attack.damage_type = "bludgeoning";
         attack.melee = true;
+        attack.magical = class_name == "Monk" && character.level >= 6;  // Ki-Empowered Strikes
         if (monk_unarmored) {  // Martial Arts: the better of STR and DEX, and the Martial Arts die
             int ability = std::max(str, dex);
             attack.martial_arts = true;
@@ -284,6 +285,7 @@ WeaponAttack weapon_attack(const Character& stored, const std::string& class_nam
         attack.attack_bonus += wielded->item.magic_bonus;
         attack.damage_bonus += wielded->item.magic_bonus;
     }
+    attack.magical = wielded->item.magic_bonus > 0 || (class_name == "Warlock" && has_pact_blade(character) && attack.melee);
     return attack;
 }
 

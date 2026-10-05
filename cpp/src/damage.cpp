@@ -18,11 +18,14 @@ bool contains(const std::vector<std::string>& types, const std::string& type) {
 
 }  // namespace
 
-DamageModifier damage_modifier(const DamageTraits& traits, const std::string& type) {
+DamageModifier damage_modifier(const DamageTraits& traits, const std::string& type, bool magical) {
     if (type.empty()) return DamageModifier::Normal;
     std::string key = lowercase(type);
     if (contains(traits.immunities, key)) return DamageModifier::Immune;
-    bool resisted = contains(traits.resistances, key);
+    bool physical = key == "bludgeoning" || key == "piercing" || key == "slashing";
+    if (!magical && physical && traits.nonmagical_weapons == "immune") return DamageModifier::Immune;
+    bool resisted = contains(traits.resistances, key) ||
+                    (!magical && physical && traits.nonmagical_weapons == "resistant");
     bool vulnerable = contains(traits.vulnerabilities, key);
     if (resisted && !vulnerable) return DamageModifier::Resisted;
     if (vulnerable && !resisted) return DamageModifier::Vulnerable;

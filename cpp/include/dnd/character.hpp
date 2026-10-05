@@ -49,6 +49,9 @@ struct Character {
     int exhaustion = 0;
     // Temporary hit points, lost first and gone after a long rest.
     int temp_hp = 0;
+    // Life Drain (Wight, Wraith): max HP taken away until a long rest, already
+    // subtracted from max_hp; the long rest gives it back.
+    int max_hp_reduction = 0;
     // Class choices beyond the subclass (docs/class-features-1-5.md), by key:
     // "Metamagic", "Invocations", "PactBoon", "Expertise", "TomeCantrips",
     // "BonusSkills" -- each a list of names.

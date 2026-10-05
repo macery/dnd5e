@@ -71,6 +71,7 @@ ExportedCharacter export_one(const Repository& repo, const Character& c, const s
     out.exhaustion = c.exhaustion;
     out.temp_hp = c.temp_hp;
     out.class_options = c.class_options;
+    out.max_hp_reduction = c.max_hp_reduction;
     for (int a = 0; a < kAbilityCount; ++a) {
         if (c.save_proficiencies & (1u << a)) out.saving_throws.push_back(ability_name(static_cast<Ability>(a)));
     }
@@ -141,6 +142,7 @@ std::string to_json(const CharacterExport& file) {
             {"exhaustion", c.exhaustion},
             {"temp_hp", c.temp_hp},
             {"class_options", c.class_options},
+            {"max_hp_reduction", c.max_hp_reduction},
             {"saving_throws", c.saving_throws},
             {"skills", c.skills},
             {"fighting_style", c.fighting_style},
@@ -218,6 +220,7 @@ ParseResult parse_character_file(const std::string& text) {
             out.exhaustion = c.value("exhaustion", 0);
             out.temp_hp = c.value("temp_hp", 0);
             out.class_options = c.value("class_options", std::map<std::string, std::vector<std::string>>{});
+            out.max_hp_reduction = c.value("max_hp_reduction", 0);
             out.saving_throws = c.value("saving_throws", std::vector<std::string>{});
             out.skills = c.value("skills", std::vector<std::string>{});
             out.fighting_style = c.value("fighting_style", std::string());
@@ -412,6 +415,7 @@ ImportResult apply_import(Repository& repo, const ImportPlan& plan, const Import
             c.exhaustion = source.exhaustion;
             c.temp_hp = source.temp_hp;
             c.class_options = source.class_options;
+            c.max_hp_reduction = source.max_hp_reduction;
             for (const auto& ability : source.saving_throws) {
                 for (int a = 0; a < kAbilityCount; ++a) {
                     if (ability == ability_name(static_cast<Ability>(a))) c.save_proficiencies |= 1u << a;

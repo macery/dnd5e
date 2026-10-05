@@ -24,7 +24,7 @@ constexpr const char* kCharacterColumns =
     "CharacterId, CharacterName, Class, Race, Alignment, PlayerID, Level, "
     "Strength, Dexterity, Constitution, Intelligence, Wisdom, Charisma, "
     "CurrentHP, MaxHP, SkillProficiencies, SaveProficiencies, "
-    "Experience, HitDiceUsed, Background, SpellSlotsUsed, Dead, FeatureUses, FightingStyle, Coins, RevivalPenalty, CampaignID, MayPrepare, Subclass, SubclassChoice, Exhaustion, TempHP, ClassOptions";
+    "Experience, HitDiceUsed, Background, SpellSlotsUsed, Dead, FeatureUses, FightingStyle, Coins, RevivalPenalty, CampaignID, MayPrepare, Subclass, SubclassChoice, Exhaustion, TempHP, ClassOptions, MaxHpReduction";
 // (Characters.ArmorClass and WeaponID still exist but are no longer used:
 // AC and weapons come from equipped inventory items since migration 15.)
 
@@ -117,6 +117,7 @@ Character read_character_row(sqlite3_stmt* stmt) {
     character.exhaustion = sqlite3_column_int(stmt, 30);
     character.temp_hp = sqlite3_column_int(stmt, 31);
     character.class_options = parse_class_options(column_text(stmt, 32));
+    character.max_hp_reduction = sqlite3_column_int(stmt, 33);
     return character;
 }
 
@@ -371,7 +372,10 @@ std::vector<Monster> Repository::get_monsters() const {
     Statement stmt(db_,
         "SELECT MonsterID, Name, ArmorClass, HitPoints, Strength, Dexterity, Constitution, "
         "Intelligence, Wisdom, Charisma, ChallengeRating, CreatureType, DamageResistances, "
-        "DamageVulnerabilities, DamageImmunities, ConditionImmunities, Multiattack, Traits "
+        "DamageVulnerabilities, DamageImmunities, ConditionImmunities, Multiattack, Traits, NonmagicalWeapons, "
+        "BreathName, BreathDiceCount, BreathDiceSides, BreathDamageType, BreathSaveAbility, BreathSaveDC, "
+        "BreathRecharge, BreathTargets, BreathPetrifying, CasterLevel, SpellSaveDC, SpellAttackBonus, "
+        "SpellAbilityModifier, SpellSlots, Spells "
         "FROM Monsters ORDER BY ChallengeRating, Name;");
     std::vector<Monster> monsters;
     while (sqlite3_step(stmt.get()) == SQLITE_ROW) {
@@ -396,13 +400,45 @@ std::vector<Monster> Repository::get_monsters() const {
         }
         monster.multiattack = column_text(stmt.get(), 16);
         monster.traits = split_list(column_text(stmt.get(), 17));
+        monster.damage.nonmagical_weapons = column_text(stmt.get(), 18);
+        if (std::string breath = column_text(stmt.get(), 19); !breath.empty()) {
+            MonsterBreath b;
+            b.name = breath;
+            b.dice_count = sqlite3_column_int(stmt.get(), 20);
+            b.dice_sides = sqlite3_column_int(stmt.get(), 21);
+            b.damage_type = column_text(stmt.get(), 22);
+            b.save_ability = ability_from_name(column_text(stmt.get(), 23));
+            b.save_dc = sqlite3_column_int(stmt.get(), 24);
+            b.recharge = sqlite3_column_int(stmt.get(), 25);
+            b.max_targets = sqlite3_column_int(stmt.get(), 26);
+            b.petrifying = sqlite3_column_int(stmt.get(), 27) != 0;
+            monster.breath = b;
+        }
+        if (int caster_level = sqlite3_column_int(stmt.get(), 28); caster_level > 0) {
+            MonsterSpellcasting magic;
+            magic.caster_level = caster_level;
+            magic.save_dc = sqlite3_column_int(stmt.get(), 29);
+            magic.attack_bonus = sqlite3_column_int(stmt.get(), 30);
+            magic.ability_modifier = sqlite3_column_int(stmt.get(), 31);
+            for (const auto& count : split_list(column_text(stmt.get(), 32))) magic.spell_slots.push_back(std::stoi(count));
+            std::string spells = column_text(stmt.get(), 33);
+            size_t at = 0;
+            while (at < spells.size()) {
+                size_t bar = spells.find('|', at);
+                if (bar == std::string::npos) bar = spells.size();
+                if (bar > at) magic.spells.push_back(spells.substr(at, bar - at));
+                at = bar + 1;
+            }
+            monster.spellcasting = magic;
+        }
         monsters.push_back(std::move(monster));
     }
 
     Statement attacks(db_,
         "SELECT MonsterID, Name, AttackBonus, DamageDiceCount, DamageDiceSides, DamageBonus, DamageType, Ranged, "
         "ExtraDiceCount, ExtraDiceSides, ExtraDamageType, OnHitSaveAbility, OnHitSaveDC, OnHitCondition, Count, "
-        "OnHitRounds, OnHitRepeatSave FROM MonsterAttacks ORDER BY MonsterID, Position, MonsterAttackID;");
+        "OnHitRounds, OnHitRepeatSave, Preferred, LifeDrainDC FROM MonsterAttacks "
+        "ORDER BY MonsterID, Position, MonsterAttackID;");
     while (sqlite3_step(attacks.get()) == SQLITE_ROW) {
         int monster_id = sqlite3_column_int(attacks.get(), 0);
         auto owner = std::find_if(monsters.begin(), monsters.end(),
@@ -427,6 +463,8 @@ std::vector<Monster> Repository::get_monsters() const {
         attack.count = std::max(1, sqlite3_column_int(attacks.get(), 14));
         attack.on_hit_rounds = sqlite3_column_int(attacks.get(), 15);
         attack.on_hit_repeat_save = sqlite3_column_int(attacks.get(), 16) != 0;
+        attack.preferred = sqlite3_column_int(attacks.get(), 17) != 0;
+        attack.life_drain_dc = sqlite3_column_int(attacks.get(), 18);
         owner->attacks.push_back(std::move(attack));
     }
     return monsters;
@@ -563,8 +601,8 @@ int Repository::add_character(const Character& character) {
         "Strength, Dexterity, Constitution, Intelligence, Wisdom, Charisma, "
         "CurrentHP, MaxHP, SkillProficiencies, SaveProficiencies, "
         "Experience, HitDiceUsed, Background, SpellSlotsUsed, Dead, FeatureUses, FightingStyle, Coins, RevivalPenalty, MayPrepare, "
-        "Subclass, SubclassChoice, Exhaustion, TempHP, ClassOptions) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);");
+        "Subclass, SubclassChoice, Exhaustion, TempHP, ClassOptions, MaxHpReduction) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);");
     bind_text(stmt, 1, character.character_name);
     sqlite3_bind_int(stmt.get(), 2, character.class_id);
     sqlite3_bind_int(stmt.get(), 3, character.race);
@@ -596,6 +634,7 @@ int Repository::add_character(const Character& character) {
     sqlite3_bind_int(stmt.get(), 29, character.exhaustion);
     sqlite3_bind_int(stmt.get(), 30, character.temp_hp);
     bind_text(stmt, 31, format_class_options(character.class_options));
+    sqlite3_bind_int(stmt.get(), 32, character.max_hp_reduction);
     detail::run_and_expect_done(stmt, "insert character");
     return static_cast<int>(sqlite3_last_insert_rowid(db_));
 }
@@ -634,7 +673,7 @@ void Repository::update_character(const Character& character) {
         "CurrentHP = ?, MaxHP = ?, SkillProficiencies = ?, SaveProficiencies = ?, "
         "Experience = ?, HitDiceUsed = ?, Background = ?, SpellSlotsUsed = ?, Dead = ?, FeatureUses = ?, "
         "FightingStyle = ?, Coins = ?, RevivalPenalty = ?, MayPrepare = ?, Subclass = ?, SubclassChoice = ?, "
-        "Exhaustion = ?, TempHP = ?, ClassOptions = ? WHERE CharacterId = ?;");
+        "Exhaustion = ?, TempHP = ?, ClassOptions = ?, MaxHpReduction = ? WHERE CharacterId = ?;");
     bind_text(stmt, 1, character.character_name);
     sqlite3_bind_int(stmt.get(), 2, character.class_id);
     sqlite3_bind_int(stmt.get(), 3, character.race);
@@ -665,7 +704,8 @@ void Repository::update_character(const Character& character) {
     sqlite3_bind_int(stmt.get(), 28, character.exhaustion);
     sqlite3_bind_int(stmt.get(), 29, character.temp_hp);
     bind_text(stmt, 30, format_class_options(character.class_options));
-    sqlite3_bind_int(stmt.get(), 31, character.character_id);
+    sqlite3_bind_int(stmt.get(), 31, character.max_hp_reduction);
+    sqlite3_bind_int(stmt.get(), 32, character.character_id);
     detail::run_and_expect_done(stmt, "update character");
 }
 

@@ -18,7 +18,7 @@ using detail::Statement;
 // for future schema changes -- never edit an existing one, since a
 // migration's sql is exactly what already ran on every database that has it
 // recorded in SchemaMigrations.
-constexpr std::array<Migration, 30> kMigrations = {{
+constexpr std::array<Migration, 31> kMigrations = {{
     {1, "initial schema: Players, Classes, Characters", R"sql(
         CREATE TABLE IF NOT EXISTS Players (
             PlayerID INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1052,6 +1052,30 @@ constexpr std::array<Migration, 30> kMigrations = {{
             UNION ALL SELECT 'Black Bear',   2, 'Claws',  3, 2, 4, 2, 'slashing',    1
             UNION ALL SELECT 'Ape',          1, 'Fist',   5, 1, 6, 3, 'bludgeoning', 2
         ) AS a ON a.Monster = Monsters.Name;
+    )sql"},
+    // Monster abilities for levels 5-10 (docs/content-5-10.md): nonmagical
+    // weapon resistance, preferred (ranged) attacks, Life Drain, recharging
+    // breath weapons, and spellcasting.
+    {31, "add monster abilities: breath weapons, spellcasting, life drain, nonmagical resistance", R"sql(
+        ALTER TABLE Monsters ADD COLUMN NonmagicalWeapons TEXT NOT NULL DEFAULT '';
+        ALTER TABLE Monsters ADD COLUMN BreathName TEXT NOT NULL DEFAULT '';
+        ALTER TABLE Monsters ADD COLUMN BreathDiceCount INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE Monsters ADD COLUMN BreathDiceSides INTEGER NOT NULL DEFAULT 8;
+        ALTER TABLE Monsters ADD COLUMN BreathDamageType TEXT NOT NULL DEFAULT '';
+        ALTER TABLE Monsters ADD COLUMN BreathSaveAbility TEXT NOT NULL DEFAULT 'Constitution';
+        ALTER TABLE Monsters ADD COLUMN BreathSaveDC INTEGER NOT NULL DEFAULT 10;
+        ALTER TABLE Monsters ADD COLUMN BreathRecharge INTEGER NOT NULL DEFAULT 5;
+        ALTER TABLE Monsters ADD COLUMN BreathTargets INTEGER NOT NULL DEFAULT 4;
+        ALTER TABLE Monsters ADD COLUMN BreathPetrifying INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE Monsters ADD COLUMN CasterLevel INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE Monsters ADD COLUMN SpellSaveDC INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE Monsters ADD COLUMN SpellAttackBonus INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE Monsters ADD COLUMN SpellAbilityModifier INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE Monsters ADD COLUMN SpellSlots TEXT NOT NULL DEFAULT '';
+        ALTER TABLE Monsters ADD COLUMN Spells TEXT NOT NULL DEFAULT '';
+        ALTER TABLE MonsterAttacks ADD COLUMN Preferred INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE MonsterAttacks ADD COLUMN LifeDrainDC INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE Characters ADD COLUMN MaxHpReduction INTEGER NOT NULL DEFAULT 0;
     )sql"},
 }};
 
