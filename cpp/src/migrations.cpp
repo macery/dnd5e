@@ -18,7 +18,7 @@ using detail::Statement;
 // for future schema changes -- never edit an existing one, since a
 // migration's sql is exactly what already ran on every database that has it
 // recorded in SchemaMigrations.
-constexpr std::array<Migration, 31> kMigrations = {{
+constexpr std::array<Migration, 32> kMigrations = {{
     {1, "initial schema: Players, Classes, Characters", R"sql(
         CREATE TABLE IF NOT EXISTS Players (
             PlayerID INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1076,6 +1076,71 @@ constexpr std::array<Migration, 31> kMigrations = {{
         ALTER TABLE MonsterAttacks ADD COLUMN Preferred INTEGER NOT NULL DEFAULT 0;
         ALTER TABLE MonsterAttacks ADD COLUMN LifeDrainDC INTEGER NOT NULL DEFAULT 0;
         ALTER TABLE Characters ADD COLUMN MaxHpReduction INTEGER NOT NULL DEFAULT 0;
+    )sql"},
+    // Twelve SRD 5.1 monsters for levels 5-10 (docs/content-5-10.md).
+    {32, "add monsters for levels 5-10", R"sql(
+        INSERT INTO Monsters (Name, ArmorClass, HitPoints, Strength, Dexterity, Constitution, Intelligence, Wisdom,
+                              Charisma, ChallengeRating, CreatureType, DamageResistances, DamageImmunities,
+                              ConditionImmunities, Multiattack, Traits, NonmagicalWeapons) VALUES
+            ('Cult Fanatic',       13, 33,  11, 14, 12, 10, 13, 14, 2, 'Humanoid',    '', '', '', 'Two dagger attacks', '', ''),
+            ('Veteran',            17, 58,  16, 13, 14, 10, 11, 10, 3, 'Humanoid',    '', '', '', 'Two longsword attacks', '', ''),
+            ('Wight',              14, 45,  15, 14, 16, 10, 13, 15, 3, 'Undead',      'necrotic', 'poison', 'Poisoned', 'Life Drain and a longsword attack', '', 'resistant'),
+            ('Werewolf',           12, 58,  15, 13, 14, 10, 11, 10, 3, 'Humanoid',    '', '', '', 'A bite and a claws attack', '', 'immune'),
+            ('Wraith',             13, 67,  6,  16, 16, 12, 14, 15, 5, 'Undead',      'acid,cold,fire,lightning,thunder', 'necrotic,poison', 'Charmed,Grappled,Paralyzed,Petrified,Poisoned,Prone,Restrained', '', '', 'resistant'),
+            ('Bulette',            17, 94,  19, 11, 21, 2,  10, 5,  5, 'Monstrosity', '', '', '', '', '', ''),
+            ('Flesh Golem',        9,  93,  19, 9,  18, 6,  10, 5,  5, 'Construct',   '', 'lightning,poison', 'Charmed,Frightened,Paralyzed,Petrified,Poisoned', 'Two slam attacks', '', 'immune'),
+            ('Gorgon',             19, 114, 20, 11, 18, 2,  12, 7,  5, 'Monstrosity', '', '', 'Petrified', '', '', ''),
+            ('Mage',               15, 40,  9,  14, 11, 17, 12, 11, 6, 'Humanoid',    '', '', '', '', '', ''),
+            ('Young White Dragon', 17, 133, 18, 10, 18, 6,  11, 12, 6, 'Dragon',      '', 'cold', '', 'A bite and two claw attacks', '', ''),
+            ('Stone Giant',        17, 126, 23, 15, 20, 10, 12, 9,  7, 'Giant',       '', '', '', 'Two greatclub attacks', '', ''),
+            ('Young Green Dragon', 18, 136, 19, 12, 17, 16, 13, 15, 8, 'Dragon',      '', 'poison', 'Poisoned', 'A bite and two claw attacks', '', '');
+
+        UPDATE Monsters SET BreathName = 'Cold Breath', BreathDiceCount = 10, BreathDiceSides = 8, BreathDamageType = 'cold',
+                            BreathSaveAbility = 'Constitution', BreathSaveDC = 15, BreathRecharge = 5, BreathTargets = 4
+            WHERE Name = 'Young White Dragon';
+        UPDATE Monsters SET BreathName = 'Poison Breath', BreathDiceCount = 12, BreathDiceSides = 6, BreathDamageType = 'poison',
+                            BreathSaveAbility = 'Constitution', BreathSaveDC = 14, BreathRecharge = 5, BreathTargets = 4
+            WHERE Name = 'Young Green Dragon';
+        UPDATE Monsters SET BreathName = 'Petrifying Breath', BreathDiceCount = 0, BreathSaveAbility = 'Constitution',
+                            BreathSaveDC = 13, BreathRecharge = 5, BreathTargets = 4, BreathPetrifying = 1
+            WHERE Name = 'Gorgon';
+        UPDATE Monsters SET CasterLevel = 4, SpellSaveDC = 11, SpellAttackBonus = 3, SpellAbilityModifier = 1,
+                            SpellSlots = '4,3', Spells = 'Sacred Flame|Inflict Wounds|Hold Person'
+            WHERE Name = 'Cult Fanatic';
+        UPDATE Monsters SET CasterLevel = 9, SpellSaveDC = 14, SpellAttackBonus = 6, SpellAbilityModifier = 3,
+                            SpellSlots = '4,3,3,3,1', Spells = 'Fire Bolt|Magic Missile|Shield|Fireball'
+            WHERE Name = 'Mage';
+
+        INSERT INTO MonsterAttacks (MonsterID, Position, Name, AttackBonus, DamageDiceCount, DamageDiceSides,
+                                    DamageBonus, DamageType, Ranged, ExtraDiceCount, ExtraDiceSides, ExtraDamageType,
+                                    OnHitSaveAbility, OnHitSaveDC, OnHitCondition, Count, Preferred, LifeDrainDC)
+        SELECT MonsterID, a.Position, a.Name, a.Bonus, a.DiceCount, a.DiceSides, a.DamageBonus, a.Type, a.Ranged,
+               a.ExtraCount, a.ExtraSides, a.ExtraType, a.SaveAbility, a.SaveDC, a.Condition, a.Count, a.Preferred,
+               a.Drain
+        FROM Monsters JOIN (
+            SELECT 'Cult Fanatic' AS Monster, 1 AS Position, 'Dagger' AS Name, 4 AS Bonus, 1 AS DiceCount,
+                   4 AS DiceSides, 2 AS DamageBonus, 'piercing' AS Type, 0 AS Ranged, 0 AS ExtraCount,
+                   0 AS ExtraSides, '' AS ExtraType, '' AS SaveAbility, 0 AS SaveDC, '' AS Condition, 2 AS Count,
+                   0 AS Preferred, 0 AS Drain
+            UNION ALL SELECT 'Veteran',            1, 'Longsword',      5, 1, 8,  3, 'slashing',    0, 0, 0, '',       '',         0,  '',      2, 0, 0
+            UNION ALL SELECT 'Veteran',            2, 'Heavy Crossbow', 3, 1, 10, 1, 'piercing',    1, 0, 0, '',       '',         0,  '',      1, 1, 0
+            UNION ALL SELECT 'Wight',              1, 'Life Drain',     4, 1, 6,  2, 'necrotic',    0, 0, 0, '',       '',         0,  '',      1, 0, 13
+            UNION ALL SELECT 'Wight',              2, 'Longsword',      4, 1, 8,  2, 'slashing',    0, 0, 0, '',       '',         0,  '',      1, 0, 0
+            UNION ALL SELECT 'Werewolf',           1, 'Bite',           4, 1, 8,  2, 'piercing',    0, 0, 0, '',       '',         0,  '',      1, 0, 0
+            UNION ALL SELECT 'Werewolf',           2, 'Claws',          4, 2, 4,  2, 'slashing',    0, 0, 0, '',       '',         0,  '',      1, 0, 0
+            UNION ALL SELECT 'Wraith',             1, 'Life Drain',     6, 4, 8,  3, 'necrotic',    0, 0, 0, '',       '',         0,  '',      1, 0, 14
+            UNION ALL SELECT 'Bulette',            1, 'Bite',           7, 4, 12, 4, 'piercing',    0, 0, 0, '',       '',         0,  '',      1, 0, 0
+            UNION ALL SELECT 'Flesh Golem',        1, 'Slam',           7, 2, 8,  4, 'bludgeoning', 0, 0, 0, '',       '',         0,  '',      2, 0, 0
+            UNION ALL SELECT 'Gorgon',             1, 'Gore',           8, 2, 12, 5, 'piercing',    0, 0, 0, '',       '',         0,  '',      1, 0, 0
+            UNION ALL SELECT 'Gorgon',             2, 'Hooves',         8, 2, 10, 5, 'bludgeoning', 0, 0, 0, '',       '',         0,  '',      1, 0, 0
+            UNION ALL SELECT 'Mage',               1, 'Dagger',         5, 1, 4,  2, 'piercing',    0, 0, 0, '',       '',         0,  '',      1, 0, 0
+            UNION ALL SELECT 'Young White Dragon', 1, 'Bite',           7, 2, 10, 4, 'piercing',    0, 1, 8, 'cold',   '',         0,  '',      1, 0, 0
+            UNION ALL SELECT 'Young White Dragon', 2, 'Claw',           7, 2, 6,  4, 'slashing',    0, 0, 0, '',       '',         0,  '',      2, 0, 0
+            UNION ALL SELECT 'Stone Giant',        1, 'Greatclub',      9, 3, 8,  6, 'bludgeoning', 0, 0, 0, '',       '',         0,  '',      2, 0, 0
+            UNION ALL SELECT 'Stone Giant',        2, 'Rock',           9, 4, 10, 6, 'bludgeoning', 1, 0, 0, '',       'Strength', 17, 'Prone', 1, 1, 0
+            UNION ALL SELECT 'Young Green Dragon', 1, 'Bite',           7, 2, 10, 4, 'piercing',    0, 2, 6, 'poison', '',         0,  '',      1, 0, 0
+            UNION ALL SELECT 'Young Green Dragon', 2, 'Claw',           7, 2, 6,  4, 'slashing',    0, 0, 0, '',       '',         0,  '',      2, 0, 0
+        ) AS a ON a.Monster = Monsters.Name;
     )sql"},
 }};
 

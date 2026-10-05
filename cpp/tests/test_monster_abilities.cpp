@@ -1,6 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
+#include <random>
 #include <string>
 #include <vector>
 
@@ -271,5 +272,56 @@ TEST_CASE("monster spellcasting", "[monster_abilities]") {
         INFO(text);
         REQUIRE(has(text, "Mage casts Shield as a reaction: AC 17, and the attack misses."));
         REQUIRE(encounter.combatants()[1].current_hp == 60);
+    }
+}
+
+namespace {
+
+// A seeded random source, so the smoke test below is repeatable.
+class SeededRandomSource : public dnd::IRandomSource {
+public:
+    explicit SeededRandomSource(unsigned seed) : engine_(seed) {}
+    int roll_die(int sides) override { return std::uniform_int_distribution<int>(1, sides)(engine_); }
+
+private:
+    std::mt19937 engine_;
+};
+
+}  // namespace
+
+TEST_CASE("every new monster fights to the end", "[monster_abilities][smoke]") {
+    Lab lab;
+    for (const char* name : {"Cult Fanatic", "Veteran", "Wight", "Werewolf", "Wraith", "Bulette", "Flesh Golem",
+                             "Gorgon", "Mage", "Young White Dragon", "Stone Giant", "Young Green Dragon"}) {
+        INFO(name);
+        dnd::Monster monster;
+        for (const auto& m : lab.repo.get_monsters()) {
+            if (m.name == name) monster = m;
+        }
+        REQUIRE(monster.name == name);
+        for (unsigned seed : {1u, 2u, 3u}) {
+            SeededRandomSource random(seed);
+            dnd::Dice dice(random);
+            auto encounter = lab.fight(dice);
+            for (int id = 1; id <= 3; ++id) {
+                auto hero = lab.fighter(id, "Hero" + std::to_string(id));
+                hero.level = 8;
+                hero.max_hp = 150;
+                hero.current_hp = 150;
+                encounter.add_character(hero, {}, {{lab.item("Longsword +2"), 1, true}});
+            }
+            encounter.add_monsters(monster, 1);
+            encounter.roll_initiative();
+            for (int turn = 0; turn < 400 && encounter.status() == dnd::EncounterStatus::InProgress; ++turn) {
+                const auto* current = encounter.current();
+                if (current && encounter.awaiting_action() && !encounter.attack_targets().empty()) {
+                    encounter.attack(encounter.attack_targets().front(), current->attack_bonus,
+                                     current->damage_dice_count, current->damage_dice_sides, current->damage_bonus);
+                }
+                encounter.next_turn();
+                encounter.take_events();
+            }
+            REQUIRE(encounter.status() != dnd::EncounterStatus::InProgress);
+        }
     }
 }

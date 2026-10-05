@@ -174,6 +174,94 @@ const std::vector<AdventureTemplate>& adventure_templates() {
                       false, true),
             },
         },
+        // Levels 5-8 (docs/content-5-10.md): monsters that resist plain steel, breathe, cast, and drain.
+        {
+            "The Barrow-King",
+            "Lights move in the old royal barrow, and travelers on the moor road have been found pale and cold. "
+            "The barrow-king has risen, and his honor guard with him.",
+            "The barrow-king's wraith comes apart in the dawn wind. The moor is only a moor again.",
+            5,
+            {
+                scene("The Barrow Gate", "A wight in rusted mail stands at the door with the dead it commands.",
+                      {{"Wight", 1}, {"Skeleton", 3}}, {}, 800),
+                scene("The Hall of Kings", "Two of the old king's champions rise from their biers as you pass.",
+                      {{"Wight", 2}}, {{"Potion of Greater Healing", 2}}, 1000, true),
+                scene("The King's Tomb", "The barrow-king waits above his coffin, a shadow with burning eyes.",
+                      {{"Wraith", 1}, {"Wight", 1}},
+                      {{"Longsword +2", 1}, {"Ring of Protection", 1}, {"Potion of Superior Healing", 1}}, 3000,
+                      false, true),
+            },
+        },
+        {
+            "Moonrise at Ashgrove",
+            "Ashgrove's sheep are torn apart every full moon, and the villagers won't say why. A cult keeps the secret, "
+            "and tonight the moon is full.",
+            "The cult is broken and the curse with it. Ashgrove sleeps through its first quiet full moon in years.",
+            6,
+            {
+                scene("The Lane at Dusk", "A robed figure and something that was a farmhand step out of the hedges.",
+                      {{"Werewolf", 1}, {"Cult Fanatic", 1}}, {}, 1200),
+                scene("The Old Mill", "The mill wheel creaks. Two shapes on the millrace are not wolves, and not men.",
+                      {{"Werewolf", 2}}, {{"Potion of Greater Healing", 2}}, 1200, true),
+                scene("The Moon Shrine", "The cult's high priest raises a knife to the moon, and his pack answers.",
+                      {{"Werewolf", 2}, {"Cult Fanatic", 1}},
+                      {{"Warhammer +2", 1}, {"Bracers of Defense", 1}, {"Potion of Superior Healing", 2}}, 4000,
+                      false, true),
+            },
+        },
+        {
+            "The White Wyrm's Lair",
+            "A young white dragon has claimed the high pass, and a renegade mage and a stone giant serve it. The "
+            "caravans have stopped.",
+            "The wyrm is dead and its hoard is yours. The pass is open again.",
+            7,
+            {
+                scene("The Frozen Pass", "Crossbows click from the rocks: the wyrm's hired swords hold the pass.",
+                      {{"Veteran", 2}}, {}, 1500),
+                scene("The Quarry", "A stone giant hurls boulders down the quarry face.", {{"Stone Giant", 1}},
+                      {{"Potion of Greater Healing", 2}}, 1500, true),
+                scene("The Ice Tower", "The renegade mage waits in his tower, his guard beside him.",
+                      {{"Mage", 1}, {"Veteran", 1}}, {{"Spell Scroll (Fireball)", 1}}, 2000),
+                scene("The Wyrm's Lair", "The young white dragon uncoils from its hoard of frozen gold.",
+                      {{"Young White Dragon", 1}},
+                      {{"Amulet of Health", 1}, {"Plate Armor +1", 1}, {"Shield +2", 1},
+                       {"Potion of Supreme Healing", 1}},
+                      6000, false, true),
+            },
+        },
+        single(
+            "The Bulette Field",
+            "Farmers have been vanishing from their own fields, pulled down into the earth. Something big is "
+            "burrowing under the barley.",
+            "The landshark is dead. The farmers can plough again.",
+            {{"Bulette", 1}},
+            {{"Potion of Greater Healing", 2}},
+            1500,  // 15 gp
+            5),
+        single(
+            "The Golem's Workshop",
+            "A dead wizard's flesh golem still guards his workshop, and nothing nonmagical seems to hurt it.",
+            "The golem falls apart at the seams. The workshop and its notes are yours.",
+            {{"Flesh Golem", 1}},
+            {{"Spell Scroll (Lightning Bolt)", 1}, {"Potion of Greater Healing", 1}},
+            2000,  // 20 gp
+            6),
+        single(
+            "The Gorgon's Pasture",
+            "A gorgon has taken the high pasture, and the shepherds have become statues.",
+            "The gorgon falls. With it dead, the statues are only statues -- but the pasture is safe.",
+            {{"Gorgon", 1}},
+            {{"Potion of Superior Healing", 1}, {"Shield +1", 1}},
+            2000,  // 20 gp
+            6),
+        single(
+            "The Green Wyrm of Thornwood",
+            "A young green dragon has made Thornwood its own, and its poison mists creep toward the villages.",
+            "The green wyrm is dead and Thornwood's air clears. Its hoard is yours.",
+            {{"Young Green Dragon", 1}},
+            {{"Longbow +2", 1}, {"Chain Mail +2", 1}, {"Potion of Supreme Healing", 1}},
+            8000,  // 80 gp
+            8),
     };
     return templates;
 }

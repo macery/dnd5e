@@ -1,6 +1,14 @@
 # Content for levels 5–10
 
-Status: **phase 1 (monster abilities) done; phase 2 (monsters and adventures) in progress.** Every recommendation was taken on 2026-10-05.
+Status: **both phases done.** Every recommendation was taken on 2026-10-05.
+
+**Phase 2 as built:**
+- **Migration 32** seeds the twelve SRD stat blocks. The Veteran's crossbow and the Stone Giant's rock are their preferred attacks. The Wight's Multiattack is Life Drain plus a longsword.
+- **Adventures:**
+  - Three multi-fight runs: **The Barrow-King** (5), **Moonrise at Ashgrove** (6), and **The White Wyrm's Lair** (7, four fights).
+  - Four single fights: **The Bulette Field** (5), **The Golem's Workshop** (6), **The Gorgon's Pasture** (6), and **The Green Wyrm of Thornwood** (8).
+  - Bosses drop rare and very rare items: Longsword +2, Ring of Protection, Warhammer +2, Bracers of Defense, Amulet of Health, Plate Armor +1, Shield +2, Longbow +2, Chain Mail +2, and Superior and Supreme Healing.
+- **Tests:** a smoke test fights every new monster to the end against a level-8 party with three seeds. The existing checks confirm that every adventure's monsters and loot exist and that its scenes scale.
 
 **Phase 1 as built:**
 - **Migration 31:**
