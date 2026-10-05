@@ -50,6 +50,8 @@ add_library(dndcore
     src/spellbook.cpp
     src/subclass.cpp
     src/class_options.cpp
+    src/checks.cpp
+    src/scenes.cpp
     src/damage.cpp
     src/dice.cpp
     src/effects.cpp

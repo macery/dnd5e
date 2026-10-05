@@ -271,7 +271,7 @@ BetweenScenesDialog::BetweenScenesDialog(dnd::Repository& repository, dnd::Adven
     const dnd::AdventureScene* next = dnd::next_scene(run_, adventure_);
     auto* header = new QLabel(this);
     header->setWordWrap(true);
-    header->setText(QString("<b>%1 of %2 fights won.</b> Next: <b>%3</b> (%4)%5")
+    header->setText(QString("<b>%1 of %2 scenes done.</b> Next: <b>%3</b> (%4)%5")
                         .arg(run_.next_scene)
                         .arg(adventure_.scenes.size())
                         .arg(next ? q(next->title).toHtmlEscaped() : QString())

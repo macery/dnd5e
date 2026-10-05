@@ -417,6 +417,12 @@ EncounterRating Encounter::difficulty() const {
 
 // --- Turns -------------------------------------------------------------------
 
+bool Encounter::has_inspiration() const {
+    const Combatant* actor = current();
+    const Character* c = actor && actor->is_character ? character(actor->character_id) : nullptr;
+    return c && c->inspiration;
+}
+
 void Encounter::roll_initiative() {
     // The day's fighting has begun: prepared spells are fixed until a long rest.
     for (auto& character : characters_) {
@@ -431,6 +437,17 @@ void Encounter::roll_initiative() {
         combatant.initiative = d20 + combatant.dex_modifier + combatant.initiative_bonus - combatant.roll_penalty;
     }
 
+    surprised_.clear();
+    for (int i = 0; i < static_cast<int>(combatants_.size()); ++i) {
+        bool character = combatants_[static_cast<size_t>(i)].is_character;
+        if ((surprise_ == Surprise::PartySurprised && character) || (surprise_ == Surprise::PartySurprises && !character)) {
+            surprised_.push_back(i);
+        }
+    }
+    if (surprise_ != Surprise::None) {
+        log(surprise_ == Surprise::PartySurprises ? "The party has surprise: the enemies lose their first turn."
+                                                  : "The party is surprised: everyone loses their first turn.");
+    }
     turn_order_.resize(combatants_.size());
     for (size_t i = 0; i < turn_order_.size(); ++i) turn_order_[i] = static_cast<int>(i);
     std::sort(turn_order_.begin(), turn_order_.end(), [this](int a, int b) {
@@ -479,6 +496,13 @@ void Encounter::advance_to_actionable_turn() {
                 if (status_ == EncounterStatus::InProgress) move_on();
                 continue;
             }
+        }
+
+        if (auto at = std::find(surprised_.begin(), surprised_.end(), index); at != surprised_.end()) {
+            surprised_.erase(at);
+            log(current.name + " is surprised and loses this turn.");
+            move_on();
+            continue;
         }
 
         if (is_incapacitated(effects_, index)) {
@@ -905,6 +929,10 @@ bool Encounter::weapon_attack(int attacker_index, int target_index, const Weapon
     }
     if (has_trait(attacker_index, "PackTactics") && ally_fighting(attacker_index)) {
         mods.advantage.push_back("Pack Tactics");
+    }
+    if (spend_inspiration_) {  // spent on this attack (AttackOptions::inspired)
+        spend_inspiration_ = false;
+        mods.advantage.push_back("inspiration");
     }
     exhaustion_mods(attacker_index, mods);
     std::vector<int> bonus_rolls;
@@ -2287,6 +2315,12 @@ bool Encounter::attack(int target_index, int attack_bonus, int damage_dice_count
     attack.great_weapon_fighting = attacker.attack_great_weapon_fighting;
     attack.magical = attacker.attack_magical;
     attack.damage_type = attacker.attack_damage_type;
+    if (options.inspired && has_inspiration()) {
+        Character* inspired = character_mut(attacker.character_id);
+        inspired->inspiration = false;
+        changed(attacker.character_id);
+        spend_inspiration_ = true;
+    }
     bool hit = weapon_attack(actor, target_index, attack, options.divine_smite_slot);
     if (hit && options.stunning_strike && can_stunning_strike() && attack.melee) stunning_strike(actor, target_index);
     if (turn_.attacks_left > 0) {

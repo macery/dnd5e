@@ -24,7 +24,7 @@ constexpr const char* kCharacterColumns =
     "CharacterId, CharacterName, Class, Race, Alignment, PlayerID, Level, "
     "Strength, Dexterity, Constitution, Intelligence, Wisdom, Charisma, "
     "CurrentHP, MaxHP, SkillProficiencies, SaveProficiencies, "
-    "Experience, HitDiceUsed, Background, SpellSlotsUsed, Dead, FeatureUses, FightingStyle, Coins, RevivalPenalty, CampaignID, MayPrepare, Subclass, SubclassChoice, Exhaustion, TempHP, ClassOptions, MaxHpReduction";
+    "Experience, HitDiceUsed, Background, SpellSlotsUsed, Dead, FeatureUses, FightingStyle, Coins, RevivalPenalty, CampaignID, MayPrepare, Subclass, SubclassChoice, Exhaustion, TempHP, ClassOptions, MaxHpReduction, Inspiration";
 // (Characters.ArmorClass and WeaponID still exist but are no longer used:
 // AC and weapons come from equipped inventory items since migration 15.)
 
@@ -118,6 +118,7 @@ Character read_character_row(sqlite3_stmt* stmt) {
     character.temp_hp = sqlite3_column_int(stmt, 31);
     character.class_options = parse_class_options(column_text(stmt, 32));
     character.max_hp_reduction = sqlite3_column_int(stmt, 33);
+    character.inspiration = sqlite3_column_int(stmt, 34) != 0;
     return character;
 }
 
@@ -601,8 +602,8 @@ int Repository::add_character(const Character& character) {
         "Strength, Dexterity, Constitution, Intelligence, Wisdom, Charisma, "
         "CurrentHP, MaxHP, SkillProficiencies, SaveProficiencies, "
         "Experience, HitDiceUsed, Background, SpellSlotsUsed, Dead, FeatureUses, FightingStyle, Coins, RevivalPenalty, MayPrepare, "
-        "Subclass, SubclassChoice, Exhaustion, TempHP, ClassOptions, MaxHpReduction) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);");
+        "Subclass, SubclassChoice, Exhaustion, TempHP, ClassOptions, MaxHpReduction, Inspiration) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);");
     bind_text(stmt, 1, character.character_name);
     sqlite3_bind_int(stmt.get(), 2, character.class_id);
     sqlite3_bind_int(stmt.get(), 3, character.race);
@@ -635,6 +636,7 @@ int Repository::add_character(const Character& character) {
     sqlite3_bind_int(stmt.get(), 30, character.temp_hp);
     bind_text(stmt, 31, format_class_options(character.class_options));
     sqlite3_bind_int(stmt.get(), 32, character.max_hp_reduction);
+    sqlite3_bind_int(stmt.get(), 33, character.inspiration ? 1 : 0);
     detail::run_and_expect_done(stmt, "insert character");
     return static_cast<int>(sqlite3_last_insert_rowid(db_));
 }
@@ -673,7 +675,7 @@ void Repository::update_character(const Character& character) {
         "CurrentHP = ?, MaxHP = ?, SkillProficiencies = ?, SaveProficiencies = ?, "
         "Experience = ?, HitDiceUsed = ?, Background = ?, SpellSlotsUsed = ?, Dead = ?, FeatureUses = ?, "
         "FightingStyle = ?, Coins = ?, RevivalPenalty = ?, MayPrepare = ?, Subclass = ?, SubclassChoice = ?, "
-        "Exhaustion = ?, TempHP = ?, ClassOptions = ?, MaxHpReduction = ? WHERE CharacterId = ?;");
+        "Exhaustion = ?, TempHP = ?, ClassOptions = ?, MaxHpReduction = ?, Inspiration = ? WHERE CharacterId = ?;");
     bind_text(stmt, 1, character.character_name);
     sqlite3_bind_int(stmt.get(), 2, character.class_id);
     sqlite3_bind_int(stmt.get(), 3, character.race);
@@ -705,7 +707,8 @@ void Repository::update_character(const Character& character) {
     sqlite3_bind_int(stmt.get(), 29, character.temp_hp);
     bind_text(stmt, 30, format_class_options(character.class_options));
     sqlite3_bind_int(stmt.get(), 31, character.max_hp_reduction);
-    sqlite3_bind_int(stmt.get(), 32, character.character_id);
+    sqlite3_bind_int(stmt.get(), 32, character.inspiration ? 1 : 0);
+    sqlite3_bind_int(stmt.get(), 33, character.character_id);
     detail::run_and_expect_done(stmt, "update character");
 }
 
@@ -737,10 +740,20 @@ std::vector<int> split_ids(const std::string& text) {
 
 }  // namespace
 
+namespace {
+
+std::string join_flags(const std::vector<std::string>& flags) {
+    std::string text;
+    for (const auto& flag : flags) text += (text.empty() ? "" : ",") + flag;
+    return text;
+}
+
+}  // namespace
+
 int Repository::add_adventure_run(const AdventureRun& run) {
     Statement stmt(db_,
-        "INSERT INTO AdventureRuns (Title, NextScene, Party, Status, LongRestTaken, StartedAt, CampaignID) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?);");
+        "INSERT INTO AdventureRuns (Title, NextScene, Party, Status, LongRestTaken, StartedAt, CampaignID, Flags, "
+        "NextFight) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);");
     bind_text(stmt, 1, run.title);
     sqlite3_bind_int(stmt.get(), 2, run.next_scene);
     bind_text(stmt, 3, join_ids(run.party));
@@ -748,27 +761,31 @@ int Repository::add_adventure_run(const AdventureRun& run) {
     sqlite3_bind_int(stmt.get(), 5, run.long_rest_taken ? 1 : 0);
     bind_text(stmt, 6, run.started_at);
     sqlite3_bind_int(stmt.get(), 7, run.campaign_id);
+    bind_text(stmt, 8, join_flags(run.flags));
+    bind_text(stmt, 9, format_next_fight(run));
     detail::run_and_expect_done(stmt, "insert adventure run");
     return static_cast<int>(sqlite3_last_insert_rowid(db_));
 }
 
 void Repository::update_adventure_run(const AdventureRun& run) {
     Statement stmt(db_,
-        "UPDATE AdventureRuns SET Title = ?, NextScene = ?, Party = ?, Status = ?, LongRestTaken = ?, StartedAt = ? "
-        "WHERE AdventureRunID = ?;");
+        "UPDATE AdventureRuns SET Title = ?, NextScene = ?, Party = ?, Status = ?, LongRestTaken = ?, StartedAt = ?, "
+        "Flags = ?, NextFight = ? WHERE AdventureRunID = ?;");
     bind_text(stmt, 1, run.title);
     sqlite3_bind_int(stmt.get(), 2, run.next_scene);
     bind_text(stmt, 3, join_ids(run.party));
     bind_text(stmt, 4, adventure_status_name(run.status));
     sqlite3_bind_int(stmt.get(), 5, run.long_rest_taken ? 1 : 0);
     bind_text(stmt, 6, run.started_at);
-    sqlite3_bind_int(stmt.get(), 7, run.run_id);
+    bind_text(stmt, 7, join_flags(run.flags));
+    bind_text(stmt, 8, format_next_fight(run));
+    sqlite3_bind_int(stmt.get(), 9, run.run_id);
     detail::run_and_expect_done(stmt, "update adventure run");
 }
 
 std::vector<AdventureRun> Repository::get_adventure_runs(bool in_progress_only) const {
-    std::string sql = "SELECT AdventureRunID, Title, NextScene, Party, Status, LongRestTaken, StartedAt, CampaignID "
-                      "FROM AdventureRuns";
+    std::string sql = "SELECT AdventureRunID, Title, NextScene, Party, Status, LongRestTaken, StartedAt, CampaignID, "
+                      "Flags, NextFight FROM AdventureRuns";
     if (in_progress_only) sql += " WHERE Status = 'InProgress'";
     sql += " ORDER BY AdventureRunID DESC;";
     Statement stmt(db_, sql.c_str());
@@ -783,6 +800,8 @@ std::vector<AdventureRun> Repository::get_adventure_runs(bool in_progress_only) 
         run.long_rest_taken = sqlite3_column_int(stmt.get(), 5) != 0;
         run.started_at = column_text(stmt.get(), 6);
         run.campaign_id = sqlite3_column_int(stmt.get(), 7);
+        run.flags = split_list(column_text(stmt.get(), 8));
+        parse_next_fight(run, column_text(stmt.get(), 9));
         runs.push_back(std::move(run));
     }
     return runs;

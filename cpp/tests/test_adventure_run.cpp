@@ -24,8 +24,9 @@ private:
 TEST_CASE("a run through a multi-scene adventure", "[adventure_run]") {
     const auto* warren = dnd::find_adventure("The Goblin Warren");
     REQUIRE(warren);
-    REQUIRE(warren->scenes.size() == 3);
-    REQUIRE(warren->scenes[1].camp_after);
+    REQUIRE(warren->scenes.size() == 6);
+    REQUIRE(warren->scenes[0].kind == dnd::SceneKind::Challenge);
+    REQUIRE(warren->scenes[2].camp_after);
 
     dnd::AdventureRun run;
     run.title = warren->title;
@@ -33,16 +34,19 @@ TEST_CASE("a run through a multi-scene adventure", "[adventure_run]") {
     REQUIRE_FALSE(dnd::between_scenes(run));
     REQUIRE_FALSE(dnd::can_long_rest(run, *warren));
 
-    dnd::record_fight(run, *warren, true);  // the lookouts
+    dnd::record_scene(run, *warren);  // the approach
     REQUIRE(dnd::between_scenes(run));
     REQUIRE(dnd::next_scene(run, *warren) == &warren->scenes[1]);
     REQUIRE_FALSE(dnd::can_long_rest(run, *warren));  // no camp after the first scene
-    REQUIRE(dnd::progress_text(run, *warren) == "scene 2 of 3");
+    REQUIRE(dnd::progress_text(run, *warren) == "scene 2 of 6");
 
+    dnd::record_fight(run, *warren, true);  // the lookouts
     dnd::record_fight(run, *warren, true);  // the wolf pens: a camp after
     REQUIRE(dnd::can_long_rest(run, *warren));
     dnd::record_long_rest(run);
     REQUIRE_FALSE(dnd::can_long_rest(run, *warren));  // once per camp
+    dnd::record_scene(run, *warren);  // the snare corridor
+    dnd::record_scene(run, *warren);  // the captive
     REQUIRE(dnd::is_last_scene(run, *warren));
 
     dnd::record_fight(run, *warren, true);  // the boss

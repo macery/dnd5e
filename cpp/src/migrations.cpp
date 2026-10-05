@@ -18,7 +18,7 @@ using detail::Statement;
 // for future schema changes -- never edit an existing one, since a
 // migration's sql is exactly what already ran on every database that has it
 // recorded in SchemaMigrations.
-constexpr std::array<Migration, 32> kMigrations = {{
+constexpr std::array<Migration, 33> kMigrations = {{
     {1, "initial schema: Players, Classes, Characters", R"sql(
         CREATE TABLE IF NOT EXISTS Players (
             PlayerID INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1141,6 +1141,13 @@ constexpr std::array<Migration, 32> kMigrations = {{
             UNION ALL SELECT 'Young Green Dragon', 1, 'Bite',           7, 2, 10, 4, 'piercing',    0, 2, 6, 'poison', '',         0,  '',      1, 0, 0
             UNION ALL SELECT 'Young Green Dragon', 2, 'Claw',           7, 2, 6,  4, 'slashing',    0, 0, 0, '',       '',         0,  '',      2, 0, 0
         ) AS a ON a.Monster = Monsters.Name;
+    )sql"},
+    // Scenes between fights (docs/scenes-and-npcs.md): inspiration, and what
+    // a run's scenes unlocked and changed about the next fight.
+    {33, "add inspiration and adventure run scene state", R"sql(
+        ALTER TABLE Characters ADD COLUMN Inspiration INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE AdventureRuns ADD COLUMN Flags TEXT NOT NULL DEFAULT '';
+        ALTER TABLE AdventureRuns ADD COLUMN NextFight TEXT NOT NULL DEFAULT '';
     )sql"},
 }};
 

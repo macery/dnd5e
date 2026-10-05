@@ -39,6 +39,7 @@
 #include "InitiativeTrackerDialog.hpp"
 #include "ImportDialog.hpp"
 #include "InventoryDialog.hpp"
+#include "SceneDialog.hpp"
 #include "ShopDialog.hpp"
 #include "LevelUpDialog.hpp"
 #include "MonsterListDialog.hpp"
@@ -55,6 +56,7 @@
 #include "dnd/class_features.hpp"
 #include "dnd/level_up.hpp"
 #include "dnd/progression.hpp"
+#include "dnd/scenes.hpp"
 #include "dnd/spellbook.hpp"
 #include "dnd/subclass.hpp"
 #include "dnd/spellcasting.hpp"
@@ -424,6 +426,7 @@ void MainWindow::onEditCharacterClicked() {
         updated.temp_hp = existing.temp_hp;
         updated.class_options = existing.class_options;
         updated.max_hp_reduction = existing.max_hp_reduction;
+        updated.inspiration = existing.inspiration;
         updated.coins = existing.coins;
         repository_.update_character(updated);
         reloadCharactersForCurrentPlayer();
@@ -885,16 +888,38 @@ void MainWindow::playAdventure(dnd::AdventureRun run) {
         }
 
         const dnd::AdventureScene* scene = dnd::next_scene(run, *adventure);
+        QString sceneTitle = adventure->scenes.size() == 1
+                                 ? title
+                                 : QString("%1 — %2: %3")
+                                       .arg(title, QString::fromStdString(dnd::progress_text(run, *adventure)),
+                                            QString::fromStdString(scene->title));
+        if (scene->kind != dnd::SceneKind::Fight) {
+            // A challenge, trap, or choice (docs/scenes-and-npcs.md).
+            SceneDialog sceneDialog(repository_, run, *adventure, *scene, sceneTitle, this);
+            bool continued = sceneDialog.exec() == QDialog::Accepted;
+            repository_.update_adventure_run(run);
+            if (!continued) {
+                reloadCharactersForCurrentPlayer();
+                return;  // resume from Solo Adventure
+            }
+            continue;
+        }
         std::vector<int> levels;
         for (const auto& member : members) levels.push_back(member.level);
         AdventureFight fight;
         fight.scene = dnd::scale_scene(*scene, levels, monsters).scene;
+        bool skip = false;
+        fight.surprise = dnd::shape_next_fight(run, fight.scene, skip);  // what earlier scenes did to it
+        if (skip) {
+            dnd::record_fight(run, *adventure, true);
+            repository_.update_adventure_run(run);
+            QMessageBox::information(this, sceneTitle,
+                                     QString("The party slips past %1 without a fight (and without its rewards).")
+                                         .arg(QString::fromStdString(scene->title)));
+            continue;
+        }
         fight.victory_text = dnd::is_last_scene(run, *adventure) ? adventure->victory_text : std::string();
-        fight.title = adventure->scenes.size() == 1
-                          ? title
-                          : QString("%1 — %2: %3")
-                                .arg(title, QString::fromStdString(dnd::progress_text(run, *adventure)),
-                                     QString::fromStdString(scene->title));
+        fight.title = sceneTitle;
 
         CombatEncounterDialog combat(repository_, members, monsters, this, &fight);
         combat.exec();

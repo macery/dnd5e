@@ -246,6 +246,9 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
     stunningBox_->setToolTip("On a hit, spend 1 ki: the target makes a CON save or is stunned until the end of "
                              "your next turn. No ki is spent on a miss.");
     attackForm->addRow("Stunning Strike", stunningBox_);
+    inspirationBox_ = new QCheckBox("Use inspiration (advantage)", attackGroup);
+    inspirationBox_->setToolTip("Inspiration (earned in adventure scenes): advantage on this attack. Spent once used.");
+    attackForm->addRow("Inspiration", inspirationBox_);
     attackForm->addRow("Divine Smite", smiteCombo_);
     attackForm->addRow("Touch", layOnHandsTargetCombo_);
     attackForm->addRow("Hit points", layOnHandsSpin_);
@@ -383,6 +386,7 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
             if (item != items.end()) loot.push_back({*item, grant.quantity});
         }
         encounter_.set_victory_reward(fight->victory_text, std::move(loot), fight->scene.coins_cp);
+        encounter_.set_surprise(fight->surprise);
     }
 
     updateActionControlsVisibility();
@@ -667,6 +671,7 @@ void CombatEncounterDialog::onTakeActionClicked() {
             dnd::AttackOptions options;
             options.reckless = recklessBox_->isVisible() && recklessBox_->isChecked();
             options.stunning_strike = stunningBox_->isVisible() && stunningBox_->isChecked();
+            options.inspired = inspirationBox_->isVisible() && inspirationBox_->isChecked();
             options.divine_smite_slot = smiteCombo_->isVisible() ? smiteCombo_->currentData().toInt() : 0;
             acted = encounter_.attack(targetCombo_->currentData().toInt(), attackBonusSpin_->value(),
                                       damageDiceCountSpin_->value(), damageDiceSidesSpin_->value(),
@@ -803,6 +808,7 @@ void CombatEncounterDialog::refreshBonusTargets() {
 void CombatEncounterDialog::refreshFeatureControls() {
     recklessBox_->setChecked(false);
     stunningBox_->setChecked(false);
+    inspirationBox_->setChecked(false);
 
     // Back to "No smite" after every attack, so slots are never spent by accident.
     smiteCombo_->clear();
@@ -852,7 +858,8 @@ void CombatEncounterDialog::updateActionControlsVisibility() {
     bool show_smite = is_attack && smiteCombo_->count() > 1;
     bool show_stunning = is_attack && encounter_.can_stunning_strike();
     for (auto [field, visible] : {std::pair<QWidget*, bool>{recklessBox_, show_reckless}, {smiteCombo_, show_smite},
-                                  {stunningBox_, show_stunning}}) {
+                                  {stunningBox_, show_stunning},
+                                  {inspirationBox_, is_attack && encounter_.has_inspiration()}}) {
         field->setVisible(visible);
         if (auto* row_label = attackFormLayout_->labelForField(field)) row_label->setVisible(visible);
     }

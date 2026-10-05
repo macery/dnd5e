@@ -52,6 +52,8 @@ struct Character {
     // Life Drain (Wight, Wraith): max HP taken away until a long rest, already
     // subtracted from max_hp; the long rest gives it back.
     int max_hp_reduction = 0;
+    // Inspiration (PHB ch. 4): spend it for advantage on one attack or check.
+    bool inspiration = false;
     // Class choices beyond the subclass (docs/class-features-1-5.md), by key:
     // "Metamagic", "Invocations", "PactBoon", "Expertise", "TomeCantrips",
     // "BonusSkills" -- each a list of names.

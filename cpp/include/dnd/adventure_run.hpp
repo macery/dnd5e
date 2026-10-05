@@ -26,13 +26,27 @@ struct AdventureRun {
     bool long_rest_taken = false;  // at the current camp
     std::string started_at;
     int campaign_id = 0;       // the campaign active when it started (0 = none)
+    // What earlier scenes changed (docs/scenes-and-npcs.md): unlocked flags,
+    // and how the next fight goes.
+    std::vector<std::string> flags;
+    bool skip_next_fight = false;
+    int fewer_monsters = 0;
+    int more_monsters = 0;
+    Surprise surprise = Surprise::None;
 };
+
+// "skip;fewer=1;more=0;surprise=PartySurprises" and back, for the database.
+std::string format_next_fight(const AdventureRun& run);
+void parse_next_fight(AdventureRun& run, const std::string& text);
 
 // The scene to fight next; nullptr once the run is over.
 const AdventureScene* next_scene(const AdventureRun& run, const AdventureTemplate& adventure);
 bool is_last_scene(const AdventureRun& run, const AdventureTemplate& adventure);
 // Between scenes: at least one fight won and the run still going.
 bool between_scenes(const AdventureRun& run);
+
+// After a non-fight scene: on to the next one (Finished after the last).
+void record_scene(AdventureRun& run, const AdventureTemplate& adventure);
 
 // After a fight: a victory moves on to the next scene (Finished after the
 // last one); a defeat ends the run. Anything else (the fight left

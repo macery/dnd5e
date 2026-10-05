@@ -172,6 +172,11 @@ CharacterSheetDialog::CharacterSheetDialog(const dnd::Character& character,
                             "Chosen with Class Options on the main window (docs/class-features-1-5.md).");
         }
     }
+    if (character.inspiration) {
+        addExplainedRow(summaryForm, "Inspiration", new QLabel("Yes: advantage on one attack or check", summaryGroup),
+                        "Inspiration (PHB ch. 4) is earned in adventure scenes. Spend it from the combat screen or a "
+                        "scene's check; you can only hold one.");
+    }
     if (character.exhaustion > 0) {
         static const char* kLevels[] = {"", "disadvantage on ability checks", "speed halved",
                                         "disadvantage on attack rolls and saving throws", "hit point maximum halved",

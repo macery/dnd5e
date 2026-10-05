@@ -44,6 +44,36 @@ void record_fight(AdventureRun& run, const AdventureTemplate& adventure, bool vi
     if (run.next_scene >= static_cast<int>(adventure.scenes.size())) run.status = AdventureStatus::Finished;
 }
 
+void record_scene(AdventureRun& run, const AdventureTemplate& adventure) {
+    if (run.status != AdventureStatus::InProgress) return;
+    ++run.next_scene;
+    run.long_rest_taken = false;
+    if (run.next_scene >= static_cast<int>(adventure.scenes.size())) run.status = AdventureStatus::Finished;
+}
+
+std::string format_next_fight(const AdventureRun& run) {
+    std::string text;
+    if (run.skip_next_fight) text += "skip;";
+    if (run.fewer_monsters) text += "fewer=" + std::to_string(run.fewer_monsters) + ";";
+    if (run.more_monsters) text += "more=" + std::to_string(run.more_monsters) + ";";
+    if (run.surprise == Surprise::PartySurprises) text += "surprise=party;";
+    if (run.surprise == Surprise::PartySurprised) text += "surprise=monsters;";
+    return text;
+}
+
+void parse_next_fight(AdventureRun& run, const std::string& text) {
+    run.skip_next_fight = text.find("skip;") != std::string::npos;
+    auto number = [&](const std::string& key) {
+        size_t at = text.find(key + "=");
+        return at == std::string::npos ? 0 : std::stoi(text.substr(at + key.size() + 1));
+    };
+    run.fewer_monsters = number("fewer");
+    run.more_monsters = number("more");
+    run.surprise = text.find("surprise=party;") != std::string::npos      ? Surprise::PartySurprises
+                   : text.find("surprise=monsters;") != std::string::npos ? Surprise::PartySurprised
+                                                                          : Surprise::None;
+}
+
 bool can_long_rest(const AdventureRun& run, const AdventureTemplate& adventure) {
     if (!between_scenes(run) || run.long_rest_taken) return false;
     return adventure.scenes[static_cast<size_t>(run.next_scene - 1)].camp_after;

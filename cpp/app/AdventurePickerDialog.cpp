@@ -46,10 +46,14 @@ AdventurePickerDialog::AdventurePickerDialog(std::vector<int> party_levels, std:
     }
     for (const auto& adventure : dnd::adventure_templates()) {
         scaled_.push_back(dnd::scale_adventure(adventure, party_levels, monsters));
-        int fights = static_cast<int>(adventure.scenes.size());
+        int fights = static_cast<int>(std::count_if(adventure.scenes.begin(), adventure.scenes.end(), [](const auto& s) {
+            return s.kind == dnd::SceneKind::Fight;
+        }));
+        int others = static_cast<int>(adventure.scenes.size()) - fights;
+        QString length = fights == 1 ? QString("1 fight") : QString("%1 fights").arg(fights);
+        if (others > 0) length += QString(", %1 other scene%2").arg(others).arg(others == 1 ? "" : "s");
         list_->addItem(QString("%1 — %2 · %3 · level %4+")
-                           .arg(q(adventure.title), dnd::difficulty_name(scaled_.back().hardest))
-                           .arg(fights == 1 ? QString("1 fight") : QString("%1 fights").arg(fights))
+                           .arg(q(adventure.title), dnd::difficulty_name(scaled_.back().hardest), length)
                            .arg(adventure.suggested_level));
     }
     // Wide enough for most entries, but never so wide the window outgrows a
@@ -120,11 +124,11 @@ void AdventurePickerDialog::onSelectionChanged(int index) {
             detailsLabel_->setText("This adventure isn't in this version of the app.");
             return;
         }
-        QString text = QString("<p><b>In progress</b> since %1: %2 of %3 fights won.</p>")
+        QString text = QString("<p><b>In progress</b> since %1: %2 of %3 scenes done.</p>")
                            .arg(q(run.started_at.substr(0, 10)))
                            .arg(run.next_scene)
                            .arg(adventure->scenes.size());
-        text += "<p>Resuming picks up between fights, with the same party. Your characters are as you left them.</p>";
+        text += "<p>Resuming picks up between scenes, with the same party. Your characters are as you left them.</p>";
         const dnd::AdventureScene* next = dnd::next_scene(run, *adventure);
         if (next) text += QString("<p><b>Next:</b> %1</p>").arg(q(next->title).toHtmlEscaped());
         detailsLabel_->setText(text);
@@ -140,6 +144,13 @@ void AdventurePickerDialog::onSelectionChanged(int index) {
         const auto& scene = scaled.adventure.scenes[s];
         const auto& rating = scaled.ratings[s];
         coins += scene.coins_cp;
+        if (scene.kind != dnd::SceneKind::Fight) {
+            const char* what = scene.kind == dnd::SceneKind::Trap      ? "a trap"
+                               : scene.kind == dnd::SceneKind::Choice  ? "a choice"
+                                                                       : "a challenge (skill checks)";
+            text += QString("<p><b>%1. %2:</b> <i>%3</i></p>").arg(s + 1).arg(q(scene.title).toHtmlEscaped(), what);
+            continue;
+        }
         QStringList foes;
         for (size_t g = 0; g < scene.monsters.size(); ++g) {
             const auto& group = scene.monsters[g];

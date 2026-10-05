@@ -3,6 +3,7 @@
 #include <algorithm>
 
 #include "dnd/adventure.hpp"
+#include "dnd/checks.hpp"
 #include "dnd/repository.hpp"
 
 TEST_CASE("every adventure template is well-formed", "[adventure]") {
@@ -20,6 +21,29 @@ TEST_CASE("every adventure template is well-formed", "[adventure]") {
         for (const auto& scene : adventure.scenes) {
             REQUIRE_FALSE(scene.title.empty());
             REQUIRE_FALSE(scene.narration.empty());
+            INFO(scene.title);
+            if (scene.kind == dnd::SceneKind::Trap) {
+                dnd::Ability ability;
+                REQUIRE_FALSE(scene.trap.name.empty());
+                REQUIRE(dnd::check_ability(scene.trap.disarm_check, ability));
+                REQUIRE(scene.trap.damage_dice >= 1);
+                continue;
+            }
+            if (scene.kind != dnd::SceneKind::Fight) {
+                REQUIRE(scene.monsters.empty());
+                REQUIRE_FALSE(scene.options.empty());
+                for (const auto& option : scene.options) {
+                    INFO(option.label);
+                    REQUIRE_FALSE(option.label.empty());
+                    REQUIRE_FALSE(option.success.text.empty());
+                    if (option.check.empty()) continue;
+                    dnd::Ability ability;
+                    REQUIRE(dnd::check_ability(option.check, ability));  // a real skill or ability
+                    REQUIRE(option.dc >= 5);
+                    REQUIRE_FALSE(option.failure.text.empty());
+                }
+                continue;
+            }
             REQUIRE_FALSE(scene.monsters.empty());
             for (const auto& group : scene.monsters) {
                 REQUIRE_FALSE(group.monster_name.empty());
@@ -57,7 +81,12 @@ TEST_CASE("every adventure's monsters and loot exist in the seeded data", "[adve
                 INFO(adventure.title << " / " << scene.title << ": " << group.monster_name);
                 REQUIRE(found);
             }
-            for (const auto& loot : scene.loot) {
+            std::vector<dnd::AdventureLoot> all = scene.loot;
+            for (const auto& option : scene.options) {
+                all.insert(all.end(), option.success.loot.begin(), option.success.loot.end());
+                all.insert(all.end(), option.failure.loot.begin(), option.failure.loot.end());
+            }
+            for (const auto& loot : all) {
                 bool found = std::any_of(items.begin(), items.end(),
                                          [&](const dnd::Item& i) { return i.name == loot.item_name; });
                 INFO(adventure.title << " / " << scene.title << ": " << loot.item_name);

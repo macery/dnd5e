@@ -33,6 +33,7 @@ struct AdventureFight {
     QString title;
     dnd::AdventureScene scene;
     std::string victory_text;
+    dnd::Surprise surprise = dnd::Surprise::None;  // from an earlier scene (docs/scenes-and-npcs.md)
 };
 
 // The combat screen: a view over a dnd::Encounter, which holds all the rules
@@ -166,6 +167,7 @@ private:
     QComboBox* wildShapeCombo_ = nullptr;
     QCheckBox* recklessBox_ = nullptr;
     QCheckBox* stunningBox_ = nullptr;     // Monk 5: Stunning Strike on the next hit
+    QCheckBox* inspirationBox_ = nullptr;  // spend inspiration for advantage
     QComboBox* metamagicCombo_ = nullptr;  // Sorcerer 3: Metamagic for the spell being cast
     QComboBox* smiteCombo_ = nullptr;        // "No smite", then each slot level
     QComboBox* layOnHandsTargetCombo_ = nullptr;

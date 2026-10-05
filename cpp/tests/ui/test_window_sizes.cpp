@@ -24,6 +24,7 @@
 #include "LevelUpDialog.hpp"
 #include "MainWindow.hpp"
 #include "MonsterListDialog.hpp"
+#include "SceneDialog.hpp"
 #include "ShopDialog.hpp"
 #include "SpellbookDialog.hpp"
 #include "SubclassDialog.hpp"
@@ -170,5 +171,13 @@ TEST_CASE("every window fits a small screen", "[ui][sizes]") {
         requireFits(monsters, "MonsterListDialog");
         InitiativeTrackerDialog initiative(repo.get_characters());
         requireFits(initiative, "InitiativeTrackerDialog");
+    }
+    SECTION("scene") {
+        const auto* warren = dnd::find_adventure("The Goblin Warren");
+        dnd::AdventureRun run;
+        run.title = warren->title;
+        run.party = {sera.character_id};
+        SceneDialog scene(repo, run, *warren, warren->scenes[4], "The Captive");
+        requireFits(scene, "SceneDialog");
     }
 }

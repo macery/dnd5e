@@ -12,6 +12,7 @@
 #include "dnd/effects.hpp"
 #include "dnd/encounter_difficulty.hpp"
 #include "dnd/equipment.hpp"
+#include "dnd/adventure.hpp"
 #include "dnd/item.hpp"
 #include "dnd/lookup_entry.hpp"
 #include "dnd/magic_items.hpp"
@@ -169,6 +170,9 @@ std::vector<LootShare> suggest_loot_shares(const std::vector<LootGrant>& loot,
 struct AttackOptions {
     // Reckless Attack; ignored unless Encounter::can_attack_recklessly().
     bool reckless = false;
+    // Spend inspiration (PHB ch. 4) for advantage on this attack. Ignored
+    // unless the attacker has it.
+    bool inspired = false;
     // Divine Smite: spend a slot of this level on a hit (0 = no smite). The
     // attack is refused if it isn't in Encounter::divine_smite_slots(). A
     // miss spends nothing.
@@ -247,6 +251,11 @@ public:
     // automatic: Shield when it turns a hit into a miss, Uncanny Dodge on a
     // hit, Hellish Rebuke when damaged. On by default.
     void set_auto_reactions(bool on) { auto_reactions_ = on; }
+    // Who's surprised when the fight starts (docs/scenes-and-npcs.md):
+    // surprised combatants lose their first turn. Set before rolling initiative.
+    void set_surprise(Surprise surprise) { surprise_ = surprise; }
+    // The current character has inspiration to spend (see AttackOptions).
+    bool has_inspiration() const;
     bool auto_reactions() const { return auto_reactions_; }
     EncounterStatus status() const { return status_; }
     // "Victory! All enemies defeated. <victory text>" / "Defeat! All characters
@@ -569,6 +578,9 @@ private:
     std::vector<Spell> scroll_spells_;
     std::vector<Monster> beasts_;  // Wild Shape forms
     bool auto_reactions_ = true;
+    Surprise surprise_ = Surprise::None;
+    std::vector<int> surprised_;  // combatants still to lose their first turn
+    bool spend_inspiration_ = false;  // the next weapon attack has advantage from inspiration
     int heightened_target_ = -1;  // Heightened Spell: this target has disadvantage on its save
     std::vector<std::string> pending_reaction_lines_;  // logged after the attack they answered
     std::vector<LootGrant> pending_loot_;  // won, waiting for divide_loot

@@ -25,7 +25,7 @@ TEST_CASE("adventure picker: runs to resume come first", "[ui][adventure]") {
     picker.show();
     settle();
     auto* list = picker.findChild<QListWidget*>();
-    REQUIRE(list->item(0)->text() == "▶ Resume: Crypt of the Restless — scene 2 of 3");
+    REQUIRE(list->item(0)->text() == "▶ Resume: Crypt of the Restless — scene 2 of 5");
     REQUIRE(picker.isResume());
     REQUIRE(picker.selectedRun().run_id == run.run_id);
 
@@ -83,18 +83,19 @@ TEST_CASE("between scenes: a long rest only at a camp, once", "[ui][adventure]")
         between.show();
         settle();
         REQUIRE_FALSE(button(between, "Long Rest")->isEnabled());
-        REQUIRE(visibleText(between).contains("1 of 3 fights won"));
+        REQUIRE(visibleText(between).contains("1 of 6 scenes done"));
         button(between, "Press On")->click();
         REQUIRE(between.choice() == BetweenScenesDialog::Choice::PressOn);
     }
 
-    SECTION("the camp after the second") {
-        dnd::record_fight(run, *warren, true);
-        dnd::record_fight(run, *warren, true);
+    SECTION("the camp after the wolf pens") {
+        dnd::record_scene(run, *warren);       // the approach
+        dnd::record_fight(run, *warren, true);  // the lookouts
+        dnd::record_fight(run, *warren, true);  // the wolf pens
         BetweenScenesDialog between(world.repo, run, *warren, classes);
         between.show();
         settle();
-        REQUIRE(visibleText(between).contains("the final fight"));
+        REQUIRE(visibleText(between).contains("The Snare Corridor"));
         auto* longRest = button(between, "Long Rest");
         REQUIRE(longRest->isEnabled());
         longRest->click();

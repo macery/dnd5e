@@ -25,6 +25,100 @@ AdventureTemplate single(std::string title, std::string hook, std::string victor
     return adventure;
 }
 
+// --- Non-fight scenes (docs/scenes-and-npcs.md) ---------------------------------------
+
+SceneOutcome says(std::string text) {
+    SceneOutcome outcome;
+    outcome.text = std::move(text);
+    return outcome;
+}
+
+SceneOutcome surprises(std::string text) {
+    SceneOutcome outcome = says(std::move(text));
+    outcome.surprise = Surprise::PartySurprises;
+    return outcome;
+}
+
+SceneOutcome surprised(std::string text) {
+    SceneOutcome outcome = says(std::move(text));
+    outcome.surprise = Surprise::PartySurprised;
+    return outcome;
+}
+
+SceneOutcome hurts(std::string text, int dice, int sides, std::string type, bool everyone = false) {
+    SceneOutcome outcome = says(std::move(text));
+    outcome.damage_dice = dice;
+    outcome.damage_sides = sides;
+    outcome.damage_type = std::move(type);
+    outcome.damage_everyone = everyone;
+    return outcome;
+}
+
+SceneOutcome fewer(std::string text, int count, bool inspiration = false) {
+    SceneOutcome outcome = says(std::move(text));
+    outcome.fewer_monsters = count;
+    outcome.inspiration = inspiration;
+    return outcome;
+}
+
+SceneOutcome more(std::string text, int count) {
+    SceneOutcome outcome = says(std::move(text));
+    outcome.more_monsters = count;
+    return outcome;
+}
+
+SceneOption check(std::string label, std::string skill, int dc, SceneOutcome success, SceneOutcome failure,
+                  bool group = false) {
+    SceneOption option;
+    option.label = std::move(label);
+    option.check = std::move(skill);
+    option.dc = dc;
+    option.group = group;
+    option.success = std::move(success);
+    option.failure = std::move(failure);
+    return option;
+}
+
+SceneOption pick(std::string label, SceneOutcome outcome) {
+    SceneOption option;
+    option.label = std::move(label);
+    option.success = std::move(outcome);
+    return option;
+}
+
+AdventureScene challenge(std::string title, std::string narration, std::vector<SceneOption> options) {
+    AdventureScene result;
+    result.title = std::move(title);
+    result.narration = std::move(narration);
+    result.kind = SceneKind::Challenge;
+    result.options = std::move(options);
+    return result;
+}
+
+AdventureScene trap(std::string title, std::string narration, SceneTrap details) {
+    AdventureScene result;
+    result.title = std::move(title);
+    result.narration = std::move(narration);
+    result.kind = SceneKind::Trap;
+    result.trap = std::move(details);
+    return result;
+}
+
+SceneTrap hazard(std::string name, int spot_dc, std::string disarm, int disarm_dc, int save_dc, int dice, int sides,
+                 std::string type, bool everyone = false) {
+    SceneTrap t;
+    t.name = std::move(name);
+    t.spot_dc = spot_dc;
+    t.disarm_check = std::move(disarm);
+    t.disarm_dc = disarm_dc;
+    t.save_dc = save_dc;
+    t.damage_dice = dice;
+    t.damage_sides = sides;
+    t.damage_type = std::move(type);
+    t.everyone = everyone;
+    return t;
+}
+
 AdventureScene scene(std::string title, std::string narration, std::vector<AdventureMonsterGroup> monsters,
                      std::vector<AdventureLoot> loot, int coins_cp, bool camp_after = false, bool boss = false) {
     AdventureScene result;
@@ -128,10 +222,28 @@ const std::vector<AdventureTemplate>& adventure_templates() {
             "The warren's boss is down and the goblins scatter into the hills. The farms are safe for now.",
             1,
             {
+                challenge("The Approach", "The warren mouth is a dark gash in the hillside. You could creep up on it, "
+                          "or simply walk in.",
+                          {check("Creep up on the lookouts", "Stealth", 12,
+                                 surprises("You're on the lookouts before they look up."),
+                                 surprised("A stone skitters away under someone's boot. The wolf's head comes up."),
+                                 true),
+                           pick("Walk straight up the path", says("You make no secret of it."))}),
                 scene("The Lookouts", "Two goblins keep a lazy watch at the warren mouth, a hungry wolf at their feet.",
                       {{"Goblin", 2}, {"Wolf", 1}}, {}, 300),
                 scene("The Wolf Pens", "Deeper in, the goblins keep their wolves. The pack has caught your scent.",
                       {{"Wolf", 2}}, {{"Rations (1 day)", 2}}, 200, true),
+                trap("The Snare Corridor", "A low passage leads deeper in. The floor is suspiciously clean.",
+                     hazard("a tripwire hung with rusty blades", 12, "Sleight of Hand", 12, 11, 2, 4, "piercing")),
+                challenge("The Captive", "A goblin sits tied up in a side room -- a deserter, by the look of it. "
+                          "It eyes you, and the door to the boss's den.",
+                          {check("Scare it into talking", "Intimidation", 12,
+                                 fewer("It babbles where the boss's guards sleep. One won't be waking up.", 1),
+                                 more("It shrieks for help before you can stop it.", 1)),
+                           check("Talk it round", "Persuasion", 14,
+                                 fewer("It tells you everything, and points out a guard to deal with quietly.", 1, true),
+                                 says("It just glares at you.")),
+                           pick("Leave it tied up", says("You leave it for the farmers to deal with."))}),
                 scene("The Boss's Den", "A hobgoblin has taken charge of the warren. It isn't going to give it "
                       "up without a fight.",
                       {{"Hobgoblin", 1}, {"Goblin", 2}}, {{"Potion of Healing", 2}, {"Cloak of Protection", 1}}, 1500,
@@ -147,8 +259,17 @@ const std::vector<AdventureTemplate>& adventure_templates() {
             {
                 scene("The Ossuary", "Bones rattle out of their niches and stand up to meet you.",
                       {{"Skeleton", 3}}, {{"Torch", 2}}, 400),
+                trap("The False Floor", "The passage beyond the ossuary is paved with old, uneven slabs.",
+                     hazard("a pit under a pivoting slab", 13, "Athletics", 12, 12, 2, 6, "bludgeoning")),
                 scene("The Flooded Tomb", "Knee-deep water, and shapes shambling through it.",
                       {{"Zombie", 2}, {"Skeleton", 1}}, {}, 500, true),
+                challenge("The Sealed Door", "A stone door blocks the deepest chamber, carved with warding runes.",
+                          {check("Read the runes and speak the old words", "Religion", 13,
+                                 surprises("The door swings open in silence. Nothing inside heard you coming."),
+                                 hurts("The wards flare: radiant fire licks across your hands.", 1, 6, "radiant")),
+                           check("Force it open", "Athletics", 15,
+                                 says("Stone grinds, and the door gives."),
+                                 surprised("It takes three tries, and the noise echoes through the barrow."))}),
                 scene("The Ghouls' Feast", "The smell of the barrow's deepest room is the worst yet. Ghouls look up "
                       "from what they were eating.",
                       {{"Ghoul", 2}},
@@ -165,6 +286,22 @@ const std::vector<AdventureTemplate>& adventure_templates() {
             5,
             {
                 scene("Gnoll Scouts", "Gnolls cackle in the rocks above the road.", {{"Gnoll", 3}}, {}, 600),
+                challenge("The Scree Slope", "The road climbs a slope of loose rock under the giant's lookout.",
+                          {check("Climb carefully, together", "Athletics", 13,
+                                 says("Everyone makes it up without starting a slide."),
+                                 hurts("The scree gives way. Everyone is battered by a rockslide.", 2, 6, "bludgeoning",
+                                       true),
+                                 true)}),
+                challenge("The Gatekeepers", "Two ogres lounge at the gate, gnawing bones. They don't look clever.",
+                          {check("Convince them you're the giant's guests", "Deception", 15,
+                                 [] {
+                                     SceneOutcome passed = says("They wave you through, grinning. The gate fight is "
+                                                                "avoided.");
+                                     passed.skip_next_fight = true;
+                                     return passed;
+                                 }(),
+                                 surprised("They don't believe a word, and they're on you before you're ready.")),
+                           pick("Attack the gate", says("Steel out, you charge."))}),
                 scene("The Ogre Gate", "Two ogres guard a crude gate of logs across the road.", {{"Ogre", 2}},
                       {{"Potion of Healing", 2}}, 1000, true),
                 scene("The Owlbear Pit", "The giant keeps a pet. It's hungry.", {{"Owlbear", 1}}, {}, 800),
@@ -184,8 +321,19 @@ const std::vector<AdventureTemplate>& adventure_templates() {
             {
                 scene("The Barrow Gate", "A wight in rusted mail stands at the door with the dead it commands.",
                       {{"Wight", 1}, {"Skeleton", 3}}, {}, 800),
+                trap("The Collapsing Passage", "The barrow's spine is a low passage of stacked stone, and it creaks.",
+                     hazard("a passage that comes down on whoever disturbs its keystone", 14, "Athletics", 14, 13, 3, 6,
+                            "bludgeoning", true)),
                 scene("The Hall of Kings", "Two of the old king's champions rise from their biers as you pass.",
                       {{"Wight", 2}}, {{"Potion of Greater Healing", 2}}, 1000, true),
+                challenge("The King's Epitaph", "Above the tomb door, a long inscription names the king and his oath.",
+                          {check("Read the history of the king", "History", 15,
+                                 fewer("You speak his name and oath aloud. His honor guard kneels and does not rise.", 1,
+                                       true),
+                                 says("The words mean nothing to you.")),
+                           check("Recognize the funeral rites", "Religion", 13,
+                                 fewer("You perform the rites. His honor guard lies back down.", 1),
+                                 says("You can't make out which rites these are."))}),
                 scene("The King's Tomb", "The barrow-king waits above his coffin, a shadow with burning eyes.",
                       {{"Wraith", 1}, {"Wight", 1}},
                       {{"Longsword +2", 1}, {"Ring of Protection", 1}, {"Potion of Superior Healing", 1}}, 3000,
@@ -201,8 +349,17 @@ const std::vector<AdventureTemplate>& adventure_templates() {
             {
                 scene("The Lane at Dusk", "A robed figure and something that was a farmhand step out of the hedges.",
                       {{"Werewolf", 1}, {"Cult Fanatic", 1}}, {}, 1200),
+                challenge("Questioning the Villagers", "The villagers clam up when you ask about the full moon.",
+                          {check("Read who's lying", "Insight", 14,
+                                 surprises("The miller's wife can't meet your eyes. She tells you when they'll gather."),
+                                 surprised("You pick the wrong villager -- one of the cult. They're warned.")),
+                           check("Lean on them", "Intimidation", 15,
+                                 surprises("The miller breaks: they meet at the old mill at moonrise."),
+                                 more("Someone runs to warn the mill.", 1))}),
                 scene("The Old Mill", "The mill wheel creaks. Two shapes on the millrace are not wolves, and not men.",
                       {{"Werewolf", 2}}, {{"Potion of Greater Healing", 2}}, 1200, true),
+                trap("The Shrine Path", "The path to the shrine winds through dark woods, and something has dug here.",
+                     hazard("a covered pit lined with stakes", 14, "Survival", 13, 13, 3, 6, "piercing")),
                 scene("The Moon Shrine", "The cult's high priest raises a knife to the moon, and his pack answers.",
                       {{"Werewolf", 2}, {"Cult Fanatic", 1}},
                       {{"Warhammer +2", 1}, {"Bracers of Defense", 1}, {"Potion of Superior Healing", 2}}, 4000,
@@ -216,12 +373,34 @@ const std::vector<AdventureTemplate>& adventure_templates() {
             "The wyrm is dead and its hoard is yours. The pass is open again.",
             7,
             {
+                challenge("The Blizzard", "Snow comes sideways off the peaks, and the trail disappears.",
+                          {check("Keep the party on the trail", "Survival", 14,
+                                 says("You find the way through the whiteout."),
+                                 [] {
+                                     SceneOutcome lost = says("You spend a freezing night lost on the mountain.");
+                                     lost.exhaustion = 1;
+                                     return lost;
+                                 }(),
+                                 true)}),
                 scene("The Frozen Pass", "Crossbows click from the rocks: the wyrm's hired swords hold the pass.",
                       {{"Veteran", 2}}, {}, 1500),
                 scene("The Quarry", "A stone giant hurls boulders down the quarry face.", {{"Stone Giant", 1}},
                       {{"Potion of Greater Healing", 2}}, 1500, true),
+                challenge("The Ice Bridge", "A bridge of blue ice spans the chasm to the tower. It's thin.",
+                          {check("Cross first and anchor a rope", "Acrobatics", 15,
+                                 says("You make it across and tie off the rope; the rest follow safely."),
+                                 hurts("The ice cracks. You hang on, but the cold bites deep.", 3, 6, "cold")),
+                           check("Find another way down and up", "Athletics", 14,
+                                 says("A long climb, but nobody falls."),
+                                 hurts("A handhold breaks. You slide down the ice.", 2, 6, "bludgeoning"))}),
                 scene("The Ice Tower", "The renegade mage waits in his tower, his guard beside him.",
                       {{"Mage", 1}, {"Veteran", 1}}, {{"Spell Scroll (Fireball)", 1}}, 2000),
+                challenge("The Sleeping Wyrm", "Through the ice you can see the dragon, coiled and still. Asleep?",
+                          {check("Creep in while it sleeps", "Stealth", 15,
+                                 surprises("It's still asleep when you strike."),
+                                 surprised("A blue eye opens. It was never asleep."),
+                                 true),
+                           pick("Wake it with a war cry", says("No tricks. You stride in."))}),
                 scene("The Wyrm's Lair", "The young white dragon uncoils from its hoard of frozen gold.",
                       {{"Young White Dragon", 1}},
                       {{"Amulet of Health", 1}, {"Plate Armor +1", 1}, {"Shield +2", 1},
