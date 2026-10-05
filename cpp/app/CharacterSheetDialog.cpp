@@ -220,7 +220,8 @@ CharacterSheetDialog::CharacterSheetDialog(const dnd::Character& character,
         "A bonus added to attack rolls, saving throws, and skill checks this character is proficient in. "
         "It grows as the character levels up.");
     addExplainedRow(summaryForm, "Initiative",
-        new QLabel(formatModifier(dnd::initiative(character)), summaryGroup),
+        new QLabel(formatModifier(dnd::initiative(character) + dnd::jack_of_all_trades(character, className)),
+                   summaryGroup),
         "Added to a d20 roll at the start of combat to determine turn order. Equal to the Dexterity modifier.");
     addExplainedRow(summaryForm, "Passive Perception",
         new QLabel(QString::number(dnd::passive_perception(character)), summaryGroup),
@@ -287,7 +288,11 @@ CharacterSheetDialog::CharacterSheetDialog(const dnd::Character& character,
         auto skill = static_cast<dnd::Skill>(i);
         QString name = dnd::skill_name(skill);
         addExplainedRow(skillsForm, name,
-            buildRollableRow(skillsGroup, name, dnd::skill_bonus(scored, skill),
+            buildRollableRow(skillsGroup, name,
+                             dnd::skill_bonus(scored, skill) +
+                                 (dnd::has_skill_proficiency(character, skill)
+                                      ? 0
+                                      : dnd::jack_of_all_trades(character, className)),  // Bard 2
                               dnd::has_skill_proficiency(character, skill)),
             dnd::skill_description(skill));
     }

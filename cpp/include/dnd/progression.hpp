@@ -74,12 +74,16 @@ struct ShortRestResult {
     bool slots_restored = false;     // a Warlock's pact slots
     bool features_restored = false;  // Second Wind, Action Surge, Ki, ...
     std::array<int, 9> arcane_recovery{};  // slots a Wizard recovered, by level
+    int song_of_rest = 0;                  // extra HP from a bard's Song of Rest
 };
 
 // A whole short rest (PHB ch. 8) for one character: the automatic part
 // (take_short_rest), Arcane Recovery for a Wizard with spent slots, and up
 // to `hit_dice` hit dice spent (fewer if they don't have that many; spending
-// stops once HP is full). Nothing happens to the dead.
-ShortRestResult short_rest(Character& character, const ClassInfo& class_info, const Dice& dice, int hit_dice);
+// stops once HP is full). Nothing happens to the dead. `song_of_rest_die`
+// (a bard resting with them; dnd/class_features.hpp) adds one roll of that
+// die to the healing if any hit die was spent.
+ShortRestResult short_rest(Character& character, const ClassInfo& class_info, const Dice& dice, int hit_dice,
+                           int song_of_rest_die = 0);
 
 }  // namespace dnd

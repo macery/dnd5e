@@ -113,7 +113,8 @@ void take_short_rest(Character& character, const ClassInfo& class_info) {
     restore_short_rest_features(character, class_info.name);
 }
 
-ShortRestResult short_rest(Character& character, const ClassInfo& class_info, const Dice& dice, int hit_dice) {
+ShortRestResult short_rest(Character& character, const ClassInfo& class_info, const Dice& dice, int hit_dice,
+                           int song_of_rest_die) {
     ShortRestResult result;
     if (character.dead) return result;
     auto slots_before = character.spell_slots_used;
@@ -128,6 +129,12 @@ ShortRestResult short_rest(Character& character, const ClassInfo& class_info, co
         if (regained < 0) break;  // none left
         ++result.hit_dice_spent;
         result.hp_regained += regained;
+    }
+    if (song_of_rest_die > 0 && result.hit_dice_spent > 0) {
+        int before = character.current_hp;
+        character.current_hp = std::min(character.max_hp, character.current_hp + dice.roll(song_of_rest_die, 1).front());
+        result.song_of_rest = character.current_hp - before;
+        result.hp_regained += result.song_of_rest;
     }
     return result;
 }

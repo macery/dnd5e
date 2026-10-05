@@ -207,11 +207,19 @@ ShortRestDialog::ShortRestDialog(dnd::Repository& repository, std::vector<dnd::C
 void ShortRestDialog::rest() {
     dnd::SystemRandomSource source;
     dnd::Dice dice(source);
+    // Song of Rest: the best bard resting with the group plays for everyone.
+    int songDie = 0;
+    for (const auto& member : characters_) {
+        const dnd::ClassInfo* memberClass = dnd::find_class_info_by_id(classes_, member.class_id);
+        if (memberClass && memberClass->name == "Bard" && !member.dead && member.current_hp > 0) {
+            songDie = std::max(songDie, dnd::song_of_rest_die(member.level));
+        }
+    }
     for (size_t i = 0; i < characters_.size(); ++i) {
         auto& c = characters_[i];
         const dnd::ClassInfo* info = dnd::find_class_info_by_id(classes_, c.class_id);
         if (!info || c.dead) continue;
-        auto result = dnd::short_rest(c, *info, dice, spins_[i]->value());
+        auto result = dnd::short_rest(c, *info, dice, spins_[i]->value(), songDie);
         repository_.update_character(c);
         QStringList what;
         if (QComboBox* attunement = attunementCombos_[i]) {
@@ -237,6 +245,7 @@ void ShortRestDialog::rest() {
                         .arg(c.current_hp)
                         .arg(c.max_hp);
         }
+        if (result.song_of_rest > 0) what << QString("Song of Rest +%1 HP").arg(result.song_of_rest);
         if (result.features_restored) what << "short-rest features back";
         if (result.slots_restored) what << "pact slots back";
         QStringList recovered;

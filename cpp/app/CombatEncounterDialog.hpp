@@ -96,6 +96,7 @@ private:
     // known spells, then (via onSpellChanged) slots and targets.
     void refreshSpellControls();
     void onSpellChanged();
+    void refreshMetamagic();
     void refreshSpellInfo();
     const dnd::Spell* selectedSpell() const;
     void log(const QString& line);
@@ -161,6 +162,8 @@ private:
     QComboBox* channelCombo_ = nullptr;
     QPushButton* channelButton_ = nullptr;
     QCheckBox* recklessBox_ = nullptr;
+    QCheckBox* stunningBox_ = nullptr;     // Monk 5: Stunning Strike on the next hit
+    QComboBox* metamagicCombo_ = nullptr;  // Sorcerer 3: Metamagic for the spell being cast
     QComboBox* smiteCombo_ = nullptr;        // "No smite", then each slot level
     QComboBox* layOnHandsTargetCombo_ = nullptr;
     QSpinBox* layOnHandsSpin_ = nullptr;     // hit points to spend from the pool

@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "dnd/character.hpp"
+#include "dnd/class_features.hpp"
 #include "dnd/dice.hpp"
 #include "dnd/effects.hpp"
 #include "dnd/encounter_difficulty.hpp"
@@ -69,6 +70,7 @@ struct Combatant {
     bool frenzied = false;           // a Berserker's Frenzy: exhaustion when the rage ends
     bool frenzy_ready = false;       // Frenzy attacks start on the turn after the rage
     double challenge_rating = 0;     // monsters only (Destroy Undead)
+    int initiative_bonus = 0;        // characters only: Jack of All Trades
     // Characters only: the *raise dead* penalty (Character::revival_penalty),
     // taken off attack rolls, saving throws, and initiative.
     int roll_penalty = 0;
@@ -148,6 +150,10 @@ struct AttackOptions {
     // attack is refused if it isn't in Encounter::divine_smite_slots(). A
     // miss spends nothing.
     int divine_smite_slot = 0;
+    // Stunning Strike (Monk 5): spend 1 ki on a hit; the target makes a CON
+    // save or is stunned until the end of the monk's next turn. Ignored
+    // unless Encounter::can_stunning_strike().
+    bool stunning_strike = false;
 };
 
 // The combat engine: characters and (possibly several copies of) monsters
@@ -290,8 +296,9 @@ public:
         RageWithFrenzy,         // Berserker: Rage, and Frenzy (exhaustion when it ends)
         FrenzyAttack,           // Berserker: one melee weapon attack while frenzied
         FastHandsPotion,        // Thief: drink a potion (the target is the potion's item id)
+        CreateSpellSlot,        // Sorcerer: Font of Magic, sorcery points into a slot (the target is its level)
     };
-    enum class BonusTarget { None, Ally, Enemy, Potion };
+    enum class BonusTarget { None, Ally, Enemy, Potion, SlotLevel };
     struct BonusActionOption {
         BonusAction kind;
         std::string label;        // "Second Wind (1 left)"
@@ -322,6 +329,11 @@ public:
     // Barbarian Reckless Attack (level 2): decided on the first attack of the
     // turn (see AttackOptions).
     bool can_attack_recklessly() const;
+    // Everything that shapes a combatant's saving throw right now: effects,
+    // exhaustion, Danger Sense, ...
+    RollModifiers save_modifiers(int index, Ability ability) const;
+    // Monk Stunning Strike (level 5) with ki left (see AttackOptions).
+    bool can_stunning_strike() const;
     // Paladin Divine Smite (level 2): slot levels the current character could
     // smite with on a melee hit; empty if none.
     std::vector<int> divine_smite_slots() const;
@@ -353,7 +365,12 @@ public:
     // `slot_level` is 0 for cantrips; `targets` are combatant indices (ignored
     // for Utility spells). The spell's casting time decides whether it takes
     // the action or the bonus action.
-    bool cast_spell(int spell_id, int slot_level, const std::vector<int>& targets);
+    bool cast_spell(int spell_id, int slot_level, const std::vector<int>& targets,
+                    Metamagic metamagic = Metamagic::None);
+    // Metamagic the current sorcerer could apply to `spell` at `slot_level`
+    // (chosen options, enough sorcery points, and a spell it fits), with each
+    // one's cost in points.
+    std::vector<std::pair<Metamagic, int>> metamagic_options(const Spell& spell, int slot_level) const;
 
     // Spell scrolls (docs/magic-items.md). The encounter only knows the
     // spells it's given: every spell a scroll might cast.
@@ -438,6 +455,11 @@ private:
     bool drink(int index, int item_id);
     // Disadvantage from exhaustion on attack rolls and saves (level 3+).
     void exhaustion_mods(int index, RollModifiers& mods) const;
+    // Class features on a saving throw: exhaustion, and a Barbarian's Danger
+    // Sense (advantage on DEX saves unless blinded, deafened, or incapacitated).
+    void save_feature_mods(int index, Ability ability, RollModifiers& mods) const;
+    // Stunning Strike after a hit; logs the save.
+    void stunning_strike(int monk, int target);
 
     // Effect bookkeeping at turn boundaries (durations, standing up, saves to end).
     void start_turn(int index);
@@ -502,6 +524,7 @@ private:
     std::vector<LootGrant> loot_;
     std::vector<Spell> scroll_spells_;
     bool auto_reactions_ = true;
+    int heightened_target_ = -1;  // Heightened Spell: this target has disadvantage on its save
     std::vector<std::string> pending_reaction_lines_;  // logged after the attack they answered
     std::vector<LootGrant> pending_loot_;  // won, waiting for divide_loot
     int coins_cp_ = 0;

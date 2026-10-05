@@ -28,6 +28,7 @@ enum class Feature {
     LayOnHands,
     ChannelDivinity,  // Cleric 2 (1 use, 2 at 6, 3 at 18), Paladin 3 (1 use); short rest
     NaturalRecovery,  // Circle of the Land druids: Arcane Recovery's twin
+    SorceryPoints,    // Sorcerer 2: points equal to the sorcerer level, back on a long rest
 };
 
 enum class Recovery { ShortRest, LongRest };
@@ -67,6 +68,37 @@ bool spend_feature(Character& character, Feature feature, const std::string& cla
 void restore_short_rest_features(Character& character, const std::string& class_name);
 // Long rest: every feature comes back.
 void restore_all_features(Character& character);
+
+// --- Levels 1-5 (docs/class-features-1-5.md) -------------------------------------
+
+// Jack of All Trades (Bard 2): half the proficiency bonus (rounded down) on
+// ability checks without proficiency -- initiative included. 0 otherwise.
+int jack_of_all_trades(const Character& character, const std::string& class_name);
+// Song of Rest (Bard 2): the extra healing die for anyone who spends hit dice
+// on a short rest -- d6, d8 at 9, d10 at 13, d12 at 17; 0 below level 2.
+int song_of_rest_die(int bard_level);
+
+// Font of Magic (Sorcerer 2): creating a spell slot costs sorcery points
+// (1st: 2, 2nd: 3, 3rd: 5, 4th: 6, 5th: 7); 0 for levels that can't be made.
+int slot_creation_cost(int slot_level);
+// Spends the points and adds the slot (on top of the usual ones; it's gone
+// after a long rest). False, changing nothing, if the points are short.
+bool create_spell_slot(Character& character, const std::string& class_name, int slot_level);
+// Expends an unused slot for sorcery points equal to its level, never above
+// the maximum. False if there's no such slot or the points are already full.
+bool convert_slot_to_points(Character& character, const std::string& class_name, int slot_level);
+
+// Metamagic (Sorcerer 3): two options at 3, three at 10, four at 17.
+enum class Metamagic { None, Careful, Distant, Empowered, Extended, Heightened, Quickened, Subtle, Twinned };
+const char* metamagic_name(Metamagic metamagic);
+Metamagic metamagic_from_name(const std::string& name);  // None for unknown text
+std::vector<Metamagic> all_metamagic();
+// What it does, in a line; and whether combat applies it (the rest are shown only).
+const char* metamagic_description(Metamagic metamagic);
+bool metamagic_automated(Metamagic metamagic);
+// Sorcery points it costs on `spell_level` (Twinned: the level, 1 for a cantrip).
+int metamagic_cost(Metamagic metamagic, int spell_level);
+int metamagic_known(int sorcerer_level);
 
 // --- Formulas --------------------------------------------------------------------
 

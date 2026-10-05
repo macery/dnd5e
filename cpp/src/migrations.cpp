@@ -18,7 +18,7 @@ using detail::Statement;
 // for future schema changes -- never edit an existing one, since a
 // migration's sql is exactly what already ran on every database that has it
 // recorded in SchemaMigrations.
-constexpr std::array<Migration, 28> kMigrations = {{
+constexpr std::array<Migration, 29> kMigrations = {{
     {1, "initial schema: Players, Classes, Characters", R"sql(
         CREATE TABLE IF NOT EXISTS Players (
             PlayerID INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1020,6 +1020,11 @@ constexpr std::array<Migration, 28> kMigrations = {{
         SELECT Classes.ClassID, Spells.SpellID FROM Pairs
         JOIN Classes ON Classes.ClassName = Pairs.ClassName
         JOIN Spells ON Spells.Name = Pairs.SpellName;
+    )sql"},
+    // Class choices for levels 1-5 (docs/class-features-1-5.md): Metamagic,
+    // invocations, Pact Boon, Expertise, ...
+    {29, "add Characters.ClassOptions", R"sql(
+        ALTER TABLE Characters ADD COLUMN ClassOptions TEXT NOT NULL DEFAULT '';
     )sql"},
 }};
 

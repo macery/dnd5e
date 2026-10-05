@@ -33,6 +33,7 @@ private slots:
     void onForgetClicked();
     void onLearnClicked();
     void onPrepareClicked();
+    void onFontOfMagicClicked();
 
 private:
     void reload();
@@ -59,6 +60,9 @@ private:
     QPushButton* forgetButton_ = nullptr;
     QPushButton* prepareButton_ = nullptr;  // Wizards: prepare or unprepare a spellbook spell
     QLabel* prepareLabel_ = nullptr;        // when prepared spells can change
+    QWidget* fontRow_ = nullptr;            // Sorcerers: Font of Magic conversions
+    QComboBox* fontCombo_ = nullptr;
+    QPushButton* fontButton_ = nullptr;
     QComboBox* learnCombo_ = nullptr;
     QPushButton* learnButton_ = nullptr;
     bool isWizard() const;

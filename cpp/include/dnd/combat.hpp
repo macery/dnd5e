@@ -28,6 +28,11 @@ struct AttackResult {
 // `critical_threshold` is the lowest natural roll that crits (19 for a Champion).
 AttackResult resolve_attack(const Dice& dice, int attack_bonus, int target_ac, int damage_dice_count,
                              int damage_dice_sides, int damage_bonus, RollMode mode = RollMode::Normal,
-                             bool critical_on_hit = false, bool reroll_low_damage = false, int critical_threshold = 20);
+                             bool critical_on_hit = false, bool reroll_low_damage = false, int critical_threshold = 20,
+                             int reroll_lowest = 0);
+
+// Rerolls up to `count` of the lowest dice that came up below the die's
+// average, keeping the new rolls (Empowered Spell).
+void reroll_lowest_dice(const Dice& dice, std::vector<int>& rolled, int sides, int count);
 
 }  // namespace dnd

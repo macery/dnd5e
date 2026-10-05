@@ -154,6 +154,7 @@ void Encounter::add_character(const Character& character, std::vector<Spell> kno
     combatant.death_saves.dead = character.dead;
     combatant.roll_penalty = character.revival_penalty;
     combatant.subclass = character.subclass;
+    combatant.initiative_bonus = jack_of_all_trades(character, class_name);
     combatant.exhaustion = character.exhaustion;
     combatant.temp_hp = character.temp_hp;
     if (character.exhaustion >= 4) {  // exhaustion 4: hit point maximum halved
@@ -418,7 +419,7 @@ void Encounter::roll_initiative() {
     for (auto& combatant : combatants_) {
         int d20 = dice_.roll(20, 1).front();
         if (combatant.exhaustion >= 1) d20 = std::min(d20, dice_.roll(20, 1).front());  // exhaustion: disadvantage
-        combatant.initiative = d20 + combatant.dex_modifier - combatant.roll_penalty;
+        combatant.initiative = d20 + combatant.dex_modifier + combatant.initiative_bonus - combatant.roll_penalty;
     }
 
     turn_order_.resize(combatants_.size());
@@ -996,6 +997,15 @@ bool Encounter::weapon_attack(int attacker_index, int target_index, const Weapon
                               (monster_attack ? typed_damage(target_index, extra_damage,
                                                              monster_attack->extra_damage_type, extra_note)
                                               : 0);
+        // Deflect Missiles (Monk 3): a ranged weapon attack's damage drops by 1d10 + DEX + monk level.
+        if (reacting && !target.reaction_used && target.class_name == "Monk" && target.level >= 3 &&
+            monster_attack->ranged && result.damage_total > 0) {
+            const Character* monk = character(target.character_id);
+            int reduce = dice_.roll(10, 1).front() + ability_modifier(monk ? monk->dexterity : 10) + target.level;
+            target.reaction_used = true;
+            result.damage_total = std::max(0, result.damage_total - reduce);
+            extra_note += " (Deflect Missiles: -" + std::to_string(reduce) + ")";
+        }
         // Uncanny Dodge (Rogue 5): halve an attack's damage.
         if (reacting && !target.reaction_used && target.class_name == "Rogue" && target.level >= 5 &&
             result.damage_total > 0) {
@@ -1255,7 +1265,7 @@ std::vector<std::string> Encounter::apply_healing(int target_index, int amount, 
 
 bool Encounter::roll_save(int target_index, Ability ability, int dc, std::string& detail) {
     RollModifiers mods = saving_throw_modifiers(effects_, target_index, ability);
-    exhaustion_mods(target_index, mods);
+    save_feature_mods(target_index, ability, mods);
     use_effects(mods.used_effects);  // e.g. a Bardic Inspiration die
     int roll = dice_.roll_d20(mods.mode()).result;
     std::vector<int> bonus_rolls;
@@ -1753,6 +1763,14 @@ std::vector<Encounter::BonusActionOption> Encounter::bonus_action_options() cons
         options.push_back({BonusAction::FrenzyAttack, "Frenzy: melee attack (" + actor.attack_name + ")",
                            "While frenzied, one melee weapon attack as a bonus action.", BonusTarget::Enemy});
     }
+    if (uses(Feature::SorceryPoints) >= slot_creation_cost(1)) {
+        options.push_back({BonusAction::CreateSpellSlot,
+                           "Font of Magic: create a spell slot (" + std::to_string(uses(Feature::SorceryPoints)) +
+                               " points)",
+                           "Turn sorcery points into a spell slot: 1st level for 2 points, 2nd 3, 3rd 5, 4th 6, 5th "
+                           "7. It lasts until a long rest.",
+                           BonusTarget::SlotLevel});
+    }
     if (actor.subclass == "Thief" && actor.level >= 3 && !bonus_action_targets(BonusTarget::Potion).empty()) {
         options.push_back({BonusAction::FastHandsPotion, "Fast Hands: drink a potion",
                            "Cunning Action with Fast Hands: drink a healing potion as a bonus action.",
@@ -1805,6 +1823,16 @@ std::vector<Encounter::BonusActionOption> Encounter::bonus_action_options() cons
 std::vector<int> Encounter::bonus_action_targets(BonusTarget target) const {
     std::vector<int> targets;
     int actor = current_index();
+    if (target == BonusTarget::SlotLevel) {  // slot levels the sorcerer can afford to create
+        const Combatant* current = this->current();
+        const Character* sorcerer = current ? character(current->character_id) : nullptr;
+        if (!sorcerer) return targets;
+        int points = feature_uses_left(Feature::SorceryPoints, *sorcerer, current->class_name);
+        for (int level = 1; level <= 5; ++level) {
+            if (slot_creation_cost(level) <= points) targets.push_back(level);
+        }
+        return targets;
+    }
     if (target == BonusTarget::Potion) {  // item ids of the healing potions carried
         const Combatant* current = this->current();
         auto inventory = current ? inventories_.find(current->character_id) : inventories_.end();
@@ -1891,6 +1919,12 @@ bool Encounter::use_bonus_action(BonusAction kind, int target) {
         }
         case BonusAction::FastHandsPotion:
             drink(index, target);
+            break;
+        case BonusAction::CreateSpellSlot:
+            create_spell_slot(character, actor.class_name, target);
+            changed(actor.character_id);
+            log(actor.name + " uses Font of Magic: " + std::to_string(slot_creation_cost(target)) +
+                " sorcery points become a " + ordinal(target) + "-level spell slot.");
             break;
         case BonusAction::CunningDash:
             log(actor.name + " takes the Dash action as a bonus action (Cunning Action).");
@@ -2114,7 +2148,8 @@ bool Encounter::attack(int target_index, int attack_bonus, int damage_dice_count
     attack.martial_arts = attacker.attack_martial_arts;
     attack.great_weapon_fighting = attacker.attack_great_weapon_fighting;
     attack.damage_type = attacker.attack_damage_type;
-    weapon_attack(actor, target_index, attack, options.divine_smite_slot);
+    bool hit = weapon_attack(actor, target_index, attack, options.divine_smite_slot);
+    if (hit && options.stunning_strike && can_stunning_strike() && attack.melee) stunning_strike(actor, target_index);
     if (turn_.attacks_left > 0) {
         log("    (Extra Attack: " + std::to_string(turn_.attacks_left) + " more attack" +
             (turn_.attacks_left == 1 ? "" : "s") + " in this Attack action.)");
@@ -2217,7 +2252,8 @@ bool Encounter::stabilize(int target_index) {
     return true;
 }
 
-bool Encounter::cast_spell(int spell_id, int slot_level, const std::vector<int>& target_indices) {
+bool Encounter::cast_spell(int spell_id, int slot_level, const std::vector<int>& target_indices,
+                           Metamagic metamagic) {
     if (!character_can_act()) return false;
     int actor_index = current_index();
     const Combatant& actor = combatants_[static_cast<size_t>(actor_index)];
@@ -2234,7 +2270,11 @@ bool Encounter::cast_spell(int spell_id, int slot_level, const std::vector<int>&
     const auto& known = known_spells_[actor.character_id];
     auto known_spell = std::find_if(known.begin(), known.end(), [&](const Spell& s) { return s.spell_id == spell_id; });
     if (known_spell != known.end()) {
-        if (auto blocked = spell_casting_blocked(turn_, *known_spell)) {
+        Spell timed = *known_spell;
+        if (metamagic == Metamagic::Quickened && timed.casting_time == CastingTime::Action) {
+            timed.casting_time = CastingTime::BonusAction;
+        }
+        if (auto blocked = spell_casting_blocked(turn_, timed)) {
             log(*blocked);
             return false;
         }
@@ -2245,12 +2285,41 @@ bool Encounter::cast_spell(int spell_id, int slot_level, const std::vector<int>&
         log(actor.name + " has no spell to cast -- choose another action.");
         return false;
     }
-    const Spell spell = *chosen;
+    Spell spell = *chosen;
     Character& caster_character = *character_mut(actor.character_id);
     const ClassInfo& info = *find_class_info_by_id(classes_, caster_character.class_id);
     CasterStats caster = caster_stats(caster_character, info);
     caster.spell_attack_bonus -= actor.roll_penalty;
     int slot = spell.level == 0 ? 0 : slot_level;
+
+    // Metamagic (Sorcerer 3): check it fits, and shape the spell.
+    int metamagic_points = 0;
+    if (metamagic != Metamagic::None) {
+        auto options = metamagic_options(spell, slot);
+        auto option = std::find_if(options.begin(), options.end(),
+                                   [&](const std::pair<Metamagic, int>& o) { return o.first == metamagic; });
+        if (option == options.end()) {
+            log(std::string(metamagic_name(metamagic)) + " can't be used on " + spell.name + " now.");
+            return false;
+        }
+        metamagic_points = option->second;
+        if (metamagic == Metamagic::Quickened) spell.casting_time = CastingTime::BonusAction;
+        if (metamagic == Metamagic::Twinned) {
+            spell.max_targets = 2;
+            spell.upcast_targets = 0;
+            // Attack and auto-hit spells roll per projectile: one for each target.
+            if (spell.resolution == SpellResolution::Attack || spell.resolution == SpellResolution::AutoHit) {
+                spell.projectiles = static_cast<int>(target_indices.size());
+                spell.upcast_projectiles = 0;
+                spell.cantrip_scaling = CantripScaling::Dice;
+            }
+            if (target_indices.size() == 2 && target_indices[0] == target_indices[1]) {
+                log("Twinned Spell needs two different targets.");
+                return false;
+            }
+        }
+        if (metamagic == Metamagic::Empowered) caster.empowered_rerolls = std::max(1, ability_modifier(caster_character.charisma));
+    }
 
     if (!spell_targets_ok(spell, caster.level, slot, target_indices)) return false;
     // A costly material component the spell uses up (Revivify's diamonds).
@@ -2274,6 +2343,14 @@ bool Encounter::cast_spell(int spell_id, int slot_level, const std::vector<int>&
             return false;
         }
     }
+    std::string metamagic_note;
+    if (metamagic_points > 0) {
+        spend_feature(caster_character, Feature::SorceryPoints, actor.class_name, metamagic_points);
+        metamagic_note = " with " + std::string(metamagic_name(metamagic)) + " (" + std::to_string(metamagic_points) +
+                         (metamagic_points == 1 ? " sorcery point" : " sorcery points") +
+                         (metamagic_automated(metamagic) ? "" : "; its effect is shown only") + ")";
+        if (metamagic == Metamagic::Heightened && !target_indices.empty()) heightened_target_ = target_indices.front();
+    }
     changed(actor.character_id);  // the spent slot
     if (component != inventory.end()) {
         EncounterEvent used;
@@ -2285,8 +2362,43 @@ bool Encounter::cast_spell(int spell_id, int slot_level, const std::vector<int>&
         if (--component->quantity == 0) inventory.erase(component);
     }
     resolve_spell(actor_index, spell, caster, slot, target_indices,
-                  actor.name + " casts " + spell.name + (slot > 0 ? " (" + ordinal(slot) + "-level slot)" : "") + ".");
+                  actor.name + " casts " + spell.name + (slot > 0 ? " (" + ordinal(slot) + "-level slot)" : "") +
+                      metamagic_note + ".");
+    heightened_target_ = -1;
     return true;
+}
+
+std::vector<std::pair<Metamagic, int>> Encounter::metamagic_options(const Spell& spell, int slot_level) const {
+    std::vector<std::pair<Metamagic, int>> options;
+    const Combatant* actor = current();
+    if (!actor || !actor->is_character || actor->class_name != "Sorcerer" || actor->level < 3) return options;
+    const Character* sorcerer = character(actor->character_id);
+    if (!sorcerer) return options;
+    int points = feature_uses_left(Feature::SorceryPoints, *sorcerer, actor->class_name);
+    bool damage = spell.dice_count > 0 && !spell.damage_type.empty() &&
+                  (spell.resolution == SpellResolution::Attack || spell.resolution == SpellResolution::Save ||
+                   spell.resolution == SpellResolution::AutoHit);
+    int level = spell.level == 0 ? 0 : std::max(spell.level, slot_level);
+    for (const auto& name : class_option(*sorcerer, "Metamagic")) {
+        Metamagic metamagic = metamagic_from_name(name);
+        bool fits = true;
+        switch (metamagic) {
+            case Metamagic::Quickened: fits = spell.casting_time == CastingTime::Action; break;
+            case Metamagic::Twinned:
+                fits = !spell_targets_nobody(spell) && spell.resolution != SpellResolution::Utility &&
+                       spell_max_targets(spell, actor->level, level) == 1 &&
+                       spell_projectiles(spell, actor->level, level) == 1;  // not Eldritch Blast's beams
+                break;
+            case Metamagic::Heightened:
+            case Metamagic::Careful: fits = spell.resolution == SpellResolution::Save; break;
+            case Metamagic::Empowered: fits = damage; break;
+            case Metamagic::None: fits = false; break;
+            default: break;  // Distant, Extended, Subtle: shown only
+        }
+        int cost = metamagic_cost(metamagic, level);
+        if (fits && cost <= points) options.push_back({metamagic, cost});
+    }
+    return options;
 }
 
 bool Encounter::spell_targets_ok(const Spell& spell, int caster_level, int slot, const std::vector<int>& target_indices) {
@@ -2327,7 +2439,8 @@ void Encounter::resolve_spell(int actor_index, const Spell& spell, const CasterS
             spell_target.attack_bonus_dice = mods.bonus_dice;
         } else if (spell.resolution == SpellResolution::Save) {
             mods = saving_throw_modifiers(effects_, index, spell.save_ability);
-            exhaustion_mods(index, mods);
+            save_feature_mods(index, spell.save_ability, mods);
+            if (index == heightened_target_) mods.disadvantage.push_back("Heightened Spell");
             if (spell.combat_save_advantage) mods.advantage.push_back("in combat with the caster");
             spell_target.save_mode = mods.mode();
             spell_target.save_auto_fail = mods.auto_fail;
@@ -2434,6 +2547,59 @@ void Encounter::resolve_spell(int actor_index, const Spell& spell, const CasterS
     }
 
     check_for_victory_or_defeat();
+}
+
+// --- Class features, levels 1-5 (docs/class-features-1-5.md) -----------------------
+
+void Encounter::save_feature_mods(int index, Ability ability, RollModifiers& mods) const {
+    exhaustion_mods(index, mods);
+    const Combatant& combatant = combatants_.at(static_cast<size_t>(index));
+    if (ability == Ability::Dexterity && combatant.class_name == "Barbarian" && combatant.level >= 2 &&
+        !has_condition(effects_, index, Condition::Blinded) && !has_condition(effects_, index, Condition::Deafened) &&
+        !has_condition(effects_, index, Condition::Incapacitated)) {
+        mods.advantage.push_back("Danger Sense");
+    }
+}
+
+RollModifiers Encounter::save_modifiers(int index, Ability ability) const {
+    RollModifiers mods = saving_throw_modifiers(effects_, index, ability);
+    save_feature_mods(index, ability, mods);
+    return mods;
+}
+
+bool Encounter::can_stunning_strike() const {
+    const Combatant* actor = current();
+    if (!actor || !actor->is_character || actor->class_name != "Monk" || actor->level < 5) return false;
+    const Character* monk = character(actor->character_id);
+    return monk && feature_uses_left(Feature::Ki, *monk, actor->class_name) > 0;
+}
+
+void Encounter::stunning_strike(int monk_index, int target_index) {
+    Combatant& monk = combatants_[static_cast<size_t>(monk_index)];
+    Combatant& target = combatants_[static_cast<size_t>(target_index)];
+    if (target.current_hp <= 0) return;
+    Character* character = character_mut(monk.character_id);
+    if (!character || !spend_feature(*character, Feature::Ki, monk.class_name)) return;
+    changed(monk.character_id);
+    int dc = 8 + proficiency_bonus(monk.level) + ability_modifier(character->wisdom);
+    std::string detail;
+    if (roll_save(target_index, Ability::Constitution, dc, detail)) {
+        log("    Stunning Strike (1 ki): " + target.name + " " + detail + " vs DC " + std::to_string(dc) +
+            " -> shakes it off.");
+        return;
+    }
+    ActiveEffect stunned;
+    stunned.kind = EffectKind::Condition;
+    stunned.condition = Condition::Stunned;
+    stunned.target = target_index;
+    stunned.source = monk_index;
+    stunned.duration.kind = DurationKind::UntilEndOfTurn;
+    stunned.duration.participant = monk_index;
+    stunned.duration.skip_current_turn = true;  // through the end of the monk's *next* turn
+    stunned.label = "Stunned";
+    add_effect(stunned);
+    log("    Stunning Strike (1 ki): " + target.name + " " + detail + " vs DC " + std::to_string(dc) +
+        " -> stunned until the end of " + monk.name + "'s next turn.");
 }
 
 // --- Subclass mechanics (docs/subclasses.md) ------------------------------------

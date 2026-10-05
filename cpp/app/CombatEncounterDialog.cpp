@@ -230,6 +230,11 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
     attackForm->addRow(stabilizeInfoLabel_);
     attackForm->addRow("Spell", spellCombo_);
     attackForm->addRow("Slot", spellSlotCombo_);
+    metamagicCombo_ = new QComboBox(attackGroup);
+    metamagicCombo_->setToolTip("Sorcerer Metamagic: shape the spell with sorcery points. Quickened casts it as a "
+                                "bonus action, Twinned adds a second target, Empowered rerolls low damage dice, "
+                                "Heightened gives one target disadvantage on its save.");
+    attackForm->addRow("Metamagic", metamagicCombo_);
     attackForm->addRow("Targets", spellTargetList_);
     attackForm->addRow(spellInfoLabel_);
     attackForm->addRow("Attack Bonus", attackBonusSpin_);
@@ -237,6 +242,10 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
     attackForm->addRow("Damage Dice Sides", damageDiceSidesSpin_);
     attackForm->addRow("Damage Bonus", damageBonusSpin_);
     attackForm->addRow("Reckless", recklessBox_);
+    stunningBox_ = new QCheckBox("Stunning Strike (1 ki)", attackGroup);
+    stunningBox_->setToolTip("On a hit, spend 1 ki: the target makes a CON save or is stunned until the end of "
+                             "your next turn. No ki is spent on a miss.");
+    attackForm->addRow("Stunning Strike", stunningBox_);
     attackForm->addRow("Divine Smite", smiteCombo_);
     attackForm->addRow("Touch", layOnHandsTargetCombo_);
     attackForm->addRow("Hit points", layOnHandsSpin_);
@@ -330,7 +339,10 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
     connect(layOnHandsTargetCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             [this](int) { refreshLayOnHandsAmount(); });
     connect(spellSlotCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-            [this](int) { refreshSpellInfo(); });
+            [this](int) {
+                refreshSpellInfo();
+                refreshMetamagic();
+            });
 
     encounter_.set_scroll_spells(repository_.get_spells());  // what scrolls in packs can cast
     for (const auto& character : characters) {
@@ -631,7 +643,9 @@ void CombatEncounterDialog::onTakeActionClicked() {
                 }
             }
             int slot = spell && spell->level > 0 ? spellSlotCombo_->currentData().toInt() : 0;
-            acted = encounter_.cast_spell(spell ? spell->spell_id : 0, slot, targets);
+            auto metamagic = static_cast<dnd::Metamagic>(metamagicCombo_->isVisible() ? metamagicCombo_->currentData().toInt()
+                                                                                    : 0);
+            acted = encounter_.cast_spell(spell ? spell->spell_id : 0, slot, targets, metamagic);
             break;
         }
         default:
@@ -639,6 +653,7 @@ void CombatEncounterDialog::onTakeActionClicked() {
         {
             dnd::AttackOptions options;
             options.reckless = recklessBox_->isVisible() && recklessBox_->isChecked();
+            options.stunning_strike = stunningBox_->isVisible() && stunningBox_->isChecked();
             options.divine_smite_slot = smiteCombo_->isVisible() ? smiteCombo_->currentData().toInt() : 0;
             acted = encounter_.attack(targetCombo_->currentData().toInt(), attackBonusSpin_->value(),
                                       damageDiceCountSpin_->value(), damageDiceSidesSpin_->value(),
@@ -727,6 +742,11 @@ void CombatEncounterDialog::refreshBonusTargets() {
     if (!needsTarget) return;
     auto kind = bonusTargets_[static_cast<size_t>(index)];
     for (int target : encounter_.bonus_action_targets(kind)) {
+        if (kind == dnd::Encounter::BonusTarget::SlotLevel) {
+            bonusTargetCombo_->addItem(QString("%1-level slot (%2 points)").arg(ordinal(target)).arg(dnd::slot_creation_cost(target)),
+                                       target);
+            continue;
+        }
         if (kind == dnd::Encounter::BonusTarget::Potion) {  // item ids: name the potion
             const dnd::Combatant* current = encounter_.current();
             QString name = "Potion";
@@ -744,6 +764,7 @@ void CombatEncounterDialog::refreshBonusTargets() {
 
 void CombatEncounterDialog::refreshFeatureControls() {
     recklessBox_->setChecked(false);
+    stunningBox_->setChecked(false);
 
     // Back to "No smite" after every attack, so slots are never spent by accident.
     smiteCombo_->clear();
@@ -791,7 +812,9 @@ void CombatEncounterDialog::updateActionControlsVisibility() {
     }
     bool show_reckless = is_attack && encounter_.can_attack_recklessly();
     bool show_smite = is_attack && smiteCombo_->count() > 1;
-    for (auto [field, visible] : {std::pair<QWidget*, bool>{recklessBox_, show_reckless}, {smiteCombo_, show_smite}}) {
+    bool show_stunning = is_attack && encounter_.can_stunning_strike();
+    for (auto [field, visible] : {std::pair<QWidget*, bool>{recklessBox_, show_reckless}, {smiteCombo_, show_smite},
+                                  {stunningBox_, show_stunning}}) {
         field->setVisible(visible);
         if (auto* row_label = attackFormLayout_->labelForField(field)) row_label->setVisible(visible);
     }
@@ -825,6 +848,10 @@ void CombatEncounterDialog::updateActionControlsVisibility() {
         field->setVisible(visible);
         if (auto* row_label = attackFormLayout_->labelForField(field)) row_label->setVisible(visible);
     }
+
+    bool show_metamagic = actionCombo_->currentIndex() == CastSpellAction && metamagicCombo_->count() > 0;
+    metamagicCombo_->setVisible(show_metamagic);
+    if (auto* label = attackFormLayout_->labelForField(metamagicCombo_)) label->setVisible(show_metamagic);
 
     switch (actionCombo_->currentIndex()) {
         case DashAction: takeActionButton_->setText("Take Dash Action"); break;
@@ -964,6 +991,28 @@ void CombatEncounterDialog::refreshSpellControls() {
     onSpellChanged();
 }
 
+void CombatEncounterDialog::refreshMetamagic() {
+    metamagicCombo_->clear();
+    const dnd::Spell* spell = selectedSpell();
+    bool casting = actionCombo_->currentIndex() == CastSpellAction && spell;
+    if (casting) {
+        int slot = spell->level == 0 ? 0 : spellSlotCombo_->currentData().toInt();
+        for (const auto& [metamagic, cost] : encounter_.metamagic_options(*spell, slot)) {
+            if (metamagicCombo_->count() == 0) metamagicCombo_->addItem("None", 0);
+            metamagicCombo_->addItem(QString("%1 (%2 %3)")
+                                         .arg(dnd::metamagic_name(metamagic))
+                                         .arg(cost)
+                                         .arg(cost == 1 ? "point" : "points"),
+                                     static_cast<int>(metamagic));
+            metamagicCombo_->setItemData(metamagicCombo_->count() - 1, dnd::metamagic_description(metamagic),
+                                         Qt::ToolTipRole);
+        }
+    }
+    bool show = metamagicCombo_->count() > 0;
+    metamagicCombo_->setVisible(show);
+    if (auto* label = attackFormLayout_->labelForField(metamagicCombo_)) label->setVisible(show);
+}
+
 void CombatEncounterDialog::onSpellChanged() {
     spellSlotCombo_->blockSignals(true);
     spellSlotCombo_->clear();
@@ -991,6 +1040,7 @@ void CombatEncounterDialog::onSpellChanged() {
     spellSlotCombo_->blockSignals(false);
     refreshSpellInfo();
     updateActionControlsVisibility();
+    refreshMetamagic();
 }
 
 void CombatEncounterDialog::refreshSpellInfo() {

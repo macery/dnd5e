@@ -115,6 +115,9 @@ struct CasterStats {
     int spell_attack_bonus = 0;
     int spell_save_dc = 10;
     int spellcasting_modifier = 0;
+    // Empowered Spell (Metamagic): reroll up to this many of the lowest damage
+    // dice that came up below average, keeping the new rolls.
+    int empowered_rerolls = 0;
 };
 
 CasterStats caster_stats(const Character& character, const ClassInfo& class_info);

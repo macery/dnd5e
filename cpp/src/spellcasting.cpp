@@ -478,6 +478,7 @@ SpellCastResult cast_spell(const Dice& dice, const Spell& spell, const CasterSta
     if (spell.resolution == SpellResolution::Save) {
         // Area damage is rolled once for everyone caught in it.
         result.dice = dice.roll(spell.dice_sides, dice_count);
+        reroll_lowest_dice(dice, result.dice, spell.dice_sides, caster.empowered_rerolls);
         int full = std::max(0, Dice::sum(result.dice) + bonus);
         for (size_t i = 0; i < targets.size(); ++i) {
             SpellEffectRoll effect;
@@ -522,14 +523,16 @@ SpellCastResult cast_spell(const Dice& dice, const Spell& spell, const CasterSta
             }
             AttackResult attack = resolve_attack(dice, caster.spell_attack_bonus + bonus_total, target.armor_class,
                                                  dice_count, spell.dice_sides, bonus, target.attack_mode,
-                                                 target.critical_on_hit);
+                                                 target.critical_on_hit, false, 20, caster.empowered_rerolls);
             effect.attack_roll = attack.attack_roll;
             effect.hit = attack.hit;
             effect.critical = attack.critical;
             effect.amount = attack.damage_total;
-        } else {  // AutoHit, Heal
+        } else {  // AutoHit
             effect.hit = true;
-            effect.amount = std::max(0, Dice::sum(dice.roll(spell.dice_sides, dice_count)) + bonus);
+            auto rolled = dice.roll(spell.dice_sides, dice_count);
+            reroll_lowest_dice(dice, rolled, spell.dice_sides, caster.empowered_rerolls);
+            effect.amount = std::max(0, Dice::sum(rolled) + bonus);
         }
         result.effects.push_back(effect);
     }

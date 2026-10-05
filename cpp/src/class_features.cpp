@@ -3,7 +3,9 @@
 #include <algorithm>
 #include <stdexcept>
 
+#include "dnd/character_creation.hpp"
 #include "dnd/rules.hpp"
+#include "dnd/spellcasting.hpp"
 
 namespace dnd {
 
@@ -47,6 +49,9 @@ const std::vector<FeatureInfo>& limited_features() {
         {Feature::ChannelDivinity, "ChannelDivinity", "Channel Divinity", "Cleric", 2,
          "Action: channel divine energy -- Turn Undead (undead that fail a WIS save are turned for a minute), or "
          "your domain's or oath's option. Back on a short rest."},
+        {Feature::SorceryPoints, "SorceryPoints", "Sorcery Points", "Sorcerer", 2,
+         "Font of Magic: points equal to your sorcerer level, back on a long rest. Spend them on Metamagic, or to "
+         "create spell slots; turn unused slots back into points."},
         {Feature::NaturalRecovery, "NaturalRecovery", "Natural Recovery", "Druid", 2,
          "Circle of the Land: once per day, on a short rest, recover spell slots with combined levels up to half "
          "your druid level (rounded up), none of 6th level or higher."},
@@ -90,6 +95,7 @@ int feature_max_uses(Feature feature, const Character& character, const std::str
             if (class_name == "Paladin") return 1;
             return level >= 18 ? 3 : level >= 6 ? 2 : 1;
         case Feature::NaturalRecovery: return character.subclass == "Circle of the Land" ? 1 : 0;
+        case Feature::SorceryPoints: return level;
     }
     return 0;
 }
@@ -110,6 +116,7 @@ Recovery feature_recovery(Feature feature, int level) {
         case Feature::Rage:
         case Feature::ArcaneRecovery:
         case Feature::NaturalRecovery:
+        case Feature::SorceryPoints:
         case Feature::LayOnHands: return Recovery::LongRest;
     }
     return Recovery::LongRest;
@@ -132,6 +139,130 @@ void restore_short_rest_features(Character& character, const std::string& class_
 
 void restore_all_features(Character& character) {
     character.feature_uses_spent.clear();
+}
+
+// --- Levels 1-5 ----------------------------------------------------------------------
+
+int jack_of_all_trades(const Character& character, const std::string& class_name) {
+    return class_name == "Bard" && character.level >= 2 ? proficiency_bonus(character.level) / 2 : 0;
+}
+
+int song_of_rest_die(int bard_level) {
+    if (bard_level >= 17) return 12;
+    if (bard_level >= 13) return 10;
+    if (bard_level >= 9) return 8;
+    if (bard_level >= 2) return 6;
+    return 0;
+}
+
+int slot_creation_cost(int slot_level) {
+    static const int kCosts[] = {0, 2, 3, 5, 6, 7};
+    return slot_level >= 1 && slot_level <= 5 ? kCosts[slot_level] : 0;
+}
+
+bool create_spell_slot(Character& character, const std::string& class_name, int slot_level) {
+    int cost = slot_creation_cost(slot_level);
+    if (cost == 0 || !spend_feature(character, Feature::SorceryPoints, class_name, cost)) return false;
+    --character.spell_slots_used[static_cast<size_t>(slot_level - 1)];  // negative: an extra slot
+    return true;
+}
+
+bool convert_slot_to_points(Character& character, const std::string& class_name, int slot_level) {
+    if (slot_level < 1 || slot_level > 9 || feature_max_uses(Feature::SorceryPoints, character, class_name) == 0) {
+        return false;
+    }
+    auto spent = character.feature_uses_spent.find(feature_info(Feature::SorceryPoints).key);
+    if (spent == character.feature_uses_spent.end() || spent->second <= 0) return false;  // already full
+    const ClassInfo* info = find_class_info(class_name);
+    if (!info || slots_remaining(character, *info, slot_level) == 0) return false;
+    ++character.spell_slots_used[static_cast<size_t>(slot_level - 1)];
+    spent->second = std::max(0, spent->second - slot_level);
+    return true;
+}
+
+namespace {
+
+struct MetamagicInfo {
+    Metamagic metamagic;
+    const char* name;
+    const char* description;
+    bool automated;
+};
+
+const std::vector<MetamagicInfo>& metamagic_table() {
+    static const std::vector<MetamagicInfo> table = {
+        {Metamagic::Careful, "Careful Spell",
+         "1 point: allies in the spell's area succeed on its save. (Area spells here only hit the targets you "
+         "choose, so this rarely matters.)",
+         false},
+        {Metamagic::Distant, "Distant Spell", "1 point: double the spell's range. (Shown only: there's no map.)", false},
+        {Metamagic::Empowered, "Empowered Spell",
+         "1 point: reroll damage dice up to your CHA modifier (the low ones), keeping the new rolls.", true},
+        {Metamagic::Extended, "Extended Spell", "1 point: double a duration of 1 minute or more. (Shown only.)", false},
+        {Metamagic::Heightened, "Heightened Spell",
+         "3 points: one target has disadvantage on its first save against the spell.", true},
+        {Metamagic::Quickened, "Quickened Spell",
+         "2 points: cast a spell that takes an action as a bonus action instead.", true},
+        {Metamagic::Subtle, "Subtle Spell", "1 point: cast without words or gestures. (Shown only.)", false},
+        {Metamagic::Twinned, "Twinned Spell",
+         "Points equal to the spell's level (1 for a cantrip): a spell that targets one creature targets a second.",
+         true},
+    };
+    return table;
+}
+
+const MetamagicInfo* metamagic_info(Metamagic metamagic) {
+    for (const auto& info : metamagic_table()) {
+        if (info.metamagic == metamagic) return &info;
+    }
+    return nullptr;
+}
+
+}  // namespace
+
+const char* metamagic_name(Metamagic metamagic) {
+    const MetamagicInfo* info = metamagic_info(metamagic);
+    return info ? info->name : "";
+}
+
+Metamagic metamagic_from_name(const std::string& name) {
+    for (const auto& info : metamagic_table()) {
+        if (name == info.name) return info.metamagic;
+    }
+    return Metamagic::None;
+}
+
+std::vector<Metamagic> all_metamagic() {
+    std::vector<Metamagic> all;
+    for (const auto& info : metamagic_table()) all.push_back(info.metamagic);
+    return all;
+}
+
+const char* metamagic_description(Metamagic metamagic) {
+    const MetamagicInfo* info = metamagic_info(metamagic);
+    return info ? info->description : "";
+}
+
+bool metamagic_automated(Metamagic metamagic) {
+    const MetamagicInfo* info = metamagic_info(metamagic);
+    return info && info->automated;
+}
+
+int metamagic_cost(Metamagic metamagic, int spell_level) {
+    switch (metamagic) {
+        case Metamagic::None: return 0;
+        case Metamagic::Heightened: return 3;
+        case Metamagic::Quickened: return 2;
+        case Metamagic::Twinned: return std::max(1, spell_level);
+        default: return 1;
+    }
+}
+
+int metamagic_known(int sorcerer_level) {
+    if (sorcerer_level >= 17) return 4;
+    if (sorcerer_level >= 10) return 3;
+    if (sorcerer_level >= 3) return 2;
+    return 0;
 }
 
 // --- Formulas --------------------------------------------------------------------

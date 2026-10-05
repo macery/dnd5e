@@ -22,6 +22,7 @@ add_executable(dnd_tests
     test_preparing.cpp
     test_reactions.cpp
     test_subclasses.cpp
+    test_class_features_1_5.cpp
     test_damage.cpp
     test_dice.cpp
     test_effects.cpp

@@ -14,6 +14,7 @@
 #include <algorithm>
 
 #include "WindowSizing.hpp"
+#include "dnd/class_features.hpp"
 #include "dnd/spellbook.hpp"
 #include "dnd/spellcasting.hpp"
 #include "dnd/subclass.hpp"
@@ -83,6 +84,17 @@ SpellbookDialog::SpellbookDialog(dnd::Repository& repository, dnd::Character cha
     castRow->addWidget(forgetButton_);
     prepareLabel_ = new QLabel(this);
     prepareLabel_->setWordWrap(true);
+    fontRow_ = new QWidget(this);
+    auto* fontLayout = new QHBoxLayout(fontRow_);
+    fontLayout->setContentsMargins(0, 0, 0, 0);
+    fontCombo_ = new QComboBox(fontRow_);
+    fontButton_ = new QPushButton("Convert", fontRow_);
+    fontButton_->setToolTip("Font of Magic: turn an unused spell slot into sorcery points (its level), or points into "
+                            "a slot (1st: 2, 2nd: 3, 3rd: 5, 4th: 6, 5th: 7). Created slots last until a long rest.");
+    fontLayout->addWidget(new QLabel("Font of Magic:", fontRow_));
+    fontLayout->addWidget(fontCombo_, 1);
+    fontLayout->addWidget(fontButton_);
+    connect(fontButton_, &QPushButton::clicked, this, &SpellbookDialog::onFontOfMagicClicked);
 
     auto* learnRow = new QHBoxLayout();
     learnCombo_ = new QComboBox(this);
@@ -102,6 +114,7 @@ SpellbookDialog::SpellbookDialog(dnd::Repository& repository, dnd::Character cha
     layout->addWidget(slotsLabel_);
     layout->addWidget(countsLabel_);
     layout->addWidget(prepareLabel_);
+    layout->addWidget(fontRow_);
     layout->addWidget(table_, 1);
     layout->addLayout(castRow);
     layout->addWidget(messageLabel_);
@@ -171,6 +184,31 @@ void SpellbookDialog::reload() {
                       .arg(dnd::prepared_spell_count(character_, info));
     }
     countsLabel_->setText(counts);
+
+    // Font of Magic (Sorcerer 2): sorcery points and conversions.
+    int points = dnd::feature_uses_left(dnd::Feature::SorceryPoints, character_, info.name);
+    int maxPoints = dnd::feature_max_uses(dnd::Feature::SorceryPoints, character_, info.name);
+    fontRow_->setVisible(maxPoints > 0);
+    fontCombo_->clear();
+    if (maxPoints > 0) {
+        countsLabel_->setText(countsLabel_->text() + QString(" · Sorcery points: %1 / %2").arg(points).arg(maxPoints));
+        for (int level = 1; level <= dnd::kMaxSpellLevel; ++level) {
+            if (points < maxPoints && dnd::slots_remaining(character_, info, level) > 0) {
+                fontCombo_->addItem(QString("Turn a %1-level slot into %2 point%3")
+                                        .arg(ordinal(level))
+                                        .arg(level)
+                                        .arg(level == 1 ? "" : "s"),
+                                    -level);
+            }
+        }
+        for (int level = 1; level <= 5; ++level) {
+            if (dnd::slot_creation_cost(level) <= points) {
+                fontCombo_->addItem(QString("Create a %1-level slot (%2 points)").arg(ordinal(level)).arg(dnd::slot_creation_cost(level)),
+                                    level);
+            }
+        }
+    }
+    fontButton_->setEnabled(fontCombo_->count() > 0);
 
     // When prepared spells can change: after a long rest, until the next fight.
     std::string refusal = dnd::preparation_refusal(character_, info);
@@ -319,6 +357,19 @@ bool SpellbookDialog::isWizard() const {
 
 bool SpellbookDialog::preparesFromList() const {
     return classInfo_ && classInfo_->spellcasting.preparation == dnd::SpellPreparation::Prepared;
+}
+
+void SpellbookDialog::onFontOfMagicClicked() {
+    if (fontCombo_->count() == 0) return;
+    int choice = fontCombo_->currentData().toInt();
+    bool done = choice < 0 ? dnd::convert_slot_to_points(character_, classInfo_->name, -choice)
+                           : dnd::create_spell_slot(character_, classInfo_->name, choice);
+    if (done) {
+        repository_.update_character(character_);
+        messageLabel_->setText(choice < 0 ? QString("A %1-level slot became sorcery points.").arg(ordinal(-choice))
+                                          : QString("Created a %1-level spell slot.").arg(ordinal(choice)));
+    }
+    reload();
 }
 
 void SpellbookDialog::onPrepareClicked() {

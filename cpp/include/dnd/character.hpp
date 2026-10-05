@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <map>
 #include <string>
+#include <vector>
 
 namespace dnd {
 
@@ -48,6 +49,10 @@ struct Character {
     int exhaustion = 0;
     // Temporary hit points, lost first and gone after a long rest.
     int temp_hp = 0;
+    // Class choices beyond the subclass (docs/class-features-1-5.md), by key:
+    // "Metamagic", "Invocations", "PactBoon", "Expertise", "TomeCantrips",
+    // "BonusSkills" -- each a list of names.
+    std::map<std::string, std::vector<std::string>> class_options;
     // Class feature uses spent since they last came back, by feature key
     // ("SecondWind", "Rage", ...). Maximums come from class and level
     // (dnd/class_features.hpp); rests clear them.
@@ -72,5 +77,12 @@ struct Character {
     std::uint32_t skill_proficiencies = 0;
     std::uint32_t save_proficiencies = 0;
 };
+
+// The choices stored under `key` (empty if none), and whether `value` is one.
+std::vector<std::string> class_option(const Character& character, const std::string& key);
+bool has_class_option(const Character& character, const std::string& key, const std::string& value);
+// "Metamagic=Quickened Spell|Twinned Spell;PactBoon=Pact of the Blade" and back.
+std::string format_class_options(const std::map<std::string, std::vector<std::string>>& options);
+std::map<std::string, std::vector<std::string>> parse_class_options(const std::string& text);
 
 }  // namespace dnd

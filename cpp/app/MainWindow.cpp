@@ -415,6 +415,7 @@ void MainWindow::onEditCharacterClicked() {
         updated.subclass_choice = existing.subclass_choice;
         updated.exhaustion = existing.exhaustion;
         updated.temp_hp = existing.temp_hp;
+        updated.class_options = existing.class_options;
         updated.coins = existing.coins;
         repository_.update_character(updated);
         reloadCharactersForCurrentPlayer();

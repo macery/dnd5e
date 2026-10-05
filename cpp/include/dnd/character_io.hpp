@@ -45,6 +45,7 @@ struct ExportedCharacter {
     std::string subclass_choice;
     int exhaustion = 0;
     int temp_hp = 0;
+    std::map<std::string, std::vector<std::string>> class_options;  // optional in files
     std::vector<std::string> saving_throws;  // ability names
     std::vector<std::string> skills;         // skill names
     std::string fighting_style;
