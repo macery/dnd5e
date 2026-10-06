@@ -67,7 +67,7 @@ It manages players and characters, computes a full character sheet from the 5e r
   - **Attunement:** one item per short rest (chosen in the Short Rest dialog), three at most.
   - **Spell scrolls:** a **Read Scroll** action in combat. Only classes with the spell on their list can read one, a spell above your highest slot needs a check, and the scroll's own DC and attack bonus apply.
   - **Where they come from:** boss fights drop them, and the Shop sells the common and uncommon ones.
-- **Shop** ([docs/shops.md](docs/shops.md)): buy gear at PHB list price (with change made automatically) and sell it for half; equipped gear must be unequipped first. Give coins, or items from the Inventory, to any other living character. A temple raises the dead for 550 gp; they return with 1 HP and −4 to attack rolls, saving throws, and ability checks, easing by 1 each long rest.
+- **Shop** ([docs/shops.md](docs/shops.md)): buy gear at PHB list price (with change made automatically) and sell it for half; equipped gear must be unequipped first. Give coins, or items from the Inventory, to any other living character. A temple raises the dead for 550 gp (500 gp if its priest is Friendly); they return with 1 HP and −4 to attack rolls, saving throws, and ability checks, easing by 1 each long rest. Once between long rests, each character can haggle with the merchant (a Persuasion check) for 10% off.
 - **Solo adventures** ([docs/adventures-and-currency.md](docs/adventures-and-currency.md), [docs/content-5-10.md](docs/content-5-10.md)): nineteen pre-built adventures for levels 1–8.
   - Thirteen are single fights, including The Bulette Field, The Golem's Workshop, The Gorgon's Pasture, and The Green Wyrm of Thornwood.
   - Six are multi-fight runs: The Goblin Warren, Crypt of the Restless, The Hill Giant's Toll, The Barrow-King, Moonrise at Ashgrove, and The White Wyrm's Lair.
@@ -80,6 +80,12 @@ It manages players and characters, computes a full character sheet from the 5e r
     - take a long rest at the adventure's camps, with Level Up for anyone ready;
     - or retreat, keeping what you've earned.
   - **Saving:** progress is saved between fights, and Solo Adventure offers to resume.
+  - **Scenes between fights** ([docs/scenes-and-npcs.md](docs/scenes-and-npcs.md)): skill challenges (with Help and group checks), traps, choices, and conversations. Outcomes can hurt, reward, give inspiration, or change the next fight: skip it, thin it out, or surprise either side.
+- **NPCs** ([docs/scenes-and-npcs.md](docs/scenes-and-npcs.md)):
+  - People the party talks to have an attitude (Friendly, Indifferent, Hostile), which sets the DC of each request, as in the DMG's conversation rules.
+  - An Insight check reveals what they want and fear, which makes every request easier.
+  - NPCs belong to the campaign and remember how the party treated them. That includes the Shop's merchant and the Temple's priest.
+  - **NPCs…** edits the campaign's NPCs.
 - **Export, import, and backup** ([docs/save-load.md](docs/save-load.md)):
   - **Export…** saves a player's characters, or just one, to a readable `.dnd5e.json` file: stats, XP, proficiencies, spent resources, inventory, and spells, all by name.
   - **Import…** previews the file before anything changes: which player the characters go to, a choice for any name clash (import as a copy, replace, or skip), and anything this version doesn't have.
@@ -362,7 +368,8 @@ Phases 1 (core and data) and 2 (UI) are done; see [docs/magic-system.md](docs/ma
 - [ ] **More monsters**: CR 9 and up, legendary and lair actions, and the traits that need a map.
 - [ ] **Monster editor**: add and edit custom monsters in the UI.
 - [x] **Multi-encounter adventures** ([docs/adventures-and-currency.md](docs/adventures-and-currency.md)): adventures made of scenes, party choice, short and long rests between fights (long rests at camps), retreat, progress saved between fights (Resume), and three multi-fight adventures.
-- [ ] **More adventure content**: branching choices, skill checks, and traps between fights. Scenes are narration plus a fight for now.
+- [x] **Scenes and NPCs** ([docs/scenes-and-npcs.md](docs/scenes-and-npcs.md)): challenges, traps, choices, and conversations between fights; NPCs with attitudes, per campaign; a merchant to haggle with and a priest.
+- [ ] **NPCs in fights** (phase 3): allies who fight beside the party, and named NPCs who turn hostile.
 - [x] **Encounter difficulty**:
   - Fights are rated Trivial, Easy, Medium, Hard, or Deadly with the 2014 encounter-building rules: XP thresholds by level, plus a multiplier for the number of monsters.
   - Combat Encounter shows the rating live.

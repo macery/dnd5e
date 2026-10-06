@@ -37,7 +37,8 @@ CampaignDialog::CampaignDialog(dnd::Repository& repository, QWidget* parent)
     campaignList_ = new QListWidget(this);
     auto* newButton = new QPushButton("New Campaign", this);
     deleteButton_ = new QPushButton("Delete", this);
-    deleteButton_->setToolTip("The campaign goes; its characters and adventure runs stay, outside any campaign.");
+    deleteButton_->setToolTip("The campaign and its NPCs go; its characters and adventure runs stay, outside any "
+                              "campaign.");
     auto* listButtons = new QHBoxLayout();
     listButtons->addWidget(newButton);
     listButtons->addWidget(deleteButton_);
@@ -201,6 +202,7 @@ void CampaignDialog::deleteCampaign() {
     if (id == 0) return;
     QString name = q(campaigns_[static_cast<size_t>(campaignList_->currentRow())].name);
     repository_.delete_campaign(id);
-    messageLabel_->setText(QString("Deleted %1. Its characters are still here, outside any campaign.").arg(name));
+    messageLabel_->setText(
+        QString("Deleted %1 and its NPCs. Its characters are still here, outside any campaign.").arg(name));
     reloadCampaigns(0);
 }

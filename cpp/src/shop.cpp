@@ -4,6 +4,8 @@
 
 #include "dnd/campaign.hpp"
 #include "dnd/inventory.hpp"
+#include "dnd/npc.hpp"
+#include "dnd/scenes.hpp"
 
 namespace dnd {
 
@@ -67,6 +69,39 @@ int sell_price_cp(const Item& item) {
     return std::max(0, item.cost_cp / 2);
 }
 
+int raise_dead_cost_cp(Repository& repo, int campaign_id) {
+    return temple_priest(repo, campaign_id).attitude == Attitude::Friendly ? kRaiseDeadFriendlyCostCp
+                                                                          : kRaiseDeadCostCp;
+}
+
+int price_for(const Character& character, int price_cp) {
+    if (character.haggle <= 0) return price_cp;
+    return price_cp - price_cp * kHaggleDiscountPercent / 100;  // the discount rounds down
+}
+
+ShopResult haggle(Repository& repo, int character_id, const Dice& dice) {
+    auto character = find_character(repo, character_id);
+    if (!character) return refuse("That character no longer exists.");
+    if (character->dead) return refuse(character->character_name + " is dead.");
+    if (character->current_hp <= 0) return refuse(character->character_name + " is unconscious.");
+    if (character->haggle != 0) {
+        return refuse(character->character_name + " has already haggled today. Try again after a long rest.");
+    }
+    Npc merchant = shop_merchant(repo, character->campaign_id);
+    auto dc = conversation_dc(merchant, SocialRequest::MinorRisk);
+    if (!dc) return refuse(merchant.name + " is Hostile and won't haggle with you.");
+    auto rollers = party_rollers(repo, {character_id});
+    if (rollers.empty()) return refuse(character->character_name + " can't haggle now.");
+    CheckResult check = ability_check(dice, rollers.front(), "Persuasion", *dc);
+    character->haggle = check.success ? 1 : -1;
+    repo.update_character(*character);
+    return ShopResult{check.success,
+                      check.text() + ". " +
+                          (check.success ? merchant.name + " knocks " + std::to_string(kHaggleDiscountPercent) +
+                                               "% off for " + character->character_name + " until their next long rest."
+                                         : merchant.name + " won't budge on prices today.")};
+}
+
 ShopResult buy(Repository& repo, int character_id, int item_id, int quantity) {
     if (quantity <= 0) return refuse("Choose how many to buy.");
     auto character = find_character(repo, character_id);
@@ -75,7 +110,7 @@ ShopResult buy(Repository& repo, int character_id, int item_id, int quantity) {
     if (character->dead) return refuse(character->character_name + " is dead and can't go shopping.");
     if (!sold_in_shops(*item)) return refuse("No shop sells the " + item->name + ": rare magic is found, not bought.");
 
-    int price = item->cost_cp * quantity;
+    int price = price_for(*character, item->cost_cp * quantity);
     auto paid = pay(character->coins, price);
     if (!paid) {
         return refuse(stack(quantity, item->name) + " costs " + format_cost(price) + ", but " +
@@ -124,9 +159,10 @@ ShopResult raise_dead(Repository& repo, int character_id, int payer_id) {
     if (!character->dead) return refuse(character->character_name + " isn't dead.");
     if (!in_play(repo, *payer)) return refuse(payer->character_name + " isn't in this campaign.");
     bool self_paid = payer_id == character_id;
-    auto paid = pay(payer->coins, kRaiseDeadCostCp);
+    int cost = raise_dead_cost_cp(repo, character->campaign_id);
+    auto paid = pay(payer->coins, cost);
     if (!paid) {
-        return refuse("Raise dead costs " + format_cost(kRaiseDeadCostCp) + ", but " + payer->character_name +
+        return refuse("Raise dead costs " + format_cost(cost) + ", but " + payer->character_name +
                       " has " + format_cost(total_cp(payer->coins)) + ".");
     }
     if (self_paid) {
@@ -143,7 +179,7 @@ ShopResult raise_dead(Repository& repo, int character_id, int payer_id) {
     });
     std::string name = character->character_name;
     return ShopResult{true, "The temple's priests raise " + name + " from the dead, for " +
-                                format_cost(kRaiseDeadCostCp) + " from " + (self_paid ? name + "'s own purse" : payer->character_name) +
+                                format_cost(cost) + " from " + (self_paid ? name + "'s own purse" : payer->character_name) +
                                 ". " + name + " returns with 1 HP and -" + std::to_string(kRaiseDeadPenalty) +
                                 " to attack rolls, saving throws, and ability checks, easing by 1 each long rest."};
 }

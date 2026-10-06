@@ -17,6 +17,7 @@ add_executable(dnd_ui_tests
     test_subclass_ui.cpp
     test_class_options_ui.cpp
     test_scene_ui.cpp
+    test_npc_ui.cpp
 )
 target_link_libraries(dnd_ui_tests PRIVATE dnd_ui Catch2::Catch2)
 

@@ -13,6 +13,7 @@
 #include "AdventureDialogs.hpp"
 #include "AdventurePickerDialog.hpp"
 #include "CampaignDialog.hpp"
+#include "NpcDialog.hpp"
 #include "CharacterCreationWizard.hpp"
 #include "ClassOptionsDialog.hpp"
 #include "CharacterEditorDialog.hpp"
@@ -118,6 +119,10 @@ TEST_CASE("every window fits a small screen", "[ui][sizes]") {
     SECTION("campaigns") {
         CampaignDialog campaigns(repo);
         requireFits(campaigns, "CampaignDialog");
+    }
+    SECTION("NPCs") {
+        NpcDialog npcs(repo);
+        requireFits(npcs, "NpcDialog");
     }
     SECTION("shop and give coins") {
         ShopDialog shop(repo, sera, classes, repo.get_races());

@@ -18,7 +18,7 @@ using detail::Statement;
 // for future schema changes -- never edit an existing one, since a
 // migration's sql is exactly what already ran on every database that has it
 // recorded in SchemaMigrations.
-constexpr std::array<Migration, 33> kMigrations = {{
+constexpr std::array<Migration, 34> kMigrations = {{
     {1, "initial schema: Players, Classes, Characters", R"sql(
         CREATE TABLE IF NOT EXISTS Players (
             PlayerID INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1148,6 +1148,26 @@ constexpr std::array<Migration, 33> kMigrations = {{
         ALTER TABLE Characters ADD COLUMN Inspiration INTEGER NOT NULL DEFAULT 0;
         ALTER TABLE AdventureRuns ADD COLUMN Flags TEXT NOT NULL DEFAULT '';
         ALTER TABLE AdventureRuns ADD COLUMN NextFight TEXT NOT NULL DEFAULT '';
+    )sql"},
+    // NPCs (docs/scenes-and-npcs.md, phase 2): each belongs to a campaign (0 =
+    // none), and the content's NPCs (an adventure's, the Shop's merchant, the
+    // Temple's priest) are found by NpcKey. Haggle is a character's try at the
+    // merchant's 10% off since their last long rest (1 = got it, -1 = failed).
+    {34, "add Npcs and Characters.Haggle", R"sql(
+        CREATE TABLE Npcs (
+            NpcID       INTEGER PRIMARY KEY AUTOINCREMENT,
+            CampaignID  INTEGER NOT NULL DEFAULT 0,
+            NpcKey      TEXT NOT NULL DEFAULT '',
+            Name        TEXT NOT NULL,
+            Role        TEXT NOT NULL DEFAULT '',
+            Attitude    TEXT NOT NULL DEFAULT 'Indifferent',
+            Description TEXT NOT NULL DEFAULT '',
+            Wants       TEXT NOT NULL DEFAULT '',
+            Fears       TEXT NOT NULL DEFAULT '',
+            Known       INTEGER NOT NULL DEFAULT 0,
+            StatBlock   TEXT NOT NULL DEFAULT ''
+        );
+        ALTER TABLE Characters ADD COLUMN Haggle INTEGER NOT NULL DEFAULT 0;
     )sql"},
 }};
 

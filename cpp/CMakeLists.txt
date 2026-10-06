@@ -52,6 +52,7 @@ add_library(dndcore
     src/class_options.cpp
     src/checks.cpp
     src/scenes.cpp
+    src/npc.cpp
     src/damage.cpp
     src/dice.cpp
     src/effects.cpp

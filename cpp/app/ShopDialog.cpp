@@ -21,6 +21,7 @@
 #include "dnd/currency.hpp"
 #include "dnd/equipment.hpp"
 #include "dnd/inventory.hpp"
+#include "dnd/npc.hpp"
 #include "dnd/shop.hpp"
 
 namespace {
@@ -120,6 +121,12 @@ ShopDialog::ShopDialog(dnd::Repository& repository, dnd::Character character,
     buyWarnings_ = new QLabel(buyPage);
     buyWarnings_->setWordWrap(true);
     buyWarnings_->setStyleSheet("color: #b00020;");
+    merchantLabel_ = new QLabel(buyPage);
+    merchantLabel_->setWordWrap(true);
+    haggleButton_ = new QPushButton("Haggle", buyPage);
+    auto* merchantRow = new QHBoxLayout();
+    merchantRow->addWidget(merchantLabel_, 1);
+    merchantRow->addWidget(haggleButton_);
     auto* filterRow = new QHBoxLayout();
     filterRow->addWidget(new QLabel("Show:", buyPage));
     filterRow->addWidget(categoryCombo_, 1);
@@ -129,6 +136,7 @@ ShopDialog::ShopDialog(dnd::Repository& repository, dnd::Character character,
     buyRow->addWidget(buyQuantity_);
     buyRow->addWidget(buyButton_);
     auto* buyLayout = new QVBoxLayout(buyPage);
+    buyLayout->addLayout(merchantRow);
     buyLayout->addLayout(filterRow);
     buyLayout->addWidget(buyTable_, 1);
     buyLayout->addWidget(buyWarnings_);
@@ -162,10 +170,7 @@ ShopDialog::ShopDialog(dnd::Repository& repository, dnd::Character character,
     deadCombo_ = new QComboBox(templePage);
     payerCombo_ = new QComboBox(templePage);
     payerCombo_->setToolTip("Any character can pay, the dead one included: their purse survives them.");
-    raiseButton_ = new QPushButton(QString("Raise Dead (%1)").arg(cost(dnd::kRaiseDeadCostCp)), templePage);
-    raiseButton_->setToolTip("The 500 gp diamond the spell consumes, plus a 50 gp fee. The character returns with "
-                             "1 HP and -4 to attack rolls, saving throws, and ability checks, easing by 1 each "
-                             "long rest.");
+    raiseButton_ = new QPushButton("Raise Dead", templePage);
     auto* templeForm = new QFormLayout();
     templeForm->addRow("Raise:", deadCombo_);
     templeForm->addRow("Paid by:", payerCombo_);
@@ -192,6 +197,7 @@ ShopDialog::ShopDialog(dnd::Repository& repository, dnd::Character character,
     fitToScreen(this, QSize(600, 520), "Shop");
 
     connect(giveButton, &QPushButton::clicked, this, &ShopDialog::onGiveClicked);
+    connect(haggleButton_, &QPushButton::clicked, this, &ShopDialog::onHaggleClicked);
     connect(categoryCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this] { fillBuyTable(); });
     connect(buyTable_, &QTableWidget::itemSelectionChanged, this, &ShopDialog::refreshBuyControls);
     connect(buyQuantity_, QOverload<int>::of(&QSpinBox::valueChanged), this, &ShopDialog::refreshBuyControls);
@@ -217,6 +223,32 @@ void ShopDialog::reload() {
     purseLabel_->setText(QString("<b>%1</b>%2 · <b>Coins:</b> %3")
                              .arg(text(character_.character_name), character_.dead ? " (dead)" : "",
                                   text(dnd::format_coins(character_.coins))));
+
+    // The merchant, and how haggling stands.
+    dnd::Npc merchant = dnd::shop_merchant(repository_, character_.campaign_id);
+    QString deal;
+    if (character_.haggle > 0) {
+        deal = QString("<b>%1% off</b> for %2 until their next long rest.")
+                   .arg(dnd::kHaggleDiscountPercent)
+                   .arg(text(character_.character_name));
+    } else if (character_.haggle < 0) {
+        deal = "No discount today. Try again after a long rest.";
+    }
+    merchantLabel_->setText(QString("<b>%1</b>, %2 — <i>%3</i>. %4")
+                                .arg(text(merchant.name).toHtmlEscaped(), text(merchant.role).toHtmlEscaped(),
+                                     dnd::attitude_name(merchant.attitude), deal));
+    merchantLabel_->setToolTip(text(merchant.description));
+    auto haggleDc = dnd::conversation_dc(merchant, dnd::SocialRequest::MinorRisk);
+    haggleButton_->setText(haggleDc ? QString("Haggle (Persuasion, DC %1)").arg(*haggleDc) : QString("Haggle"));
+    bool canHaggle = haggleDc && character_.haggle == 0 && !character_.dead && character_.current_hp > 0;
+    haggleButton_->setEnabled(canHaggle);
+    haggleButton_->setToolTip(!haggleDc ? QString("%1 is Hostile and won't haggle.").arg(text(merchant.name))
+                              : character_.haggle != 0
+                                  ? QString("Once between long rests.")
+                                  : QString("Once between long rests: a Persuasion check for %1% off everything "
+                                            "%2 buys until their next long rest.")
+                                        .arg(dnd::kHaggleDiscountPercent)
+                                        .arg(text(character_.character_name)));
 
     // Sell: the pack, with what each fetches.
     int sellRow = sellTable_->currentRow();
@@ -304,7 +336,7 @@ void ShopDialog::refreshBuyControls() {
         buyButton_->setEnabled(false);
         return;
     }
-    int total = item->cost_cp * buyQuantity_->value();
+    int total = dnd::price_for(character_, item->cost_cp * buyQuantity_->value());
     buyButton_->setText(QString("Buy for %1").arg(cost(total)));
     int purse = dnd::total_cp(character_.coins);
     bool affordable = purse >= total;
@@ -347,11 +379,24 @@ void ShopDialog::refreshSellControls() {
 
 void ShopDialog::refreshTemple() {
     bool anyoneDead = deadCombo_->count() > 0;
-    templeIntro_->setText(anyoneDead
-        ? QString("The temple's priests can cast <i>raise dead</i> for %1. The raised return with 1 HP and -4 to "
-                  "attack rolls, saving throws, and ability checks, easing by 1 each long rest.")
-              .arg(cost(dnd::kRaiseDeadCostCp))
-        : QString("No one needs raising."));
+    int deadId = deadCombo_->currentData().toInt();
+    int campaign = character_.campaign_id;
+    for (const auto& member : everyone_) {
+        if (member.character_id == deadId) campaign = member.campaign_id;
+    }
+    dnd::Npc priest = dnd::temple_priest(repository_, campaign);
+    int price = dnd::raise_dead_cost_cp(repository_, campaign);
+    QString who = QString("<b>%1</b>, %2 — <i>%3</i>. %4")
+                      .arg(text(priest.name).toHtmlEscaped(), text(priest.role).toHtmlEscaped(),
+                           dnd::attitude_name(priest.attitude), text(priest.description).toHtmlEscaped());
+    templeIntro_->setText(who + "<br><br>" +
+        (anyoneDead
+             ? QString("The temple can cast <i>raise dead</i> for %1%2. The raised return with 1 HP and -4 to "
+                       "attack rolls, saving throws, and ability checks, easing by 1 each long rest.")
+                   .arg(cost(price),
+                        price < dnd::kRaiseDeadCostCp ? QString(" (the priest is Friendly and waives the fee)") : "")
+             : QString("No one needs raising.")));
+    raiseButton_->setText(QString("Raise Dead (%1)").arg(cost(price)));
     deadCombo_->setEnabled(anyoneDead);
     payerCombo_->setEnabled(anyoneDead);
     raiseButton_->setToolTip("");
@@ -364,11 +409,10 @@ void ShopDialog::refreshTemple() {
     for (const auto& member : everyone_) {
         if (member.character_id == payerId) purse = dnd::total_cp(member.coins);
     }
-    bool affordable = purse >= dnd::kRaiseDeadCostCp;
+    bool affordable = purse >= price;
     raiseButton_->setEnabled(affordable);
     if (!affordable) {
-        raiseButton_->setToolTip(QString("%1 short. Give Coins… can pool the party's money.")
-                                     .arg(cost(dnd::kRaiseDeadCostCp - purse)));
+        raiseButton_->setToolTip(QString("%1 short. Give Coins… can pool the party's money.").arg(cost(price - purse)));
     }
 }
 
@@ -396,6 +440,12 @@ void ShopDialog::onSellClicked() {
 void ShopDialog::onRaiseClicked() {
     if (deadCombo_->count() == 0) return;
     auto result = dnd::raise_dead(repository_, deadCombo_->currentData().toInt(), payerCombo_->currentData().toInt());
+    showMessage(result.message, result.ok);
+    reload();
+}
+
+void ShopDialog::onHaggleClicked() {
+    auto result = dnd::haggle(repository_, character_.character_id, dice_);
     showMessage(result.message, result.ok);
     reload();
 }

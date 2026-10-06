@@ -54,6 +54,9 @@ struct Character {
     int max_hp_reduction = 0;
     // Inspiration (PHB ch. 4): spend it for advantage on one attack or check.
     bool inspiration = false;
+    // Haggling with the Shop's merchant since the last long rest (dnd/shop.hpp):
+    // 1 got 10% off, -1 tried and failed, 0 not yet.
+    int haggle = 0;
     // Class choices beyond the subclass (docs/class-features-1-5.md), by key:
     // "Metamagic", "Invocations", "PactBoon", "Expertise", "TomeCantrips",
     // "BonusSkills" -- each a list of names.

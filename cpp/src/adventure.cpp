@@ -119,6 +119,59 @@ SceneTrap hazard(std::string name, int spot_dc, std::string disarm, int disarm_d
     return t;
 }
 
+// --- People and conversations ----------------------------------------------------------
+
+Npc person(std::string key, std::string name, std::string role, Attitude attitude, std::string description,
+           std::string wants, std::string fears, std::string stat_block = "") {
+    Npc npc;
+    npc.key = std::move(key);
+    npc.name = std::move(name);
+    npc.role = std::move(role);
+    npc.attitude = attitude;
+    npc.description = std::move(description);
+    npc.wants = std::move(wants);
+    npc.fears = std::move(fears);
+    npc.stat_block = std::move(stat_block);
+    return npc;
+}
+
+// The outcome, and someone's attitude moving: the scene's NPC, or `who`.
+SceneOutcome sways(SceneOutcome outcome, int steps, std::string who = "") {
+    outcome.attitude_change = steps;
+    outcome.attitude_npc = std::move(who);
+    return outcome;
+}
+
+SceneOutcome inspires(SceneOutcome outcome) {
+    outcome.inspiration = true;
+    return outcome;
+}
+
+// Asking an NPC for something: the DC comes from their attitude.
+SceneOption ask(std::string label, SocialRequest request, SceneOutcome success, SceneOutcome failure,
+                std::vector<std::string> approaches = {}) {
+    SceneOption option;
+    option.label = std::move(label);
+    option.social = true;
+    option.request = request;
+    option.approaches = std::move(approaches);
+    option.success = std::move(success);
+    option.failure = std::move(failure);
+    return option;
+}
+
+AdventureScene social(std::string title, std::string narration, std::string npc, std::vector<SceneOption> options,
+                      int insight_dc = 12) {
+    AdventureScene result;
+    result.title = std::move(title);
+    result.narration = std::move(narration);
+    result.kind = SceneKind::Social;
+    result.npc = std::move(npc);
+    result.options = std::move(options);
+    result.insight_dc = insight_dc;
+    return result;
+}
+
 AdventureScene scene(std::string title, std::string narration, std::vector<AdventureMonsterGroup> monsters,
                      std::vector<AdventureLoot> loot, int coins_cp, bool camp_after = false, bool boss = false) {
     AdventureScene result;
@@ -235,20 +288,27 @@ const std::vector<AdventureTemplate>& adventure_templates() {
                       {{"Wolf", 2}}, {{"Rations (1 day)", 2}}, 200, true),
                 trap("The Snare Corridor", "A low passage leads deeper in. The floor is suspiciously clean.",
                      hazard("a tripwire hung with rusty blades", 12, "Sleight of Hand", 12, 11, 2, 4, "piercing")),
-                challenge("The Captive", "A goblin sits tied up in a side room -- a deserter, by the look of it. "
-                          "It eyes you, and the door to the boss's den.",
-                          {check("Scare it into talking", "Intimidation", 12,
-                                 fewer("It babbles where the boss's guards sleep. One won't be waking up.", 1),
-                                 more("It shrieks for help before you can stop it.", 1)),
-                           check("Talk it round", "Persuasion", 14,
-                                 fewer("It tells you everything, and points out a guard to deal with quietly.", 1, true),
-                                 says("It just glares at you.")),
-                           pick("Leave it tied up", says("You leave it for the farmers to deal with."))}),
+                social("The Captive", "A goblin sits tied up in a side room -- a deserter, by the look of it. "
+                       "It eyes you, and the door to the boss's den.",
+                       "snig",
+                       {ask("Get it to say where the boss's guards sleep", SocialRequest::NoRisk,
+                            fewer("Snig babbles where the guards sleep. One won't be waking up.", 1),
+                            more("Snig shrieks for help before you can stop it.", 1)),
+                        ask("Get it to lead you in by the back way", SocialRequest::MinorRisk,
+                            sways(inspires(surprises("Snig leads you through a crawlway into the den, grinning. "
+                                                     "The boss never sees you coming.")),
+                                  1),
+                            says("Snig just glares at you.")),
+                        pick("Leave it tied up", says("You leave it for the farmers to deal with."))},
+                       10),
                 scene("The Boss's Den", "A hobgoblin has taken charge of the warren. It isn't going to give it "
                       "up without a fight.",
                       {{"Hobgoblin", 1}, {"Goblin", 2}}, {{"Potion of Healing", 2}, {"Cloak of Protection", 1}}, 1500,
                       false, true),
             },
+            {person("snig", "Snig", "goblin deserter", Attitude::Indifferent,
+                    "A scrawny goblin tied up with its own belt, one ear bitten off.",
+                    "to get out of the warren alive", "the hobgoblin boss finding out it talked", "Goblin")},
         },
         {
             "Crypt of the Restless",
@@ -257,6 +317,21 @@ const std::vector<AdventureTemplate>& adventure_templates() {
             "The ghouls lie still and the barrow is quiet. Whatever stirred the dead has nothing left to command.",
             2,
             {
+                social("The Gravedigger", "An old man leans on his spade at the edge of the moor, watching the "
+                       "barrow. He doesn't look round.",
+                       "tobin",
+                       {ask("Ask what he's seen", SocialRequest::NoRisk,
+                            surprises("\"They come out through the ossuary, and they don't look up.\" You'll be "
+                                      "waiting above the door."),
+                            says("He spits, and goes back to his digging.")),
+                        ask("Ask him to guide you down", SocialRequest::SignificantRisk,
+                            inspires(fewer("He knows every niche of the place, and leads you round the worst of "
+                                           "the dead.",
+                                           1)),
+                            says("\"Not for any money.\"")),
+                        pick("Promise to see his wife's grave left in peace",
+                             sways(says("He nods slowly. \"Then I'll tell the temple you came.\""), 1, "priest"))},
+                       12),
                 scene("The Ossuary", "Bones rattle out of their niches and stand up to meet you.",
                       {{"Skeleton", 3}}, {{"Torch", 2}}, 400),
                 trap("The False Floor", "The passage beyond the ossuary is paved with old, uneven slabs.",
@@ -277,6 +352,9 @@ const std::vector<AdventureTemplate>& adventure_templates() {
                        {"Spell Scroll (Cure Wounds)", 1}},
                       2000, false, true),
             },
+            {person("tobin", "Old Tobin", "gravedigger", Attitude::Indifferent,
+                    "A stooped old man with a spade, who has dug every grave on the moor for forty years.",
+                    "his wife's grave in the barrow left in peace", "the dead walking into the village")},
         },
         {
             "The Hill Giant's Toll",
@@ -286,6 +364,24 @@ const std::vector<AdventureTemplate>& adventure_templates() {
             5,
             {
                 scene("Gnoll Scouts", "Gnolls cackle in the rocks above the road.", {{"Gnoll", 3}}, {}, 600),
+                social("The Stranded Caravan", "Past the gnolls' rocks, a dwarf sits on an overturned wagon, "
+                       "binding a cut on her arm. Her guards look as battered as she does.",
+                       "dagna",
+                       {ask("Ask for supplies from her wagons", SocialRequest::NoRisk,
+                            [] {
+                                SceneOutcome given = says("\"Take them. You've earned them already.\"");
+                                given.loot = {{"Potion of Healing", 2}};
+                                return given;
+                            }(),
+                            says("She shakes her head.")),
+                        ask("Ask her to send her guards up the road with you", SocialRequest::SignificantRisk,
+                            fewer("Two of her guards march with you. At the gate, they hold off an ogre between them.",
+                                  1),
+                            says("\"They're all I've got left.\"")),
+                        pick("Promise to clear the road for her",
+                             sways(says("\"Do that, and every merchant in the valley will hear of it.\""), 1,
+                                   "merchant"))},
+                       12),
                 challenge("The Scree Slope", "The road climbs a slope of loose rock under the giant's lookout.",
                           {check("Climb carefully, together", "Athletics", 13,
                                  says("Everyone makes it up without starting a slide."),
@@ -310,6 +406,9 @@ const std::vector<AdventureTemplate>& adventure_templates() {
                       {{"Potion of Greater Healing", 2}, {"Shield +1", 1}, {"Gauntlets of Ogre Power", 1}}, 5000,
                       false, true),
             },
+            {person("dagna", "Dagna Ironfoot", "caravan master", Attitude::Friendly,
+                    "A dwarf with a scorched beard and a cut arm, whose wagons the gnolls overturned.",
+                    "her wagons over the pass before winter", "the giant's toll taking her last coin", "Veteran")},
         },
         // Levels 5-8 (docs/content-5-10.md): monsters that resist plain steel, breathe, cast, and drain.
         {
@@ -349,13 +448,18 @@ const std::vector<AdventureTemplate>& adventure_templates() {
             {
                 scene("The Lane at Dusk", "A robed figure and something that was a farmhand step out of the hedges.",
                       {{"Werewolf", 1}, {"Cult Fanatic", 1}}, {}, 1200),
-                challenge("Questioning the Villagers", "The villagers clam up when you ask about the full moon.",
-                          {check("Read who's lying", "Insight", 14,
-                                 surprises("The miller's wife can't meet your eyes. She tells you when they'll gather."),
-                                 surprised("You pick the wrong villager -- one of the cult. They're warned.")),
-                           check("Lean on them", "Intimidation", 15,
-                                 surprises("The miller breaks: they meet at the old mill at moonrise."),
-                                 more("Someone runs to warn the mill.", 1))}),
+                social("The Miller's Wife", "The villagers clam up when you ask about the full moon, all but the "
+                       "miller's wife, who can't meet your eyes.",
+                       "wenna",
+                       {ask("Win her trust: when does the cult gather?", SocialRequest::MinorRisk,
+                            sways(surprises("She tells you: the old mill, at moonrise. You'll be there first."), 1),
+                            surprised("She runs to the mill the moment you're gone. They're warned."),
+                            {"Persuasion", "Deception"}),
+                        ask("Lean on her until she talks", SocialRequest::MinorRisk,
+                            sways(surprises("She breaks: the old mill, at moonrise. She won't forgive you."), -1),
+                            more("She screams for her husband, and someone runs to warn the mill.", 1),
+                            {"Intimidation"})},
+                       14),
                 scene("The Old Mill", "The mill wheel creaks. Two shapes on the millrace are not wolves, and not men.",
                       {{"Werewolf", 2}}, {{"Potion of Greater Healing", 2}}, 1200, true),
                 trap("The Shrine Path", "The path to the shrine winds through dark woods, and something has dug here.",
@@ -365,6 +469,9 @@ const std::vector<AdventureTemplate>& adventure_templates() {
                       {{"Warhammer +2", 1}, {"Bracers of Defense", 1}, {"Potion of Superior Healing", 2}}, 4000,
                       false, true),
             },
+            {person("wenna", "Wenna Hask", "the miller's wife", Attitude::Indifferent,
+                    "A tired woman with flour to her elbows, who keeps her back to you while she works.",
+                    "her husband out of the cult before the moon takes him too", "the cult's high priest")},
         },
         {
             "The White Wyrm's Lair",

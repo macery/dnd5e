@@ -1,6 +1,6 @@
 # Campaigns design
 
-Status: **phases 1 (core) and 2 (UI) done.** The questions below were settled with the recommended answers without a review round (2026-10-02). Any of them can be revisited.
+Status: **phases 1 (core) and 2 (UI) done.** The questions below were settled with the recommended answers without a review round (2026-10-02). Any of them can be revisited. Campaigns also own their NPCs ([scenes-and-npcs.md](scenes-and-npcs.md)); deleting a campaign deletes them.
 
 **As built:**
 - **Core:**

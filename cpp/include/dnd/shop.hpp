@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "dnd/currency.hpp"
+#include "dnd/dice.hpp"
 #include "dnd/item.hpp"
 #include "dnd/repository.hpp"
 
@@ -34,6 +35,20 @@ int sell_price_cp(const Item& item);
 // *Raise dead* at a temple: the 500 gp diamond the spell consumes plus a
 // 50 gp fee (the top of the PHB's 10-50 gp for spellcasting services).
 constexpr int kRaiseDeadCostCp = 55000;
+// A Friendly priest waives the fee: just the diamond.
+constexpr int kRaiseDeadFriendlyCostCp = 50000;
+// What raising someone in `campaign_id` costs, by its priest's attitude.
+int raise_dead_cost_cp(Repository& repo, int campaign_id);
+
+// Haggling (docs/scenes-and-npcs.md): once between long rests, a character
+// can make a Persuasion check against the merchant of their campaign. The
+// DC is the DMG's for a minor sacrifice (10 if the merchant is Friendly, 20 if
+// Indifferent, 5 less once their wants and fears are known); a Hostile
+// merchant won't haggle. Success takes this much off everything they buy
+// until their next long rest.
+constexpr int kHaggleDiscountPercent = 10;
+// The price after the character's discount, if they have one (rounded up).
+int price_for(const Character& character, int price_cp);
 // The penalty a raised character starts with (PHB ch. 11, *raise dead*).
 constexpr int kRaiseDeadPenalty = 4;
 
@@ -46,7 +61,11 @@ struct ShopResult {
 
 // Each of these changes the database in one transaction, or not at all.
 
-// Pays for `quantity` (> 0) of the item and adds them to the inventory.
+// Rolls the haggle and saves the result on the character.
+ShopResult haggle(Repository& repo, int character_id, const Dice& dice);
+
+// Pays for `quantity` (> 0) of the item (at the haggled price, if any) and
+// adds them to the inventory.
 ShopResult buy(Repository& repo, int character_id, int item_id, int quantity = 1);
 
 // Removes `quantity` (> 0) of the item and pays the sale price. Equipped or
@@ -54,7 +73,7 @@ ShopResult buy(Repository& repo, int character_id, int item_id, int quantity = 1
 ShopResult sell(Repository& repo, int character_id, int item_id, int quantity = 1);
 
 // Charges `payer_id` (any character, the dead one included)
-// kRaiseDeadCostCp and brings `character_id` back with 1 HP and
+// raise_dead_cost_cp and brings `character_id` back with 1 HP and
 // the *raise dead* penalty.
 ShopResult raise_dead(Repository& repo, int character_id, int payer_id);
 

@@ -24,7 +24,7 @@ constexpr const char* kCharacterColumns =
     "CharacterId, CharacterName, Class, Race, Alignment, PlayerID, Level, "
     "Strength, Dexterity, Constitution, Intelligence, Wisdom, Charisma, "
     "CurrentHP, MaxHP, SkillProficiencies, SaveProficiencies, "
-    "Experience, HitDiceUsed, Background, SpellSlotsUsed, Dead, FeatureUses, FightingStyle, Coins, RevivalPenalty, CampaignID, MayPrepare, Subclass, SubclassChoice, Exhaustion, TempHP, ClassOptions, MaxHpReduction, Inspiration";
+    "Experience, HitDiceUsed, Background, SpellSlotsUsed, Dead, FeatureUses, FightingStyle, Coins, RevivalPenalty, CampaignID, MayPrepare, Subclass, SubclassChoice, Exhaustion, TempHP, ClassOptions, MaxHpReduction, Inspiration, Haggle";
 // (Characters.ArmorClass and WeaponID still exist but are no longer used:
 // AC and weapons come from equipped inventory items since migration 15.)
 
@@ -119,6 +119,7 @@ Character read_character_row(sqlite3_stmt* stmt) {
     character.class_options = parse_class_options(column_text(stmt, 32));
     character.max_hp_reduction = sqlite3_column_int(stmt, 33);
     character.inspiration = sqlite3_column_int(stmt, 34) != 0;
+    character.haggle = sqlite3_column_int(stmt, 35);
     return character;
 }
 
@@ -602,8 +603,8 @@ int Repository::add_character(const Character& character) {
         "Strength, Dexterity, Constitution, Intelligence, Wisdom, Charisma, "
         "CurrentHP, MaxHP, SkillProficiencies, SaveProficiencies, "
         "Experience, HitDiceUsed, Background, SpellSlotsUsed, Dead, FeatureUses, FightingStyle, Coins, RevivalPenalty, MayPrepare, "
-        "Subclass, SubclassChoice, Exhaustion, TempHP, ClassOptions, MaxHpReduction, Inspiration) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);");
+        "Subclass, SubclassChoice, Exhaustion, TempHP, ClassOptions, MaxHpReduction, Inspiration, Haggle) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);");
     bind_text(stmt, 1, character.character_name);
     sqlite3_bind_int(stmt.get(), 2, character.class_id);
     sqlite3_bind_int(stmt.get(), 3, character.race);
@@ -637,6 +638,7 @@ int Repository::add_character(const Character& character) {
     bind_text(stmt, 31, format_class_options(character.class_options));
     sqlite3_bind_int(stmt.get(), 32, character.max_hp_reduction);
     sqlite3_bind_int(stmt.get(), 33, character.inspiration ? 1 : 0);
+    sqlite3_bind_int(stmt.get(), 34, character.haggle);
     detail::run_and_expect_done(stmt, "insert character");
     return static_cast<int>(sqlite3_last_insert_rowid(db_));
 }
@@ -675,7 +677,8 @@ void Repository::update_character(const Character& character) {
         "CurrentHP = ?, MaxHP = ?, SkillProficiencies = ?, SaveProficiencies = ?, "
         "Experience = ?, HitDiceUsed = ?, Background = ?, SpellSlotsUsed = ?, Dead = ?, FeatureUses = ?, "
         "FightingStyle = ?, Coins = ?, RevivalPenalty = ?, MayPrepare = ?, Subclass = ?, SubclassChoice = ?, "
-        "Exhaustion = ?, TempHP = ?, ClassOptions = ?, MaxHpReduction = ?, Inspiration = ? WHERE CharacterId = ?;");
+        "Exhaustion = ?, TempHP = ?, ClassOptions = ?, MaxHpReduction = ?, Inspiration = ?, Haggle = ? "
+        "WHERE CharacterId = ?;");
     bind_text(stmt, 1, character.character_name);
     sqlite3_bind_int(stmt.get(), 2, character.class_id);
     sqlite3_bind_int(stmt.get(), 3, character.race);
@@ -708,7 +711,8 @@ void Repository::update_character(const Character& character) {
     bind_text(stmt, 30, format_class_options(character.class_options));
     sqlite3_bind_int(stmt.get(), 31, character.max_hp_reduction);
     sqlite3_bind_int(stmt.get(), 32, character.inspiration ? 1 : 0);
-    sqlite3_bind_int(stmt.get(), 33, character.character_id);
+    sqlite3_bind_int(stmt.get(), 33, character.haggle);
+    sqlite3_bind_int(stmt.get(), 34, character.character_id);
     detail::run_and_expect_done(stmt, "update character");
 }
 
@@ -830,6 +834,7 @@ void Repository::delete_campaign(int campaign_id) {
     with_transaction([&] {
         for (const char* sql : {"UPDATE Characters SET CampaignID = 0 WHERE CampaignID = ?;",
                                 "UPDATE AdventureRuns SET CampaignID = 0 WHERE CampaignID = ?;",
+                                "DELETE FROM Npcs WHERE CampaignID = ?;",
                                 "DELETE FROM Campaigns WHERE CampaignID = ?;"}) {
             Statement stmt(db_, sql);
             sqlite3_bind_int(stmt.get(), 1, campaign_id);
@@ -869,6 +874,73 @@ void Repository::set_character_campaign(int character_id, int campaign_id) {
     sqlite3_bind_int(stmt.get(), 1, campaign_id);
     sqlite3_bind_int(stmt.get(), 2, character_id);
     detail::run_and_expect_done(stmt, "set character campaign");
+}
+
+// --- NPCs ------------------------------------------------------------------------
+
+namespace {
+
+void bind_npc(Statement& stmt, const Npc& npc) {
+    sqlite3_bind_int(stmt.get(), 1, npc.campaign_id);
+    bind_text(stmt, 2, npc.key);
+    bind_text(stmt, 3, npc.name);
+    bind_text(stmt, 4, npc.role);
+    bind_text(stmt, 5, attitude_name(npc.attitude));
+    bind_text(stmt, 6, npc.description);
+    bind_text(stmt, 7, npc.wants);
+    bind_text(stmt, 8, npc.fears);
+    sqlite3_bind_int(stmt.get(), 9, npc.known ? 1 : 0);
+    bind_text(stmt, 10, npc.stat_block);
+}
+
+}  // namespace
+
+int Repository::add_npc(const Npc& npc) {
+    Statement stmt(db_,
+        "INSERT INTO Npcs (CampaignID, NpcKey, Name, Role, Attitude, Description, Wants, Fears, Known, StatBlock) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);");
+    bind_npc(stmt, npc);
+    detail::run_and_expect_done(stmt, "insert NPC");
+    return static_cast<int>(sqlite3_last_insert_rowid(db_));
+}
+
+void Repository::update_npc(const Npc& npc) {
+    Statement stmt(db_,
+        "UPDATE Npcs SET CampaignID = ?, NpcKey = ?, Name = ?, Role = ?, Attitude = ?, Description = ?, Wants = ?, "
+        "Fears = ?, Known = ?, StatBlock = ? WHERE NpcID = ?;");
+    bind_npc(stmt, npc);
+    sqlite3_bind_int(stmt.get(), 11, npc.npc_id);
+    detail::run_and_expect_done(stmt, "update NPC");
+}
+
+void Repository::delete_npc(int npc_id) {
+    Statement stmt(db_, "DELETE FROM Npcs WHERE NpcID = ?;");
+    sqlite3_bind_int(stmt.get(), 1, npc_id);
+    detail::run_and_expect_done(stmt, "delete NPC");
+}
+
+std::vector<Npc> Repository::get_npcs(int campaign_id) const {
+    Statement stmt(db_,
+        "SELECT NpcID, CampaignID, NpcKey, Name, Role, Attitude, Description, Wants, Fears, Known, StatBlock "
+        "FROM Npcs WHERE CampaignID = ? ORDER BY Name;");
+    sqlite3_bind_int(stmt.get(), 1, campaign_id);
+    std::vector<Npc> npcs;
+    while (sqlite3_step(stmt.get()) == SQLITE_ROW) {
+        Npc npc;
+        npc.npc_id = sqlite3_column_int(stmt.get(), 0);
+        npc.campaign_id = sqlite3_column_int(stmt.get(), 1);
+        npc.key = column_text(stmt.get(), 2);
+        npc.name = column_text(stmt.get(), 3);
+        npc.role = column_text(stmt.get(), 4);
+        npc.attitude = attitude_from_name(column_text(stmt.get(), 5));
+        npc.description = column_text(stmt.get(), 6);
+        npc.wants = column_text(stmt.get(), 7);
+        npc.fears = column_text(stmt.get(), 8);
+        npc.known = sqlite3_column_int(stmt.get(), 9) != 0;
+        npc.stat_block = column_text(stmt.get(), 10);
+        npcs.push_back(std::move(npc));
+    }
+    return npcs;
 }
 
 void Repository::with_transaction(const std::function<void()>& work) {

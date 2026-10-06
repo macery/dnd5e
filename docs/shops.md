@@ -1,6 +1,6 @@
 # Shops and spending design
 
-Status: **phases 1 (rules) and 2 (UI) done.** Decisions were settled on 2026-10-02; see [Decisions](#decisions).
+Status: **phases 1 (rules) and 2 (UI) done.** Decisions were settled on 2026-10-02; see [Decisions](#decisions). Since then, the Shop has a merchant to haggle with and the Temple has a priest ([scenes-and-npcs.md](scenes-and-npcs.md), phase 2).
 
 **Phase 2 as built:**
 - **`ShopDialog`**, from the main window's **Shop…** button, for the selected character:

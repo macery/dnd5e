@@ -25,7 +25,7 @@ TEST_CASE("adventure picker: runs to resume come first", "[ui][adventure]") {
     picker.show();
     settle();
     auto* list = picker.findChild<QListWidget*>();
-    REQUIRE(list->item(0)->text() == "▶ Resume: Crypt of the Restless — scene 2 of 5");
+    REQUIRE(list->item(0)->text() == "▶ Resume: Crypt of the Restless — scene 2 of 6");
     REQUIRE(picker.isResume());
     REQUIRE(picker.selectedRun().run_id == run.run_id);
 

@@ -1,11 +1,22 @@
 # Scenes between fights, and NPCs
 
-Status: **phase 1 built** (checks, Challenge/Trap/Choice scenes, surprise, inspiration); phase 2 next. Every recommendation was taken on 2026-10-05.
+Status: **phases 1 and 2 built** (checks, Challenge/Trap/Choice scenes, surprise, inspiration; NPCs, Social scenes, the merchant and the priest); phase 3 next. Every recommendation was taken on 2026-10-05.
 
 Phase 1 notes:
 - The code is `dnd/checks` (checks, group checks, passive scores) and `dnd/scenes` (outcomes, traps, shaping the next fight); scenes are in `src/adventure.cpp`.
-- Social scenes and `social_dc` come with NPCs in phase 2.
 - Surprised creatures lose their first turn, but can still take reactions before it (the PHB says they can't). That is a small simplification.
+
+Phase 2 notes:
+- The code is `dnd/npc` (the NPC model, attitudes, `social_dc`, and `meet_npc`), Social scenes in `dnd/scenes`, and haggling and the priest in `dnd/shop`. Migration 34 adds the `Npcs` table and `Characters.Haggle`.
+- **NPCs are saved per campaign** (0 = no campaign). An adventure defines its NPCs in code; the first time a campaign meets one, it's saved, and after that the campaign's copy is used, attitude and all. Deleting a campaign deletes its NPCs. Deleting an adventure NPC from the NPCs dialog means the next meeting starts fresh.
+- **A Social scene** shows the NPC (name, role, attitude, description). Each request has a size (stop opposing, help at no risk, minor risk, significant risk), and the DC comes from the DMG table for the NPC's attitude: 0 needs no roll, and a request the attitude rules out is shown greyed ("not while they're Indifferent"). The player picks the approach: Persuasion, Deception, or Intimidation, or whichever the option allows.
+- **Reading an NPC:** once per conversation, an Insight check against the scene's DC reveals what they want and fear. From then on every DC with them is 5 lower, in that campaign. The DMG leaves the adjustment to the DM; 5 is ours.
+- **Outcomes can change attitudes:** the scene's NPC, the merchant, or the priest, one step at a time.
+- **The merchant** (Hilda Brannock by default): once between long rests, each character can make a Persuasion check for 10% off everything they buy until their next long rest. The DC is the DMG's for a minor sacrifice: 10 if Friendly, 20 if Indifferent. A Hostile merchant won't haggle.
+- **The priest** (Brother Aldous by default): a Friendly priest waives the 50 gp fee for *raise dead*, so it costs only the 500 gp diamond. That is our addition; the doc only asked for the attitude to change.
+- **Content:** the Goblin Warren's captive is now a conversation (Snig). Crypt of the Restless opens with the gravedigger (Old Tobin), who can make the priest Friendly. The Hill Giant's Toll meets a caravan master (Dagna Ironfoot), who can make the merchant Friendly. In Moonrise at Ashgrove, the questioning is a conversation with the miller's wife (Wenna Hask).
+- **The NPCs… dialog** (main window, next to Campaigns…) lists the active campaign's NPCs: name, role, attitude, description, wants, fears, whether the party knows them, and a stat block from the monster list (used in phase 3). The merchant and the priest can be renamed but not deleted.
+- Haggling isn't exported with a character.
 
 Rules follow the 2014 PHB (ch. 7, ability checks) and DMG (ch. 8: ability checks, social interaction, traps).
 

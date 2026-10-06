@@ -57,6 +57,7 @@ private slots:
     void onSoloAdventureClicked();
     void onCampaignSelected(int index);
     void onCampaignsClicked();
+    void onNpcsClicked();
 
 private:
     // Plays a multi-scene adventure from wherever `run` is, saving it after each step.

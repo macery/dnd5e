@@ -2,8 +2,10 @@
 
 #include <string>
 
-#include "dnd/rules.hpp"
 #include <vector>
+
+#include "dnd/npc.hpp"
+#include "dnd/rules.hpp"
 
 namespace dnd {
 
@@ -23,7 +25,7 @@ struct AdventureLoot {
 };
 
 // Scenes besides fights (docs/scenes-and-npcs.md).
-enum class SceneKind { Fight, Challenge, Trap, Choice };
+enum class SceneKind { Fight, Challenge, Trap, Choice, Social };
 
 // Who's surprised when the next fight starts: surprised combatants lose
 // their first turn.
@@ -45,6 +47,11 @@ struct SceneOutcome {
     int more_monsters = 0;          // ...or gains reinforcements
     Surprise surprise = Surprise::None;
     std::string unlock;             // a flag later options can require
+    // The NPC's attitude moves this many steps (+ friendlier). `attitude_npc`
+    // names who: an adventure NPC's key, "merchant" or "priest" (the Shop's
+    // and the Temple's), or "" for the scene's own NPC.
+    int attitude_change = 0;
+    std::string attitude_npc;
 };
 
 // One way through a Challenge or Choice scene.
@@ -56,6 +63,12 @@ struct SceneOption {
     std::string requires_flag;  // offered only once this flag is unlocked
     SceneOutcome success;       // a choice with no roll uses `success`
     SceneOutcome failure;
+    // A request in a Social scene: the DC comes from the NPC's attitude and
+    // what's asked (dnd/npc.hpp's social_dc), and the player picks the
+    // approach -- Persuasion, Deception, or Intimidation, or those listed.
+    bool social = false;
+    SocialRequest request = SocialRequest::NoRisk;
+    std::vector<std::string> approaches;
 };
 
 // A hidden danger: the party's best passive Perception spots it; otherwise
@@ -75,13 +88,15 @@ struct SceneTrap {
 
 // One scene of an adventure (docs/adventures-and-currency.md): a fight
 // (narration, the monsters scaled for the party, what it pays) -- or a
-// challenge, trap, or choice (docs/scenes-and-npcs.md).
+// challenge, trap, choice, or conversation (docs/scenes-and-npcs.md).
 struct AdventureScene {
     std::string title;
     std::string narration;
     SceneKind kind = SceneKind::Fight;
     std::vector<SceneOption> options;  // Challenge and Choice
     SceneTrap trap;                    // Trap
+    std::string npc;                   // Social: the key of who the party talks to
+    int insight_dc = 12;               // Social: reading what they want and fear
     std::vector<AdventureMonsterGroup> monsters;
     std::vector<AdventureLoot> loot;  // to the first character still standing
     // Coins, split among the survivors -- for a level-1 party; scale_adventure
@@ -99,6 +114,9 @@ struct AdventureTemplate {
     std::string victory_text;
     int suggested_level = 1;
     std::vector<AdventureScene> scenes;
+    // The people met in Social scenes, as they are the first time the
+    // campaign meets them (dnd/npc.hpp's meet_npc). Keys are unique.
+    std::vector<Npc> npcs;
 };
 
 const std::vector<AdventureTemplate>& adventure_templates();

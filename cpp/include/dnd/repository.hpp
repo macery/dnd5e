@@ -9,6 +9,7 @@
 #include "dnd/item.hpp"
 #include "dnd/lookup_entry.hpp"
 #include "dnd/monster.hpp"
+#include "dnd/npc.hpp"
 #include "dnd/player.hpp"
 #include "dnd/spell.hpp"
 
@@ -96,6 +97,13 @@ public:
     void set_active_campaign(int campaign_id);
     // Moves a character into a campaign (0: out of any).
     void set_character_campaign(int character_id, int campaign_id);
+
+    // NPCs (dnd/npc.hpp). Deleting a campaign deletes its NPCs.
+    int add_npc(const Npc& npc);
+    void update_npc(const Npc& npc);
+    void delete_npc(int npc_id);
+    // One campaign's NPCs (0: those with no campaign), ordered by name.
+    std::vector<Npc> get_npcs(int campaign_id) const;
 
     // Runs `work` atomically: everything it changes is committed, or -- if it
     // throws -- rolled back and the exception rethrown. Nests safely (a

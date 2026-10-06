@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "dnd/character.hpp"
+#include "dnd/dice.hpp"
 #include "dnd/item.hpp"
 #include "dnd/lookup_entry.hpp"
 #include "dnd/repository.hpp"
@@ -16,9 +17,11 @@ class QTabWidget;
 class QTableWidget;
 
 // Buying and selling gear for one character, a temple that raises the
-// dead, and handing coins to another character (docs/shops.md). Until
-// campaigns exist, every character in the database can pay and trade.
-// Every change is saved at once through dnd/shop.
+// dead, and handing coins to another character (docs/shops.md). The
+// campaign's merchant and priest (dnd/npc.hpp) stand behind the counter and
+// the altar: haggling with the merchant can get 10% off, and a Friendly
+// priest waives the temple's fee. Every change is saved at once through
+// dnd/shop.
 class ShopDialog : public QDialog {
     Q_OBJECT
 
@@ -34,6 +37,7 @@ private slots:
     void onSellClicked();
     void onRaiseClicked();
     void onGiveClicked();
+    void onHaggleClicked();
     void refreshBuyControls();
     void refreshSellControls();
     void refreshTemple();
@@ -54,7 +58,12 @@ private:
     std::vector<dnd::InventoryEntry> pack_;   // the Sell table's rows
     std::vector<dnd::Character> everyone_;    // every character, for the Temple
 
+    dnd::SystemRandomSource random_;
+    dnd::Dice dice_{random_};
+
     QLabel* purseLabel_ = nullptr;
+    QLabel* merchantLabel_ = nullptr;
+    QPushButton* haggleButton_ = nullptr;
     QTabWidget* tabs_ = nullptr;
 
     QComboBox* categoryCombo_ = nullptr;

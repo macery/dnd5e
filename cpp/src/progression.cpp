@@ -107,6 +107,7 @@ void take_long_rest(Character& character) {
     character.may_prepare = true;  // prepared spells can change now (docs/preparing-spells.md)
     character.exhaustion = std::max(0, character.exhaustion - 1);  // a long rest removes one level
     character.temp_hp = 0;
+    character.haggle = 0;  // the merchant can be asked again
 }
 
 void take_short_rest(Character& character, const ClassInfo& class_info) {

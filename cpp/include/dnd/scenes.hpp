@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -23,11 +24,29 @@ std::vector<const SceneOption*> available_options(const AdventureScene& scene, c
 std::vector<CheckRoller> party_rollers(const Repository& repo, const std::vector<int>& party);
 
 // Applies an outcome: damage (to `roller_id`, or everyone), exhaustion,
-// inspiration, loot and coins (saved to the database), and what it changes
-// in the run (flags, the next fight). Returns lines for the player. The
-// caller records the scene and saves the run.
+// inspiration, loot and coins, an NPC's attitude (saved to the database),
+// and what it changes in the run (flags, the next fight). `scene_npc` is the
+// key of the scene's NPC, for outcomes that change "their" attitude.
+// Returns lines for the player. The caller records the scene and saves the
+// run.
 std::vector<std::string> apply_outcome(Repository& repo, AdventureRun& run, const SceneOutcome& outcome,
-                                       int roller_id, const Dice& dice);
+                                       int roller_id, const Dice& dice, const std::string& scene_npc = "");
+
+// --- Social scenes and NPCs -----------------------------------------------------
+
+// The NPC a run's campaign knows by `key`: an adventure's (met for the
+// first time from its template), or "merchant" / "priest". Nothing for a key
+// the adventure doesn't define.
+std::optional<Npc> find_run_npc(Repository& repo, const AdventureRun& run, const std::string& key);
+
+// The skills a Social option can be tried with: its own list, or
+// Persuasion, Deception, and Intimidation.
+std::vector<std::string> social_approaches(const SceneOption& option);
+
+// Reading an NPC (Insight, DMG ch. 8): on a success the party learns what
+// they want and fear, which lowers later DCs with them (saved).
+CheckResult read_npc(Repository& repo, Npc& npc, const CheckRoller& roller, int dc, const Dice& dice,
+                     bool helped = false, bool inspired = false);
 
 // The party's best passive Perception: who has it, and the score.
 struct BestPassive {

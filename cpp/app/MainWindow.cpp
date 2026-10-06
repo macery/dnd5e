@@ -30,6 +30,7 @@
 #include "AdventureDialogs.hpp"
 #include "AdventurePickerDialog.hpp"
 #include "CampaignDialog.hpp"
+#include "NpcDialog.hpp"
 #include "CharacterCreationWizard.hpp"
 #include "CharacterEditorDialog.hpp"
 #include "CharacterSheetDialog.hpp"
@@ -82,9 +83,14 @@ MainWindow::MainWindow(dnd::Repository& repository, QWidget* parent)
     campaignsButton->setToolTip("Create campaigns and choose who plays in each: characters from any players.");
     campaignRow->addWidget(campaignLabel);
     campaignRow->addWidget(campaignCombo_);
+    auto* npcsButton = new QPushButton("NPCs…", central);
+    npcsButton->setToolTip("The campaign's people: the merchant, the priest, and everyone met in adventures. Edit "
+                           "who they are and how they feel about the party.");
     campaignRow->addWidget(campaignsButton);
+    campaignRow->addWidget(npcsButton);
     rootLayout->addLayout(campaignRow);
     connect(campaignsButton, &QPushButton::clicked, this, &MainWindow::onCampaignsClicked);
+    connect(npcsButton, &QPushButton::clicked, this, &MainWindow::onNpcsClicked);
 
     auto* playerRow = new FlowLayout();
     playerCombo_ = new QComboBox(central);
@@ -304,6 +310,11 @@ void MainWindow::onCampaignSelected(int /*index*/) {
     repository_.set_active_campaign(campaignCombo_->currentData().toInt());
     reloadCampaigns();
     reloadCharactersForCurrentPlayer();  // the list shows who's in play
+}
+
+void MainWindow::onNpcsClicked() {
+    NpcDialog dialog(repository_, this);
+    dialog.exec();
 }
 
 void MainWindow::onCampaignsClicked() {
@@ -894,7 +905,7 @@ void MainWindow::playAdventure(dnd::AdventureRun run) {
                                        .arg(title, QString::fromStdString(dnd::progress_text(run, *adventure)),
                                             QString::fromStdString(scene->title));
         if (scene->kind != dnd::SceneKind::Fight) {
-            // A challenge, trap, or choice (docs/scenes-and-npcs.md).
+            // A challenge, trap, choice, or conversation (docs/scenes-and-npcs.md).
             SceneDialog sceneDialog(repository_, run, *adventure, *scene, sceneTitle, this);
             bool continued = sceneDialog.exec() == QDialog::Accepted;
             repository_.update_adventure_run(run);

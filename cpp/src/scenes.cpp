@@ -5,6 +5,7 @@
 #include "dnd/character_creation.hpp"
 #include "dnd/currency.hpp"
 #include "dnd/magic_items.hpp"
+#include "dnd/npc.hpp"
 
 namespace dnd {
 
@@ -60,7 +61,7 @@ std::vector<CheckRoller> party_rollers(const Repository& repo, const std::vector
 }
 
 std::vector<std::string> apply_outcome(Repository& repo, AdventureRun& run, const SceneOutcome& outcome,
-                                       int roller_id, const Dice& dice) {
+                                       int roller_id, const Dice& dice, const std::string& scene_npc) {
     std::vector<std::string> lines;
     if (!outcome.text.empty()) lines.push_back(outcome.text);
     auto everyone = repo.get_characters();
@@ -122,11 +123,48 @@ std::vector<std::string> apply_outcome(Repository& repo, AdventureRun& run, cons
         std::find(run.flags.begin(), run.flags.end(), outcome.unlock) == run.flags.end()) {
         run.flags.push_back(outcome.unlock);
     }
+    if (outcome.attitude_change != 0) {
+        std::string key = outcome.attitude_npc.empty() ? scene_npc : outcome.attitude_npc;
+        if (auto npc = find_run_npc(repo, run, key)) {
+            Attitude before = npc->attitude;
+            npc->attitude = shift_attitude(before, outcome.attitude_change);
+            if (npc->attitude != before) {
+                repo.update_npc(*npc);
+                lines.push_back(npc->name + " is now " + attitude_name(npc->attitude) + " toward the party.");
+            }
+        }
+    }
     if (outcome.skip_next_fight) run.skip_next_fight = true;
     run.fewer_monsters += outcome.fewer_monsters;
     run.more_monsters += outcome.more_monsters;
     if (outcome.surprise != Surprise::None) run.surprise = outcome.surprise;
     return lines;
+}
+
+std::optional<Npc> find_run_npc(Repository& repo, const AdventureRun& run, const std::string& key) {
+    if (key == "merchant") return shop_merchant(repo, run.campaign_id);
+    if (key == "priest") return temple_priest(repo, run.campaign_id);
+    if (const AdventureTemplate* adventure = find_adventure(run.title)) {
+        for (const auto& npc : adventure->npcs) {
+            if (!key.empty() && npc.key == key) return meet_npc(repo, run.campaign_id, npc);
+        }
+    }
+    return std::nullopt;
+}
+
+std::vector<std::string> social_approaches(const SceneOption& option) {
+    if (!option.approaches.empty()) return option.approaches;
+    return {"Persuasion", "Deception", "Intimidation"};
+}
+
+CheckResult read_npc(Repository& repo, Npc& npc, const CheckRoller& roller, int dc, const Dice& dice, bool helped,
+                     bool inspired) {
+    CheckResult result = ability_check(dice, roller, "Insight", dc, helped, inspired);
+    if (result.success && !npc.known) {
+        npc.known = true;
+        repo.update_npc(npc);
+    }
+    return result;
 }
 
 BestPassive best_passive(const std::vector<CheckRoller>& party, const std::string& what) {

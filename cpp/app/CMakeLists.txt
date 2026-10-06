@@ -23,6 +23,7 @@ add_library(dnd_ui STATIC
     CombatEncounterDialog.cpp
     AdventurePickerDialog.cpp
     CampaignDialog.cpp
+    NpcDialog.cpp
     SubclassDialog.cpp
     ClassOptionsDialog.cpp
     SceneDialog.cpp
