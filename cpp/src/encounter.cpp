@@ -473,7 +473,10 @@ void Encounter::advance_to_actionable_turn() {
 
     // Bounded to one full lap, so the UI gets control back even if nobody on
     // the players' side can act (everyone stunned, say); Next Turn continues.
-    for (size_t guard = 0; guard < turn_order_.size() && status_ == EncounterStatus::InProgress; ++guard) {
+    // Turns lost to surprise don't count, so a surprised party still reaches
+    // round 2 (with its turn properly started) rather than stopping short.
+    const size_t lap = turn_order_.size() + surprised_.size();
+    for (size_t guard = 0; guard < lap && status_ == EncounterStatus::InProgress; ++guard) {
         int index = turn_order_[static_cast<size_t>(current_turn_)];
         Combatant& current = combatants_[static_cast<size_t>(index)];
         turn_ = TurnState{};  // each combatant's turn starts fresh (monsters' once-per-turn flags too)

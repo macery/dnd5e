@@ -19,7 +19,7 @@ namespace dnd {
 // required flag (if any) the run has unlocked.
 std::vector<const SceneOption*> available_options(const AdventureScene& scene, const AdventureRun& run);
 
-// The party, ready to roll checks: each living member with class and pack.
+// The party, ready to roll checks: each conscious member with class and pack.
 std::vector<CheckRoller> party_rollers(const Repository& repo, const std::vector<int>& party);
 
 // Applies an outcome: damage (to `roller_id`, or everyone), exhaustion,
@@ -44,8 +44,9 @@ std::vector<std::string> spring_trap(Repository& repo, const SceneTrap& trap, co
 
 // Before a fight: what earlier scenes did to it. Removes or adds monsters
 // (never fewer than one in all; reinforcements join the first group) and
-// returns the surprise, clearing all of it from the run. `skip` reports
+// returns the surprise. The run keeps all of it until record_fight, so a
+// fight left unfinished is shaped the same way on resume. `skip` reports
 // whether the fight is skipped altogether.
-Surprise shape_next_fight(AdventureRun& run, AdventureScene& scene, bool& skip);
+Surprise shape_next_fight(const AdventureRun& run, AdventureScene& scene, bool& skip);
 
 }  // namespace dnd

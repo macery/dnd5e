@@ -4,6 +4,7 @@
 
 #include "dnd/character_creation.hpp"
 #include "dnd/currency.hpp"
+#include "dnd/magic_items.hpp"
 
 namespace dnd {
 
@@ -51,7 +52,7 @@ std::vector<CheckRoller> party_rollers(const Repository& repo, const std::vector
     std::vector<CheckRoller> rollers;
     for (const auto& character : repo.get_characters()) {
         bool in = std::find(party.begin(), party.end(), character.character_id) != party.end();
-        if (in && !character.dead) {
+        if (in && !character.dead && character.current_hp > 0) {  // the unconscious sit it out
             rollers.push_back({character, class_of(repo, character), repo.get_inventory(character.character_id)});
         }
     }
@@ -146,11 +147,14 @@ std::vector<std::string> spring_trap(Repository& repo, const SceneTrap& trap, co
     for (auto& c : everyone) {
         bool in = std::find(party.begin(), party.end(), c.character_id) != party.end();
         if (!in || c.dead || (!trap.everyone && c.character_id != victim_id)) continue;
-        int roll = dice.roll(20, 1).front();
-        int bonus = saving_throw_bonus(c, trap.save_ability) - c.revival_penalty;
+        // Exhaustion 3+ means disadvantage on saves; items (Cloak of Protection...) count.
+        bool exhausted = c.exhaustion >= 3;
+        int roll = dice.roll_d20(exhausted ? RollMode::Disadvantage : RollMode::Normal).result;
+        int bonus = saving_throw_bonus(c, trap.save_ability, repo.get_inventory(c.character_id)) - c.revival_penalty;
         bool saved = roll + bonus >= trap.save_dc;
         std::string tag = ability_name(trap.save_ability);
-        lines.push_back(c.character_name + ": " + tag.substr(0, 3) + " save d20(" + std::to_string(roll) + ") " +
+        lines.push_back(c.character_name + ": " + tag.substr(0, 3) + " save " + (exhausted ? "(disadvantage) " : "") +
+                        "d20(" + std::to_string(roll) + ") " +
                         (bonus >= 0 ? "+" : "") + std::to_string(bonus) + " vs DC " + std::to_string(trap.save_dc) +
                         " -> " + (saved ? "half. " : "failed. ") + hurt(c, saved ? rolled / 2 : rolled));
         repo.update_character(c);
@@ -158,7 +162,7 @@ std::vector<std::string> spring_trap(Repository& repo, const SceneTrap& trap, co
     return lines;
 }
 
-Surprise shape_next_fight(AdventureRun& run, AdventureScene& scene, bool& skip) {
+Surprise shape_next_fight(const AdventureRun& run, AdventureScene& scene, bool& skip) {
     skip = run.skip_next_fight;
     for (int n = 0; n < run.fewer_monsters; ++n) {
         int total = 0;
@@ -175,12 +179,7 @@ Surprise shape_next_fight(AdventureRun& run, AdventureScene& scene, bool& skip) 
                              scene.monsters.end());
     }
     if (!scene.monsters.empty()) scene.monsters.front().count += run.more_monsters;
-    Surprise surprise = run.surprise;
-    run.skip_next_fight = false;
-    run.fewer_monsters = 0;
-    run.more_monsters = 0;
-    run.surprise = Surprise::None;
-    return surprise;
+    return run.surprise;
 }
 
 }  // namespace dnd

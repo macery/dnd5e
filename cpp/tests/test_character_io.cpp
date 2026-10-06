@@ -61,6 +61,7 @@ int seed_party(dnd::Repository& repo) {
     aria.skill_proficiencies = (1u << static_cast<int>(dnd::Skill::Athletics)) |
                                (1u << static_cast<int>(dnd::Skill::Perception));
     aria.fighting_style = "Defense";
+    aria.inspiration = true;
     aria.feature_uses_spent = {{"SecondWind", 1}};
     aria.coins = {7, 3, 0, 42, 1};
     int aria_id = repo.add_character(aria);
@@ -150,6 +151,7 @@ TEST_CASE("a player's characters round-trip into another database", "[character_
     REQUIRE(aria->skill_proficiencies == before->skill_proficiencies);
     REQUIRE(aria->background == "Soldier");
     REQUIRE(aria->fighting_style == "Defense");
+    REQUIRE(aria->inspiration);
     REQUIRE(aria->feature_uses_spent == std::map<std::string, int>{{"SecondWind", 1}});
     REQUIRE(aria->coins == std::array<int, 5>{7, 3, 0, 42, 1});
 

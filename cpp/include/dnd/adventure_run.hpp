@@ -49,7 +49,8 @@ bool between_scenes(const AdventureRun& run);
 void record_scene(AdventureRun& run, const AdventureTemplate& adventure);
 
 // After a fight: a victory moves on to the next scene (Finished after the
-// last one); a defeat ends the run. Anything else (the fight left
+// last one); a defeat ends the run. Either way, what earlier scenes did to
+// the fight (skip, fewer/more monsters, surprise) is used up. Anything else (the fight left
 // unfinished) changes nothing, so the scene is fought again on resume.
 void record_fight(AdventureRun& run, const AdventureTemplate& adventure, bool victory);
 

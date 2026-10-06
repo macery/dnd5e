@@ -6,6 +6,7 @@
 
 #include "dnd/checks.hpp"
 #include "dnd/encounter.hpp"
+#include "dnd/magic_items.hpp"
 #include "dnd/repository.hpp"
 #include "dnd/scenes.hpp"
 
@@ -135,6 +136,13 @@ TEST_CASE("scene outcomes change the party and the run", "[scenes]") {
         REQUIRE_FALSE(skip);
         REQUIRE(surprise == dnd::Surprise::PartySurprises);
         REQUIRE(fight.monsters.size() == 1);  // the wolf is gone
+        // Kept until the fight is over, so leaving mid-fight loses nothing...
+        REQUIRE(run.surprise == dnd::Surprise::PartySurprises);
+        REQUIRE(run.fewer_monsters == 1);
+        // ...and used up once it is.
+        dnd::AdventureTemplate adventure;
+        adventure.scenes = {fight, fight};
+        dnd::record_fight(run, adventure, true);
         REQUIRE(run.surprise == dnd::Surprise::None);
         REQUIRE(run.fewer_monsters == 0);
     }
@@ -180,6 +188,37 @@ TEST_CASE("traps: spotted by passive Perception, or sprung", "[scenes]") {
     REQUIRE(lines.size() == 1);
     REQUIRE(p.get(aria).current_hp == 18);
     REQUIRE(p.get(nim).current_hp == 30);
+
+    SECTION("the unconscious don't spot traps or roll checks") {
+        auto down = p.get(nim);
+        down.current_hp = 0;
+        p.repo.update_character(down);
+        auto awake = dnd::party_rollers(p.repo, {aria, nim});
+        REQUIRE(awake.size() == 1);
+        REQUIRE(dnd::best_passive(awake, "Perception").name == "Aria");
+    }
+    SECTION("saves count magic items, and exhaustion 3 gives disadvantage") {
+        int cloak = 0;
+        for (const auto& item : p.repo.get_items()) {
+            if (item.name == "Cloak of Protection") cloak = item.item_id;
+        }
+        p.repo.add_to_inventory(aria, cloak, 1);
+        p.repo.set_attuned(aria, cloak, true);
+        ScriptedRandomSource cloaked({6, 6, 10});  // d20 10 + DEX 2 + cloak 1 = 13: half
+        dnd::Dice d(cloaked);
+        auto saved = dnd::spring_trap(p.repo, blade, {aria, nim}, aria, d);
+        REQUIRE(saved.front().find("+3 vs DC 13 -> half") != std::string::npos);
+        REQUIRE(p.get(aria).current_hp == 12);
+
+        auto tired = p.get(aria);
+        tired.exhaustion = 3;
+        p.repo.update_character(tired);
+        ScriptedRandomSource worse({6, 6, 18, 9});  // the lower d20, 9 + 3 = 12: failed
+        dnd::Dice d2(worse);
+        auto failed = dnd::spring_trap(p.repo, blade, {aria, nim}, aria, d2);
+        REQUIRE(failed.front().find("(disadvantage) d20(9)") != std::string::npos);
+        REQUIRE(p.get(aria).current_hp == 0);
+    }
 }
 
 TEST_CASE("surprise: the surprised lose their first turn", "[scenes][encounter]") {
@@ -202,6 +241,20 @@ TEST_CASE("surprise: the surprised lose their first turn", "[scenes][encounter]"
         REQUIRE(text.find("Goblin is surprised and loses this turn.") != std::string::npos);
         REQUIRE(encounter.current_index() == 0);  // straight to Aria
         REQUIRE(encounter.combatants()[0].current_hp == 30);
+    }
+    SECTION("a surprised party still reaches round 2") {
+        ScriptedRandomSource rolls({1, 20, 1});  // the goblin goes first, then misses everything
+        dnd::Dice dice(rolls);
+        dnd::Encounter encounter(dice, p.repo.get_classes(), p.repo.get_races());
+        encounter.set_surprise(dnd::Surprise::PartySurprised);
+        encounter.add_character(p.get(aria), {}, {});
+        encounter.add_monsters(goblin, 1);
+        encounter.roll_initiative();
+        std::string text;
+        for (const auto& e : encounter.take_events()) text += e.text + "\n";
+        REQUIRE(text.find("Aria is surprised and loses this turn.") != std::string::npos);
+        // Round 2: the goblin takes its turn again, then it's Aria's.
+        REQUIRE(encounter.current_index() == 0);
     }
     SECTION("inspiration gives advantage on an attack, once") {
         auto inspired = p.get(aria);

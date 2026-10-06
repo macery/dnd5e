@@ -35,6 +35,11 @@ bool between_scenes(const AdventureRun& run) {
 
 void record_fight(AdventureRun& run, const AdventureTemplate& adventure, bool victory) {
     if (run.status != AdventureStatus::InProgress) return;
+    // What earlier scenes did to this fight is used up.
+    run.skip_next_fight = false;
+    run.fewer_monsters = 0;
+    run.more_monsters = 0;
+    run.surprise = Surprise::None;
     if (!victory) {
         run.status = AdventureStatus::Defeated;
         return;
