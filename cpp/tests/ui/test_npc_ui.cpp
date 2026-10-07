@@ -110,16 +110,24 @@ TEST_CASE("combat: an NPC ally fights beside the party", "[ui][npcs][allies]") {
     fight.scene.monsters = {{"Goblin", 1}};
     fight.allies = dnd::next_fight_allies(world.repo, run, monsters);
     REQUIRE(fight.allies.size() == 1);
+    run.title = "Moonrise at Ashgrove";
+    run.foes = {"edric"};
+    fight.foes = dnd::next_fight_foes(world.repo, run, monsters);
+    REQUIRE(fight.foes.size() == 1);
     CombatEncounterDialog combat(world.repo, {world.get(aria.character_id)}, monsters, nullptr, &fight);
     combat.show();
     settle();
     REQUIRE(visibleText(combat).contains("Fighting beside you: Dagna Ironfoot"));
+    REQUIRE(visibleText(combat).contains("Against you: Edric Hask"));
     auto* table = combat.findChild<QTableWidget*>();
     bool listed = false;
+    bool foe = false;
     for (int row = 0; row < table->rowCount(); ++row) {
         listed = listed || table->item(row, 0)->text() == "Dagna Ironfoot (Veteran) — ally";
+        foe = foe || table->item(row, 0)->text() == "Edric Hask (Cult Fanatic)";
     }
     REQUIRE(listed);
+    REQUIRE(foe);
 }
 
 TEST_CASE("scene: with nothing left to ask, the party can still move on", "[ui][npcs][scenes]") {

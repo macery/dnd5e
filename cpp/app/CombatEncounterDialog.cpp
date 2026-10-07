@@ -73,6 +73,9 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
         QStringList allies;
         for (const auto& ally : fight->allies) allies << q(ally.npc.name).toHtmlEscaped();
         if (!allies.isEmpty()) objective += QString("<br><i>Fighting beside you: %1.</i>").arg(allies.join(", "));
+        QStringList foes;
+        for (const auto& foe : fight->foes) foes << q(foe.npc.name).toHtmlEscaped();
+        if (!foes.isEmpty()) objective += QString("<br><i>Against you: %1.</i>").arg(foes.join(", "));
         objectiveLabel_ = new QLabel(objective, this);
         objectiveLabel_->setWordWrap(true);
     }
@@ -382,6 +385,9 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
 
         for (const auto& ally : fight->allies) {
             encounter_.add_ally(ally.stat_block, ally.npc.name + " (" + ally.stat_block.name + ")", ally.npc.npc_id);
+        }
+        for (const auto& foe : fight->foes) {
+            encounter_.add_named_foe(foe.stat_block, foe.npc.name + " (" + foe.stat_block.name + ")", foe.npc.npc_id);
         }
 
         // Loot names an Item; skip any that don't match a seeded item.

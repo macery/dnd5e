@@ -142,6 +142,19 @@ std::vector<std::string> apply_outcome(Repository& repo, AdventureRun& run, cons
             lines.push_back(npc->name + " will fight beside the party in the next fight.");
         }
     }
+    if (!outcome.foe_joins.empty()) {
+        const std::string& key = outcome.foe_joins;
+        auto npc = find_run_npc(repo, run, key);
+        if (npc && !npc->dead && !npc->stat_block.empty()) {
+            if (npc->attitude != Attitude::Hostile) {
+                npc->attitude = Attitude::Hostile;
+                repo.update_npc(*npc);
+            }
+            if (std::find(run.foes.begin(), run.foes.end(), key) == run.foes.end()) run.foes.push_back(key);
+            run.allies.erase(std::remove(run.allies.begin(), run.allies.end(), key), run.allies.end());
+            lines.push_back(npc->name + " turns on the party, and will fight against it in the next fight.");
+        }
+    }
     if (outcome.skip_next_fight) run.skip_next_fight = true;
     run.fewer_monsters += outcome.fewer_monsters;
     run.more_monsters += outcome.more_monsters;
@@ -165,9 +178,9 @@ std::vector<std::string> social_approaches(const SceneOption& option) {
     return {"Persuasion", "Deception", "Intimidation"};
 }
 
-std::vector<FightAlly> next_fight_allies(Repository& repo, const AdventureRun& run,
+std::vector<FightNpc> next_fight_allies(Repository& repo, const AdventureRun& run,
                                          const std::vector<Monster>& monsters) {
-    std::vector<FightAlly> allies;
+    std::vector<FightNpc> allies;
     for (const auto& key : run.allies) {
         auto npc = find_run_npc(repo, run, key);
         if (!npc || npc->dead || npc->attitude == Attitude::Hostile) continue;
@@ -176,6 +189,19 @@ std::vector<FightAlly> next_fight_allies(Repository& repo, const AdventureRun& r
         if (block != monsters.end()) allies.push_back({*npc, *block});
     }
     return allies;
+}
+
+std::vector<FightNpc> next_fight_foes(Repository& repo, const AdventureRun& run,
+                                       const std::vector<Monster>& monsters) {
+    std::vector<FightNpc> foes;
+    for (const auto& key : run.foes) {
+        auto npc = find_run_npc(repo, run, key);
+        if (!npc || npc->dead) continue;
+        auto block = std::find_if(monsters.begin(), monsters.end(),
+                                  [&](const Monster& m) { return m.name == npc->stat_block; });
+        if (block != monsters.end()) foes.push_back({*npc, *block});
+    }
+    return foes;
 }
 
 void mark_npcs_dead(Repository& repo, int campaign_id, const std::vector<int>& npc_ids) {

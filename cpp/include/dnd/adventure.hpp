@@ -55,6 +55,9 @@ struct SceneOutcome {
     // An NPC (by key) who fights beside the party in the next fight, if
     // they're alive, not Hostile, and have a stat block.
     std::string ally_joins;
+    // An NPC (by key) who turns on the party: Hostile from now on, and among
+    // the monsters in the next fight, if they're alive and have a stat block.
+    std::string foe_joins;
 };
 
 // One way through a Challenge or Choice scene.

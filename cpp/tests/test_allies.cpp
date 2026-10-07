@@ -134,7 +134,7 @@ TEST_CASE("an ally fights the monsters, isn't a target for the party, and earns 
     REQUIRE(contains(lines, "Dagna Ironfoot (Veteran) attacks Goblin"));
     REQUIRE(encounter.status() == dnd::EncounterStatus::Victory);
     REQUIRE(encounter.character(1)->experience == 50);  // the goblin's XP, all Aria's
-    REQUIRE(encounter.fallen_allies().empty());
+    REQUIRE(encounter.fallen_npcs().empty());
 }
 
 TEST_CASE("a downed ally doesn't lose the fight, and dies if the party does", "[allies]") {
@@ -160,7 +160,7 @@ TEST_CASE("a downed ally doesn't lose the fight, and dies if the party does", "[
     lines = logs(encounter.take_events());
     REQUIRE(encounter.status() == dnd::EncounterStatus::Defeat);
     REQUIRE(contains(lines, "Snig (Goblin) is left behind, and dies."));
-    REQUIRE(encounter.fallen_allies() == std::vector<int>{3});
+    REQUIRE(encounter.fallen_npcs() == std::vector<int>{3});
 }
 
 TEST_CASE("the run remembers who fights beside the party next, until that fight", "[allies][adventure]") {
@@ -259,4 +259,93 @@ TEST_CASE("every NPC an adventure brings into a fight has a seeded stat block", 
         }
     }
     REQUIRE(joining >= 2);  // Snig and Dagna
+}
+
+TEST_CASE("a named foe is a monster in every way, and dies if it falls", "[allies][foes]") {
+    Fixture f;
+    ScriptedRandomSource rolls({20, 1, 20});  // Aria first; then she crits
+    dnd::Dice dice(rolls);
+    auto encounter = f.encounter(dice);
+    encounter.add_character(f.fighter(), {}, f.gear());
+    encounter.add_named_foe(f.monster("Goblin"), "Snig (Goblin)", 4);
+    const auto& snig = encounter.combatants()[1];
+    REQUIRE(snig.name == "Snig (Goblin)");
+    REQUIRE(snig.npc_id == 4);
+    REQUIRE_FALSE(dnd::party_side(snig));
+    REQUIRE(snig.xp == 50);
+
+    encounter.roll_initiative();
+    REQUIRE(encounter.attack_targets() == std::vector<int>{1});
+    REQUIRE(encounter.fallen_npcs().empty());  // only once the fight is over
+    REQUIRE(encounter.attack(1, 5, 1, 10, 3));
+    REQUIRE(encounter.status() == dnd::EncounterStatus::Victory);
+    REQUIRE(encounter.fallen_npcs() == std::vector<int>{4});
+    REQUIRE(encounter.character(1)->experience == 50);
+}
+
+TEST_CASE("outcomes turn NPCs against the party: Hostile, and in the next fight", "[allies][foes][scenes]") {
+    Fixture f;
+    int player = f.repo.add_player("Adam");
+    dnd::Character aria = f.fighter();
+    aria.player_id = player;
+    aria.race = f.repo.get_races().front().id;
+    aria.alignment = f.repo.get_alignments().front().id;
+    int aria_id = f.repo.add_character(aria);
+    ScriptedRandomSource rolls({10});
+    dnd::Dice dice(rolls);
+
+    dnd::AdventureRun run;
+    run.title = "Moonrise at Ashgrove";
+    run.party = {aria_id};
+    run.allies = {"edric"};  // even someone who'd have helped
+    dnd::SceneOutcome turns;
+    turns.foe_joins = "edric";
+    auto lines = dnd::apply_outcome(f.repo, run, turns, aria_id, dice);
+    REQUIRE(contains(lines, "Edric Hask turns on the party"));
+    REQUIRE(run.foes == std::vector<std::string>{"edric"});
+    REQUIRE(run.allies.empty());
+
+    auto edric = *dnd::find_run_npc(f.repo, run, "edric");
+    REQUIRE(edric.attitude == dnd::Attitude::Hostile);
+    auto foes = dnd::next_fight_foes(f.repo, run, f.repo.get_monsters());
+    REQUIRE(foes.size() == 1);
+    REQUIRE(foes.front().stat_block.name == "Cult Fanatic");
+
+    REQUIRE(dnd::format_next_fight(run) == "foes=edric;");
+    dnd::AdventureRun back;
+    dnd::parse_next_fight(back, "allies=dagna;foes=edric,snig;");
+    REQUIRE(back.allies == std::vector<std::string>{"dagna"});
+    REQUIRE(back.foes == std::vector<std::string>{"edric", "snig"});
+
+    dnd::mark_npcs_dead(f.repo, 0, {edric.npc_id});
+    REQUIRE(dnd::next_fight_foes(f.repo, run, f.repo.get_monsters()).empty());
+
+    const auto* ashgrove = dnd::find_adventure(run.title);
+    run.next_scene = 2;
+    dnd::record_fight(run, *ashgrove, true);
+    REQUIRE(run.foes.empty());  // used up
+}
+
+TEST_CASE("every NPC an adventure turns against the party has a seeded stat block", "[allies][foes][adventure]") {
+    dnd::Repository repo(":memory:");
+    auto monsters = repo.get_monsters();
+    int turning = 0;
+    for (const auto& adventure : dnd::adventure_templates()) {
+        auto check = [&](const dnd::SceneOutcome& outcome) {
+            if (outcome.foe_joins.empty()) return;
+            ++turning;
+            auto npc = std::find_if(adventure.npcs.begin(), adventure.npcs.end(),
+                                    [&](const dnd::Npc& n) { return n.key == outcome.foe_joins; });
+            REQUIRE(npc != adventure.npcs.end());
+            REQUIRE(std::any_of(monsters.begin(), monsters.end(),
+                                [&](const dnd::Monster& m) { return m.name == npc->stat_block; }));
+        };
+        for (const auto& scene : adventure.scenes) {
+            for (const auto& option : scene.options) {
+                check(option.success);
+                check(option.failure);
+            }
+        }
+    }
+    REQUIRE(turning >= 2);  // Snig and Edric
 }

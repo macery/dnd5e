@@ -35,7 +35,8 @@ struct AdventureFight {
     dnd::AdventureScene scene;
     std::string victory_text;
     dnd::Surprise surprise = dnd::Surprise::None;  // from an earlier scene (docs/scenes-and-npcs.md)
-    std::vector<dnd::FightAlly> allies;            // NPCs fighting beside the party
+    std::vector<dnd::FightNpc> allies;            // NPCs fighting beside the party
+    std::vector<dnd::FightNpc> foes;              // ...and NPCs who have turned on it
 };
 
 // The combat screen: a view over a dnd::Encounter, which holds all the rules
@@ -54,8 +55,8 @@ public:
 
     // How the fight ended: InProgress if the window was closed mid-fight.
     dnd::EncounterStatus outcome() const { return encounter_.status(); }
-    // NPC allies (ids) who died: left down when the fight was lost.
-    const std::vector<int>& fallenAllies() const { return encounter_.fallen_allies(); }
+    // NPCs (ids) who died in the fight: named foes killed, allies left down in a lost fight.
+    const std::vector<int>& fallenNpcs() const { return encounter_.fallen_npcs(); }
 
     // Closing (or Continue) hands out undivided loot as the panel shows it.
     void done(int result) override;

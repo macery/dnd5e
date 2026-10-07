@@ -104,7 +104,8 @@ struct Combatant {
     // gives no XP, takes no loot, and is down (not dying) at 0 HP; healing
     // brings it back up.
     bool ally = false;
-    int npc_id = 0;  // allies only
+    // The NPC this combatant is (an ally, or a named foe among the monsters); 0 for none.
+    int npc_id = 0;
     // Monsters only: STR..CHA, for saving throws. (Characters use their sheet.)
     std::array<int, 6> ability_scores{10, 10, 10, 10, 10, 10};
     // Monsters only: the stat block's attacks, creature type, and traits
@@ -220,8 +221,12 @@ public:
     // An NPC who fights for the party with `monster`'s stat block, named
     // "Dagna Ironfoot (Veteran)".
     void add_ally(const Monster& monster, const std::string& name, int npc_id);
-    // Allies still down when the fight was lost: left on the field, they die.
-    const std::vector<int>& fallen_allies() const { return fallen_allies_; }
+    // An NPC who has turned on the party, fighting among the monsters with
+    // `monster`'s stat block: a monster in every way (XP included), but named.
+    void add_named_foe(const Monster& monster, const std::string& name, int npc_id);
+    // The NPCs (ids) who died in this fight, once it's over: named foes at 0
+    // HP, and allies still down when the fight was lost.
+    const std::vector<int>& fallen_npcs() const { return fallen_npcs_; }
     // Shown after "Victory!" and handed out on victory, for adventures.
     // `coins_cp` is split evenly among the surviving characters (dnd/currency.hpp).
     // Items go to the only character standing at once; with more, they wait
@@ -589,7 +594,7 @@ private:
     TurnState turn_;
     EncounterStatus status_ = EncounterStatus::InProgress;
     std::string result_message_;
-    std::vector<int> fallen_allies_;  // npc ids (see fallen_allies())
+    std::vector<int> fallen_npcs_;  // npc ids (see fallen_npcs())
     std::string victory_text_;
     std::vector<LootGrant> loot_;
     std::vector<Spell> scroll_spells_;

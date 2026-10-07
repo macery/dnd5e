@@ -1,6 +1,6 @@
 # Scenes between fights, and NPCs
 
-Status: **phases 1 and 2 built, and phase 3's allies** (checks, Challenge/Trap/Choice scenes, surprise, inspiration; NPCs, Social scenes, the merchant and the priest; NPC allies in fights). Next: NPCs who turn hostile (the rest of phase 3). Every recommendation was taken on 2026-10-05.
+Status: **phases 1–3 built** (checks, Challenge/Trap/Choice scenes, surprise, inspiration; NPCs, Social scenes, the merchant and the priest; NPC allies and NPCs who turn on the party). Next: phase 4, an adventure built around scenes and NPCs. Every recommendation was taken on 2026-10-05.
 
 Phase 1 notes:
 - The code is `dnd/checks` (checks, group checks, passive scores) and `dnd/scenes` (outcomes, traps, shaping the next fight); scenes are in `src/adventure.cpp`.
@@ -26,6 +26,12 @@ Phase 3 notes (allies, 2026-10-07):
 - **Each fight starts allies fresh,** at full HP with nothing spent. Only attitude and life carry over.
 - **At 0 HP an ally is down,** not dying: out of the fight until healed. The fight is won or lost on the characters alone. **An ally still down when the fight is lost dies** (`Npcs.Dead`, migration 35). The dead don't fight or talk again, and the NPCs dialog has a Dead box.
 - **Content:** Snig joins the boss fight if he leads the party in by the back way; Dagna joins the Ogre Gate fight if asked to come up the road (Veteran).
+
+Phase 3 notes (NPCs who turn hostile, 2026-10-07):
+- **Turning:** an outcome's `foe_joins` makes an NPC Hostile (saved), and puts them among the monsters in the run's next fight (`AdventureRun::foes`). It only works if they're alive and have a stat block, and it takes them off the allies list.
+- **In the fight** (`Encounter::add_named_foe`): a monster in every way, so it gives XP and counts toward difficulty, but it's named ("Edric Hask (Cult Fanatic)"), and the fight header says "Against you". It's added after the fight is scaled, so it makes the fight harder: that's the cost of the failed scene.
+- **Killed is dead:** a named foe at 0 HP when the fight ends dies (`Encounter::fallen_npcs`, which also lists allies left down in a lost fight). A later meeting offers only Move on.
+- **Content:** if questioning Snig fails, he shrieks, gets free, and fights in the boss's den. In Ashgrove, if leaning on Wenna fails, her husband Edric Hask (a new NPC, Cult Fanatic) runs to warn the mill and fights there.
 
 Rules follow the 2014 PHB (ch. 7, ability checks) and DMG (ch. 8: ability checks, social interaction, traps).
 
@@ -112,7 +118,7 @@ NPCs appear in Social scenes, and can stand behind the Shop counter and the Temp
    - The NPC model and Social scenes with attitudes.
    - NPCs in the adventures, the Shop, and the Temple.
    - Building NPCs (question 5).
-3. **NPCs in fights** (question 6): allies who fight beside the party (built), and named NPCs who turn hostile.
+3. **NPCs in fights** (question 6): allies who fight beside the party, and named NPCs who turn hostile. Built.
 4. **A new adventure built around scenes and NPCs** (question 9).
 
 ## Open questions

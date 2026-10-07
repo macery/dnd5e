@@ -230,6 +230,12 @@ void Encounter::add_ally(const Monster& monster, const std::string& name, int np
     ally.xp = 0;  // they don't count toward the party's XP
 }
 
+void Encounter::add_named_foe(const Monster& monster, const std::string& name, int npc_id) {
+    add_monsters(monster, 1);
+    combatants_.back().name = name;
+    combatants_.back().npc_id = npc_id;
+}
+
 void Encounter::set_victory_reward(std::string victory_text, std::vector<LootGrant> loot, int coins_cp) {
     victory_text_ = std::move(victory_text);
     loot_ = std::move(loot);
@@ -1476,7 +1482,7 @@ void Encounter::check_for_victory_or_defeat() {
         log("--- " + result_message_ + " ---");
         for (const auto& combatant : combatants_) {  // allies left down on the field don't make it
             if (combatant.ally && combatant.current_hp <= 0) {
-                fallen_allies_.push_back(combatant.npc_id);
+                fallen_npcs_.push_back(combatant.npc_id);
                 log(combatant.name + " is left behind, and dies.");
             }
         }
@@ -1492,6 +1498,11 @@ void Encounter::check_for_victory_or_defeat() {
         award_coins();
     }
     if (status_ != EncounterStatus::InProgress) {
+        for (const auto& combatant : combatants_) {  // named foes die like any monster
+            if (combatant.npc_id != 0 && !combatant.ally && combatant.current_hp <= 0) {
+                fallen_npcs_.push_back(combatant.npc_id);
+            }
+        }
         for (int i = 0; i < static_cast<int>(combatants_.size()); ++i) {
             if (combatants_[static_cast<size_t>(i)].frenzied) settle_frenzy(i);  // the rage ends with the fight
             if (combatants_[static_cast<size_t>(i)].druid_form) log(revert_wild_shape(i, "the fight is over"));

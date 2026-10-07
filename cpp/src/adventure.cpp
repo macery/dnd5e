@@ -148,6 +148,12 @@ SceneOutcome joins(SceneOutcome outcome, std::string who) {
     return outcome;
 }
 
+// The outcome, and an NPC turning on the party: Hostile, and among the monsters next fight.
+SceneOutcome turns(SceneOutcome outcome, std::string who) {
+    outcome.foe_joins = std::move(who);
+    return outcome;
+}
+
 SceneOutcome inspires(SceneOutcome outcome) {
     outcome.inspiration = true;
     return outcome;
@@ -299,7 +305,9 @@ const std::vector<AdventureTemplate>& adventure_templates() {
                        "snig",
                        {ask("Get it to say where the boss's guards sleep", SocialRequest::NoRisk,
                             fewer("Snig babbles where the guards sleep. One won't be waking up.", 1),
-                            more("Snig shrieks for help before you can stop it.", 1)),
+                            turns(says("Snig shrieks for help, wriggles out of its belt, and bolts for the boss's "
+                                       "den."),
+                                  "snig")),
                         ask("Get it to lead you in by the back way", SocialRequest::MinorRisk,
                             joins(sways(surprises("Snig leads you through a crawlway into the den, grinning, and "
                                                   "draws a rusty knife. The boss never sees you coming."),
@@ -465,7 +473,9 @@ const std::vector<AdventureTemplate>& adventure_templates() {
                             {"Persuasion", "Deception"}),
                         ask("Lean on her until she talks", SocialRequest::MinorRisk,
                             sways(surprises("She breaks: the old mill, at moonrise. She won't forgive you."), -1),
-                            more("She screams for her husband, and someone runs to warn the mill.", 1),
+                            turns(says("She screams for her husband. Edric comes out of the back with a ritual "
+                                       "knife, and runs for the mill to warn the others."),
+                                  "edric"),
                             {"Intimidation"})},
                        14),
                 scene("The Old Mill", "The mill wheel creaks. Two shapes on the millrace are not wolves, and not men.",
@@ -479,7 +489,10 @@ const std::vector<AdventureTemplate>& adventure_templates() {
             },
             {person("wenna", "Wenna Hask", "the miller's wife", Attitude::Indifferent,
                     "A tired woman with flour to her elbows, who keeps her back to you while she works.",
-                    "her husband out of the cult before the moon takes him too", "the cult's high priest")},
+                    "her husband out of the cult before the moon takes him too", "the cult's high priest"),
+             person("edric", "Edric Hask", "the miller, and a cultist", Attitude::Indifferent,
+                    "A big, quiet man with a moon scratched into the back of his hand.",
+                    "the moon's gift, whatever it costs", "his wife learning what he's done", "Cult Fanatic")},
         },
         {
             "The White Wyrm's Lair",
