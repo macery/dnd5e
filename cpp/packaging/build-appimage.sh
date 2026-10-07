@@ -27,7 +27,7 @@ export DEBIAN_FRONTEND=noninteractive
 $sudo_cmd apt-get update
 $sudo_cmd apt-get install -y --no-install-recommends \
     build-essential cmake git ca-certificates wget file \
-    libsqlite3-dev qt6-base-dev qt6-qpa-plugins libgl-dev
+    libsqlite3-dev qt6-base-dev qt6-qpa-plugins qt6-wayland libgl-dev
 
 # Separate build dir so this never clobbers a host build in cpp/build.
 cmake -S "$repo_root/cpp" -B "$work/build" -DCMAKE_BUILD_TYPE=Release
@@ -48,6 +48,12 @@ done
 export APPIMAGE_EXTRACT_AND_RUN=1
 export QMAKE=/usr/lib/qt6/bin/qmake
 export LDAI_OUTPUT="$out/DnD_Engine-x86_64.AppImage"
+# Both display backends: Qt picks native Wayland on a Wayland session and X11
+# (xcb, always bundled) everywhere else, or when Wayland can't start.
+# QT_QPA_PLATFORM=xcb forces X11. "waylandcompositor" brings the client-side
+# shell, decoration, and graphics plugins the Wayland platform plugin needs.
+export EXTRA_PLATFORM_PLUGINS="libqwayland-generic.so;libqwayland-egl.so"
+export EXTRA_QT_MODULES="waylandcompositor"
 
 rm -rf "$work/AppDir"
 ./linuxdeploy-x86_64.AppImage \
