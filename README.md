@@ -370,6 +370,7 @@ Phases 1 (core and data) and 2 (UI) are done; see [docs/magic-system.md](docs/ma
 - [x] **Multi-encounter adventures** ([docs/adventures-and-currency.md](docs/adventures-and-currency.md)): adventures made of scenes, party choice, short and long rests between fights (long rests at camps), retreat, progress saved between fights (Resume), and three multi-fight adventures.
 - [x] **Scenes and NPCs** ([docs/scenes-and-npcs.md](docs/scenes-and-npcs.md)): challenges, traps, choices, and conversations between fights; NPCs with attitudes, per campaign; a merchant to haggle with and a priest.
 - [ ] **NPCs in fights** (phase 3): allies who fight beside the party, and named NPCs who turn hostile.
+- [ ] **AI combat tactics** ([docs/ai-tactics.md](docs/ai-tactics.md)): a local language model picks smart monsters' tactics from the legal options. Shelved: the small model on the home server was too slow (5–11 s a turn) and chose poorly.
 - [x] **Encounter difficulty**:
   - Fights are rated Trivial, Easy, Medium, Hard, or Deadly with the 2014 encounter-building rules: XP thresholds by level, plus a multiplier for the number of monsters.
   - Combat Encounter shows the rating live.
