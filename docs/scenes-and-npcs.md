@@ -1,6 +1,6 @@
 # Scenes between fights, and NPCs
 
-Status: **phases 1 and 2 built** (checks, Challenge/Trap/Choice scenes, surprise, inspiration; NPCs, Social scenes, the merchant and the priest); phase 3 next. Every recommendation was taken on 2026-10-05.
+Status: **phases 1 and 2 built, and phase 3's allies** (checks, Challenge/Trap/Choice scenes, surprise, inspiration; NPCs, Social scenes, the merchant and the priest; NPC allies in fights). Next: NPCs who turn hostile (the rest of phase 3). Every recommendation was taken on 2026-10-05.
 
 Phase 1 notes:
 - The code is `dnd/checks` (checks, group checks, passive scores) and `dnd/scenes` (outcomes, traps, shaping the next fight); scenes are in `src/adventure.cpp`.
@@ -17,6 +17,15 @@ Phase 2 notes:
 - **Content:** the Goblin Warren's captive is now a conversation (Snig). Crypt of the Restless opens with the gravedigger (Old Tobin), who can make the priest Friendly. The Hill Giant's Toll meets a caravan master (Dagna Ironfoot), who can make the merchant Friendly. In Moonrise at Ashgrove, the questioning is a conversation with the miller's wife (Wenna Hask).
 - **The NPCs… dialog** (main window, next to Campaigns…) lists the active campaign's NPCs: name, role, attitude, description, wants, fears, whether the party knows them, and a stat block from the monster list (used in phase 3). The merchant and the priest can be renamed but not deleted.
 - Haggling isn't exported with a character.
+- When an NPC is dead, or too hostile for anything the scene asks, the scene adds **Move on**, so the party is never stuck.
+
+Phase 3 notes (allies, 2026-10-07):
+- **Joining:** an outcome's `ally_joins` names an NPC who fights beside the party in the run's next fight (`AdventureRun::allies`, saved in `NextFight`). It only works if the NPC is alive, not Hostile, and has a stat block. Like the other next-fight effects, it's used up when that fight is won or lost, or skipped.
+- **In the fight** (`Encounter::add_ally`): the stat block, named "Dagna Ironfoot (Veteran)" and marked "ally" in the table. The monster AI runs its turns against the monsters, and monsters attack allies as well as characters. Characters can't target allies, but heal, buff, Lay on Hands, and Preserve Life reach them. `party_side()` is the one test for which side a combatant is on.
+- **No XP and no loot:** allies don't count toward the fight's difficulty or the XP.
+- **Each fight starts allies fresh,** at full HP with nothing spent. Only attitude and life carry over.
+- **At 0 HP an ally is down,** not dying: out of the fight until healed. The fight is won or lost on the characters alone. **An ally still down when the fight is lost dies** (`Npcs.Dead`, migration 35). The dead don't fight or talk again, and the NPCs dialog has a Dead box.
+- **Content:** Snig joins the boss fight if he leads the party in by the back way; Dagna joins the Ogre Gate fight if asked to come up the road (Veteran).
 
 Rules follow the 2014 PHB (ch. 7, ability checks) and DMG (ch. 8: ability checks, social interaction, traps).
 
@@ -103,7 +112,7 @@ NPCs appear in Social scenes, and can stand behind the Shop counter and the Temp
    - The NPC model and Social scenes with attitudes.
    - NPCs in the adventures, the Shop, and the Temple.
    - Building NPCs (question 5).
-3. **NPCs in fights** (question 6): allies who fight beside the party, and named NPCs who turn hostile.
+3. **NPCs in fights** (question 6): allies who fight beside the party (built), and named NPCs who turn hostile.
 4. **A new adventure built around scenes and NPCs** (question 9).
 
 ## Open questions

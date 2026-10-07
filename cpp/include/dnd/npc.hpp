@@ -35,9 +35,11 @@ struct Npc {
     std::string wants;
     std::string fears;
     bool known = false;
-    // A Monster name for their combat stats ("Veteran", "Mage"), or "".
-    // NPCs join fights in phase 3.
+    // A Monster name for their combat stats ("Veteran", "Mage"), or "":
+    // what they fight with as the party's ally.
     std::string stat_block;
+    // Killed (an ally left down in a lost fight): they don't come back.
+    bool dead = false;
 };
 
 // What the party asks of an NPC, from least to most (DMG ch. 8, the

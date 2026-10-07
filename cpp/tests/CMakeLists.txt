@@ -26,6 +26,7 @@ add_executable(dnd_tests
     test_monster_abilities.cpp
     test_scenes.cpp
     test_npcs.cpp
+    test_allies.cpp
     test_damage.cpp
     test_dice.cpp
     test_effects.cpp

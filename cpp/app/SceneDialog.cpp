@@ -1,5 +1,7 @@
 #include "SceneDialog.hpp"
 
+#include <algorithm>
+
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDialogButtonBox>
@@ -96,9 +98,17 @@ SceneDialog::SceneDialog(dnd::Repository& repository, dnd::AdventureRun& run, co
     } else {
         for (const dnd::SceneOption* option : dnd::available_options(scene_, run_)) options_.push_back(*option);
     }
+    // Someone dead, or too hostile for anything the scene asks: the party can still move on.
+    if (npc_ && std::none_of(options_.begin(), options_.end(), [this](const dnd::SceneOption& option) {
+            return !option.social || (!npc_->dead && dnd::conversation_dc(*npc_, option.request).has_value());
+        })) {
+        dnd::SceneOption onward;
+        onward.label = "Move on";
+        onward.success.text = npc_->dead ? "There's no one left here to talk to." : "There's nothing more to say.";
+        options_.push_back(onward);
+    }
     refreshNpc();
-    fillOptions();
-    if (optionList_->count() > 0) optionList_->setCurrentRow(0);
+    fillOptions();  // selects the first option that can be tried
     refreshOption();
 }
 
@@ -107,7 +117,7 @@ void SceneDialog::refreshNpc() {
     const dnd::Npc& npc = *npc_;
     QString text = QString("<b>%1</b>, %2 — <i>%3</i>.<br>%4")
                        .arg(q(npc.name).toHtmlEscaped(), q(npc.role).toHtmlEscaped(),
-                            dnd::attitude_name(npc.attitude), q(npc.description).toHtmlEscaped());
+                            npc.dead ? "dead" : dnd::attitude_name(npc.attitude), q(npc.description).toHtmlEscaped());
     if (npc.known) {
         text += QString("<br><b>Wants:</b> %1. <b>Fears:</b> %2. (DCs are %3 lower.)")
                     .arg(q(npc.wants).toHtmlEscaped(), q(npc.fears).toHtmlEscaped())
@@ -117,7 +127,7 @@ void SceneDialog::refreshNpc() {
     }
     npcLabel_->setText(text);
     readButton_->setText(QString("Read them (Insight, DC %1)").arg(scene_.insight_dc));
-    readButton_->setVisible(!npc.known);
+    readButton_->setVisible(!npc.known && !npc.dead);
     readButton_->setEnabled(!readTried_ && !done_);
 }
 
@@ -130,9 +140,11 @@ void SceneDialog::fillOptions() {
         bool possible = true;
         if (option.social && npc_) {
             auto dc = dnd::conversation_dc(*npc_, option.request);
-            possible = dc.has_value();
+            possible = dc.has_value() && !npc_->dead;
             QString ask = dnd::social_request_text(option.request);
-            if (!dc) {
+            if (npc_->dead) {
+                label += QString(" — %1 is dead").arg(q(npc_->name));
+            } else if (!dc) {
                 label += QString(" — %1: not while they're %2").arg(ask, dnd::attitude_name(npc_->attitude));
             } else if (*dc == 0) {
                 label += QString(" — %1: no check needed").arg(ask);
@@ -196,7 +208,7 @@ SceneDialog::Ask SceneDialog::currentAsk() const {
     ask.valid = true;
     if (option.social && npc_) {
         auto dc = dnd::conversation_dc(*npc_, option.request);
-        ask.possible = dc.has_value();
+        ask.possible = dc.has_value() && !npc_->dead;
         if (dc && *dc > 0) {
             ask.check = approachCombo_->currentText().toStdString();
             ask.dc = *dc;
@@ -229,7 +241,7 @@ void SceneDialog::refreshRoller() {
     Ask ask = currentAsk();
     bool rolls = ask.valid && ask.possible && !ask.check.empty();
     // Reading the NPC rolls Insight, so the list shows it until a request is picked.
-    std::string shown = rolls ? ask.check : (npc_ && !npc_->known && !readTried_ ? "Insight" : "");
+    std::string shown = rolls ? ask.check : (npc_ && !npc_->known && !npc_->dead && !readTried_ ? "Insight" : "");
 
     int keepRoller = rollerCombo_->currentData().toInt();
     rollerCombo_->blockSignals(true);

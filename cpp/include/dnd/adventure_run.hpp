@@ -33,9 +33,10 @@ struct AdventureRun {
     int fewer_monsters = 0;
     int more_monsters = 0;
     Surprise surprise = Surprise::None;
+    std::vector<std::string> allies;  // NPC keys who fight beside the party next time
 };
 
-// "skip;fewer=1;more=0;surprise=PartySurprises" and back, for the database.
+// "skip;fewer=1;surprise=party;allies=snig,dagna;" and back, for the database.
 std::string format_next_fight(const AdventureRun& run);
 void parse_next_fight(AdventureRun& run, const std::string& text);
 
@@ -50,7 +51,7 @@ void record_scene(AdventureRun& run, const AdventureTemplate& adventure);
 
 // After a fight: a victory moves on to the next scene (Finished after the
 // last one); a defeat ends the run. Either way, what earlier scenes did to
-// the fight (skip, fewer/more monsters, surprise) is used up. Anything else (the fight left
+// the fight (skip, fewer/more monsters, surprise, allies) is used up. Anything else (the fight left
 // unfinished) changes nothing, so the scene is fought again on resume.
 void record_fight(AdventureRun& run, const AdventureTemplate& adventure, bool victory);
 

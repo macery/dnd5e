@@ -891,14 +891,15 @@ void bind_npc(Statement& stmt, const Npc& npc) {
     bind_text(stmt, 8, npc.fears);
     sqlite3_bind_int(stmt.get(), 9, npc.known ? 1 : 0);
     bind_text(stmt, 10, npc.stat_block);
+    sqlite3_bind_int(stmt.get(), 11, npc.dead ? 1 : 0);
 }
 
 }  // namespace
 
 int Repository::add_npc(const Npc& npc) {
     Statement stmt(db_,
-        "INSERT INTO Npcs (CampaignID, NpcKey, Name, Role, Attitude, Description, Wants, Fears, Known, StatBlock) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);");
+        "INSERT INTO Npcs (CampaignID, NpcKey, Name, Role, Attitude, Description, Wants, Fears, Known, StatBlock, "
+        "Dead) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);");
     bind_npc(stmt, npc);
     detail::run_and_expect_done(stmt, "insert NPC");
     return static_cast<int>(sqlite3_last_insert_rowid(db_));
@@ -907,9 +908,9 @@ int Repository::add_npc(const Npc& npc) {
 void Repository::update_npc(const Npc& npc) {
     Statement stmt(db_,
         "UPDATE Npcs SET CampaignID = ?, NpcKey = ?, Name = ?, Role = ?, Attitude = ?, Description = ?, Wants = ?, "
-        "Fears = ?, Known = ?, StatBlock = ? WHERE NpcID = ?;");
+        "Fears = ?, Known = ?, StatBlock = ?, Dead = ? WHERE NpcID = ?;");
     bind_npc(stmt, npc);
-    sqlite3_bind_int(stmt.get(), 11, npc.npc_id);
+    sqlite3_bind_int(stmt.get(), 12, npc.npc_id);
     detail::run_and_expect_done(stmt, "update NPC");
 }
 
@@ -921,8 +922,8 @@ void Repository::delete_npc(int npc_id) {
 
 std::vector<Npc> Repository::get_npcs(int campaign_id) const {
     Statement stmt(db_,
-        "SELECT NpcID, CampaignID, NpcKey, Name, Role, Attitude, Description, Wants, Fears, Known, StatBlock "
-        "FROM Npcs WHERE CampaignID = ? ORDER BY Name;");
+        "SELECT NpcID, CampaignID, NpcKey, Name, Role, Attitude, Description, Wants, Fears, Known, StatBlock, "
+        "Dead FROM Npcs WHERE CampaignID = ? ORDER BY Name;");
     sqlite3_bind_int(stmt.get(), 1, campaign_id);
     std::vector<Npc> npcs;
     while (sqlite3_step(stmt.get()) == SQLITE_ROW) {
@@ -938,6 +939,7 @@ std::vector<Npc> Repository::get_npcs(int campaign_id) const {
         npc.fears = column_text(stmt.get(), 8);
         npc.known = sqlite3_column_int(stmt.get(), 9) != 0;
         npc.stat_block = column_text(stmt.get(), 10);
+        npc.dead = sqlite3_column_int(stmt.get(), 11) != 0;
         npcs.push_back(std::move(npc));
     }
     return npcs;

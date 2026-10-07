@@ -134,6 +134,14 @@ std::vector<std::string> apply_outcome(Repository& repo, AdventureRun& run, cons
             }
         }
     }
+    if (!outcome.ally_joins.empty()) {
+        const std::string& key = outcome.ally_joins;
+        auto npc = find_run_npc(repo, run, key);
+        if (npc && !npc->dead && npc->attitude != Attitude::Hostile && !npc->stat_block.empty()) {
+            if (std::find(run.allies.begin(), run.allies.end(), key) == run.allies.end()) run.allies.push_back(key);
+            lines.push_back(npc->name + " will fight beside the party in the next fight.");
+        }
+    }
     if (outcome.skip_next_fight) run.skip_next_fight = true;
     run.fewer_monsters += outcome.fewer_monsters;
     run.more_monsters += outcome.more_monsters;
@@ -155,6 +163,28 @@ std::optional<Npc> find_run_npc(Repository& repo, const AdventureRun& run, const
 std::vector<std::string> social_approaches(const SceneOption& option) {
     if (!option.approaches.empty()) return option.approaches;
     return {"Persuasion", "Deception", "Intimidation"};
+}
+
+std::vector<FightAlly> next_fight_allies(Repository& repo, const AdventureRun& run,
+                                         const std::vector<Monster>& monsters) {
+    std::vector<FightAlly> allies;
+    for (const auto& key : run.allies) {
+        auto npc = find_run_npc(repo, run, key);
+        if (!npc || npc->dead || npc->attitude == Attitude::Hostile) continue;
+        auto block = std::find_if(monsters.begin(), monsters.end(),
+                                  [&](const Monster& m) { return m.name == npc->stat_block; });
+        if (block != monsters.end()) allies.push_back({*npc, *block});
+    }
+    return allies;
+}
+
+void mark_npcs_dead(Repository& repo, int campaign_id, const std::vector<int>& npc_ids) {
+    for (auto npc : repo.get_npcs(campaign_id)) {
+        if (std::find(npc_ids.begin(), npc_ids.end(), npc.npc_id) != npc_ids.end() && !npc.dead) {
+            npc.dead = true;
+            repo.update_npc(npc);
+        }
+    }
 }
 
 CheckResult read_npc(Repository& repo, Npc& npc, const CheckRoller& roller, int dc, const Dice& dice, bool helped,

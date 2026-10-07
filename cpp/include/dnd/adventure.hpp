@@ -52,6 +52,9 @@ struct SceneOutcome {
     // and the Temple's), or "" for the scene's own NPC.
     int attitude_change = 0;
     std::string attitude_npc;
+    // An NPC (by key) who fights beside the party in the next fight, if
+    // they're alive, not Hostile, and have a stat block.
+    std::string ally_joins;
 };
 
 // One way through a Challenge or Choice scene.

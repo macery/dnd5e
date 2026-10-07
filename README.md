@@ -86,6 +86,7 @@ It manages players and characters, computes a full character sheet from the 5e r
   - An Insight check reveals what they want and fear, which makes every request easier.
   - NPCs belong to the campaign and remember how the party treated them. That includes the Shop's merchant and the Temple's priest.
   - **NPCs…** edits the campaign's NPCs.
+  - **Allies:** some scenes bring an NPC into the next fight. They fight with their stat block, run by the AI, and can be healed. An ally left down in a lost fight dies.
 - **Export, import, and backup** ([docs/save-load.md](docs/save-load.md)):
   - **Export…** saves a player's characters, or just one, to a readable `.dnd5e.json` file: stats, XP, proficiencies, spent resources, inventory, and spells, all by name.
   - **Import…** previews the file before anything changes: which player the characters go to, a choice for any name clash (import as a copy, replace, or skip), and anything this version doesn't have.
@@ -369,7 +370,8 @@ Phases 1 (core and data) and 2 (UI) are done; see [docs/magic-system.md](docs/ma
 - [ ] **Monster editor**: add and edit custom monsters in the UI.
 - [x] **Multi-encounter adventures** ([docs/adventures-and-currency.md](docs/adventures-and-currency.md)): adventures made of scenes, party choice, short and long rests between fights (long rests at camps), retreat, progress saved between fights (Resume), and three multi-fight adventures.
 - [x] **Scenes and NPCs** ([docs/scenes-and-npcs.md](docs/scenes-and-npcs.md)): challenges, traps, choices, and conversations between fights; NPCs with attitudes, per campaign; a merchant to haggle with and a priest.
-- [ ] **NPCs in fights** (phase 3): allies who fight beside the party, and named NPCs who turn hostile.
+- [x] **NPC allies in fights** (phase 3): NPCs who fight beside the party.
+- [ ] **NPCs who turn hostile** (phase 3): named NPCs who join the monsters.
 - [ ] **AI combat tactics** ([docs/ai-tactics.md](docs/ai-tactics.md)): a local language model picks smart monsters' tactics from the legal options. Shelved: the small model on the home server was too slow (5–11 s a turn) and chose poorly.
 - [x] **Encounter difficulty**:
   - Fights are rated Trivial, Easy, Medium, Hard, or Deadly with the 2014 encounter-building rules: XP thresholds by level, plus a multiplier for the number of monsters.

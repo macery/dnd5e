@@ -40,6 +40,7 @@ void record_fight(AdventureRun& run, const AdventureTemplate& adventure, bool vi
     run.fewer_monsters = 0;
     run.more_monsters = 0;
     run.surprise = Surprise::None;
+    run.allies.clear();
     if (!victory) {
         run.status = AdventureStatus::Defeated;
         return;
@@ -63,6 +64,11 @@ std::string format_next_fight(const AdventureRun& run) {
     if (run.more_monsters) text += "more=" + std::to_string(run.more_monsters) + ";";
     if (run.surprise == Surprise::PartySurprises) text += "surprise=party;";
     if (run.surprise == Surprise::PartySurprised) text += "surprise=monsters;";
+    if (!run.allies.empty()) {
+        text += "allies=";
+        for (size_t i = 0; i < run.allies.size(); ++i) text += (i ? "," : "") + run.allies[i];
+        text += ";";
+    }
     return text;
 }
 
@@ -77,6 +83,18 @@ void parse_next_fight(AdventureRun& run, const std::string& text) {
     run.surprise = text.find("surprise=party;") != std::string::npos      ? Surprise::PartySurprises
                    : text.find("surprise=monsters;") != std::string::npos ? Surprise::PartySurprised
                                                                           : Surprise::None;
+    run.allies.clear();
+    if (size_t at = text.find("allies="); at != std::string::npos) {
+        std::string list = text.substr(at + 7, text.find(';', at) - at - 7);
+        size_t start = 0;
+        while (start <= list.size()) {
+            size_t comma = list.find(',', start);
+            std::string key = list.substr(start, comma == std::string::npos ? std::string::npos : comma - start);
+            if (!key.empty()) run.allies.push_back(key);
+            if (comma == std::string::npos) break;
+            start = comma + 1;
+        }
+    }
 }
 
 bool can_long_rest(const AdventureRun& run, const AdventureTemplate& adventure) {

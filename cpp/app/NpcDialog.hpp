@@ -43,6 +43,7 @@ private:
     QLineEdit* wantsEdit_ = nullptr;
     QLineEdit* fearsEdit_ = nullptr;
     QCheckBox* knownBox_ = nullptr;
+    QCheckBox* deadBox_ = nullptr;
     QComboBox* statBlockCombo_ = nullptr;
     QPushButton* saveButton_ = nullptr;
     QPushButton* deleteButton_ = nullptr;

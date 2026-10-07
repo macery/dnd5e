@@ -142,6 +142,12 @@ SceneOutcome sways(SceneOutcome outcome, int steps, std::string who = "") {
     return outcome;
 }
 
+// The outcome, and an NPC fighting beside the party in the next fight.
+SceneOutcome joins(SceneOutcome outcome, std::string who) {
+    outcome.ally_joins = std::move(who);
+    return outcome;
+}
+
 SceneOutcome inspires(SceneOutcome outcome) {
     outcome.inspiration = true;
     return outcome;
@@ -295,9 +301,10 @@ const std::vector<AdventureTemplate>& adventure_templates() {
                             fewer("Snig babbles where the guards sleep. One won't be waking up.", 1),
                             more("Snig shrieks for help before you can stop it.", 1)),
                         ask("Get it to lead you in by the back way", SocialRequest::MinorRisk,
-                            sways(inspires(surprises("Snig leads you through a crawlway into the den, grinning. "
-                                                     "The boss never sees you coming.")),
-                                  1),
+                            joins(sways(surprises("Snig leads you through a crawlway into the den, grinning, and "
+                                                  "draws a rusty knife. The boss never sees you coming."),
+                                        1),
+                                  "snig"),
                             says("Snig just glares at you.")),
                         pick("Leave it tied up", says("You leave it for the farmers to deal with."))},
                        10),
@@ -374,10 +381,11 @@ const std::vector<AdventureTemplate>& adventure_templates() {
                                 return given;
                             }(),
                             says("She shakes her head.")),
-                        ask("Ask her to send her guards up the road with you", SocialRequest::SignificantRisk,
-                            fewer("Two of her guards march with you. At the gate, they hold off an ogre between them.",
-                                  1),
-                            says("\"They're all I've got left.\"")),
+                        ask("Ask her to come up the road with you", SocialRequest::SignificantRisk,
+                            joins(says("Dagna shoulders her axe. \"Lead on. That gate's been in my way long "
+                                       "enough.\""),
+                                  "dagna"),
+                            says("\"My wagons won't guard themselves.\"")),
                         pick("Promise to clear the road for her",
                              sways(says("\"Do that, and every merchant in the valley will hear of it.\""), 1,
                                    "merchant"))},

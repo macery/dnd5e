@@ -68,9 +68,12 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
     statusLabel_->setStyleSheet("font-weight: bold;");
 
     if (fight) {
-        objectiveLabel_ = new QLabel(QString("<b>%1.</b> %2").arg(q(fight->scene.title).toHtmlEscaped(),
-                                                                   q(fight->scene.narration).toHtmlEscaped()),
-                                     this);
+        QString objective = QString("<b>%1.</b> %2").arg(q(fight->scene.title).toHtmlEscaped(),
+                                                         q(fight->scene.narration).toHtmlEscaped());
+        QStringList allies;
+        for (const auto& ally : fight->allies) allies << q(ally.npc.name).toHtmlEscaped();
+        if (!allies.isEmpty()) objective += QString("<br><i>Fighting beside you: %1.</i>").arg(allies.join(", "));
+        objectiveLabel_ = new QLabel(objective, this);
         objectiveLabel_->setWordWrap(true);
     }
 
@@ -377,6 +380,10 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
             }
         }
 
+        for (const auto& ally : fight->allies) {
+            encounter_.add_ally(ally.stat_block, ally.npc.name + " (" + ally.stat_block.name + ")", ally.npc.npc_id);
+        }
+
         // Loot names an Item; skip any that don't match a seeded item.
         std::vector<dnd::LootGrant> loot;
         auto items = repository_.get_items();
@@ -534,7 +541,7 @@ void CombatEncounterDialog::refreshState() {
     refreshParticipantTable();
     auto rating = encounter_.difficulty();
     bool anyMonster = std::any_of(encounter_.combatants().begin(), encounter_.combatants().end(),
-                                  [](const dnd::Combatant& c) { return !c.is_character; });
+                                  [](const dnd::Combatant& c) { return !dnd::party_side(c); });
     difficultyLabel_->setText(anyMonster ? "Difficulty: " + q(rating.text()) : QString("Add monsters to fight."));
     // Color by palette, and only when the rating changes: re-applying a style
     // sheet on every refresh re-polishes the label, which crashed Qt 6.4.
@@ -934,9 +941,14 @@ void CombatEncounterDialog::refreshParticipantTable() {
     participantTable_->setRowCount(static_cast<int>(order.size()));
     for (int row = 0; row < static_cast<int>(order.size()); ++row) {
         const auto& combatant = combatants[order[static_cast<size_t>(row)]];
-        participantTable_->setItem(row, 0, new QTableWidgetItem(
+        auto* name = new QTableWidgetItem(
             combatant.druid_form ? QString("%1 (%2)").arg(q(combatant.name), q(combatant.druid_form->beast))
-                                 : q(combatant.name)));
+                                 : q(combatant.name));
+        if (combatant.ally) {
+            name->setText(name->text() + " — ally");
+            name->setToolTip("Fights on your side, run by the monster AI.");
+        }
+        participantTable_->setItem(row, 0, name);
         participantTable_->setItem(row, 1, new QTableWidgetItem(QString::number(combatant.initiative)));
         participantTable_->setItem(row, 2, new QTableWidgetItem(QString::number(combatant.armor_class)));
         participantTable_->setItem(

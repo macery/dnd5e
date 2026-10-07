@@ -18,7 +18,7 @@ using detail::Statement;
 // for future schema changes -- never edit an existing one, since a
 // migration's sql is exactly what already ran on every database that has it
 // recorded in SchemaMigrations.
-constexpr std::array<Migration, 34> kMigrations = {{
+constexpr std::array<Migration, 35> kMigrations = {{
     {1, "initial schema: Players, Classes, Characters", R"sql(
         CREATE TABLE IF NOT EXISTS Players (
             PlayerID INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1168,6 +1168,10 @@ constexpr std::array<Migration, 34> kMigrations = {{
             StatBlock   TEXT NOT NULL DEFAULT ''
         );
         ALTER TABLE Characters ADD COLUMN Haggle INTEGER NOT NULL DEFAULT 0;
+    )sql"},
+    // NPCs in fights (docs/scenes-and-npcs.md, phase 3): an ally can die.
+    {35, "add Npcs.Dead", R"sql(
+        ALTER TABLE Npcs ADD COLUMN Dead INTEGER NOT NULL DEFAULT 0;
     )sql"},
 }};
 

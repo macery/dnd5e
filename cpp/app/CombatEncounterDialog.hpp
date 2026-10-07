@@ -10,6 +10,7 @@
 #include "dnd/lookup_entry.hpp"
 #include "dnd/monster.hpp"
 #include "dnd/repository.hpp"
+#include "dnd/scenes.hpp"
 #include "dnd/spell.hpp"
 
 class QCheckBox;
@@ -34,6 +35,7 @@ struct AdventureFight {
     dnd::AdventureScene scene;
     std::string victory_text;
     dnd::Surprise surprise = dnd::Surprise::None;  // from an earlier scene (docs/scenes-and-npcs.md)
+    std::vector<dnd::FightAlly> allies;            // NPCs fighting beside the party
 };
 
 // The combat screen: a view over a dnd::Encounter, which holds all the rules
@@ -52,6 +54,8 @@ public:
 
     // How the fight ended: InProgress if the window was closed mid-fight.
     dnd::EncounterStatus outcome() const { return encounter_.status(); }
+    // NPC allies (ids) who died: left down when the fight was lost.
+    const std::vector<int>& fallenAllies() const { return encounter_.fallen_allies(); }
 
     // Closing (or Continue) hands out undivided loot as the panel shows it.
     void done(int result) override;

@@ -43,6 +43,19 @@ std::optional<Npc> find_run_npc(Repository& repo, const AdventureRun& run, const
 // Persuasion, Deception, and Intimidation.
 std::vector<std::string> social_approaches(const SceneOption& option);
 
+// The NPCs who fight beside the party in the run's next fight: those an
+// earlier outcome brought along who are alive, not Hostile, and have a stat
+// block among `monsters`. Each comes with that stat block.
+struct FightAlly {
+    Npc npc;
+    Monster stat_block;
+};
+std::vector<FightAlly> next_fight_allies(Repository& repo, const AdventureRun& run,
+                                         const std::vector<Monster>& monsters);
+
+// Marks the NPCs (by id) as dead, in whatever campaign they're in.
+void mark_npcs_dead(Repository& repo, int campaign_id, const std::vector<int>& npc_ids);
+
 // Reading an NPC (Insight, DMG ch. 8): on a success the party learns what
 // they want and fear, which lowers later DCs with them (saved).
 CheckResult read_npc(Repository& repo, Npc& npc, const CheckRoller& roller, int dc, const Dice& dice,

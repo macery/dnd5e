@@ -69,8 +69,10 @@ NpcDialog::NpcDialog(dnd::Repository& repository, QWidget* parent)
     for (const auto& monster : repository_.get_monsters()) {
         statBlockCombo_->addItem(q(monster.name), q(monster.name));
     }
-    statBlockCombo_->setToolTip("The stat block they'd fight with, from the monster list. NPCs join fights in a "
-                                "later phase.");
+    statBlockCombo_->setToolTip("The stat block they fight with when they join the party in a fight, from the "
+                                "monster list. Without one, they never fight.");
+    deadBox_ = new QCheckBox("Dead", this);
+    deadBox_->setToolTip("Killed: they won't talk or fight again. An ally left down in a lost fight dies.");
     saveButton_ = new QPushButton("Save", this);
     auto* form = new QFormLayout();
     form->addRow("Name", nameEdit_);
@@ -81,6 +83,7 @@ NpcDialog::NpcDialog(dnd::Repository& repository, QWidget* parent)
     form->addRow("Fears", fearsEdit_);
     form->addRow("", knownBox_);
     form->addRow("Stat block", statBlockCombo_);
+    form->addRow("", deadBox_);
     auto* saveRow = new QHBoxLayout();
     saveRow->addStretch(1);
     saveRow->addWidget(saveButton_);
@@ -129,7 +132,7 @@ void NpcDialog::reloadNpcs(int select_id) {
         const auto& npc = npcs_[static_cast<size_t>(row)];
         QString label = q(npc.name);
         if (!npc.role.empty()) label += QString(", %1").arg(q(npc.role));
-        npcList_->addItem(QString("%1 (%2)").arg(label, dnd::attitude_name(npc.attitude)));
+        npcList_->addItem(QString("%1 (%2)").arg(label, npc.dead ? "dead" : dnd::attitude_name(npc.attitude)));
         if (npc.npc_id == select_id) selectRow = row;
     }
     npcList_->setCurrentRow(selectRow);
@@ -144,6 +147,7 @@ void NpcDialog::showNpc() {
                        static_cast<QWidget*>(attitudeCombo_), static_cast<QWidget*>(descriptionEdit_),
                        static_cast<QWidget*>(wantsEdit_), static_cast<QWidget*>(fearsEdit_),
                        static_cast<QWidget*>(knownBox_), static_cast<QWidget*>(statBlockCombo_),
+                       static_cast<QWidget*>(deadBox_),
                        static_cast<QWidget*>(saveButton_), static_cast<QWidget*>(deleteButton_)}) {
         w->setEnabled(any);
     }
@@ -157,6 +161,7 @@ void NpcDialog::showNpc() {
     fearsEdit_->setText(q(npc.fears));
     knownBox_->setChecked(npc.known);
     statBlockCombo_->setCurrentIndex(std::max(0, statBlockCombo_->findData(q(npc.stat_block))));
+    deadBox_->setChecked(npc.dead);
     // The Shop's and the Temple's can't go: the counter and the altar need someone.
     bool fixture = npc.key == "merchant" || npc.key == "priest";
     deleteButton_->setEnabled(!fixture);
@@ -190,6 +195,7 @@ void NpcDialog::saveNpc() {
     npc.fears = fearsEdit_->text().trimmed().toStdString();
     npc.known = knownBox_->isChecked();
     npc.stat_block = statBlockCombo_->currentData().toString().toStdString();
+    npc.dead = deadBox_->isChecked();
     repository_.update_npc(npc);
     messageLabel_->setText(QString("Saved %1.").arg(name));
     reloadNpcs(id);

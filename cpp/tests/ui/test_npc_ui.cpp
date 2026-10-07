@@ -6,8 +6,11 @@
 #include <QLineEdit>
 #include <QListWidget>
 #include <QTabWidget>
+#include <QTableWidget>
 
+#include "CombatEncounterDialog.hpp"
 #include "NpcDialog.hpp"
+#include "SceneDialog.hpp"
 #include "ShopDialog.hpp"
 #include "dnd/npc.hpp"
 #include "dnd/shop.hpp"
@@ -89,4 +92,64 @@ TEST_CASE("shop: the merchant haggles once between long rests", "[ui][npcs][shop
     shop.tabs()->setCurrentIndex(2);
     settle();
     REQUIRE(visibleText(shop).contains("Brother Aldous"));
+}
+
+TEST_CASE("combat: an NPC ally fights beside the party", "[ui][npcs][allies]") {
+    World world;
+    auto aria = world.add("Aria", "Fighter", 3, {"Chain Mail", "Longsword"});
+    dnd::AdventureRun run;
+    run.title = "The Hill Giant's Toll";
+    run.party = {aria.character_id};
+    run.allies = {"dagna"};
+    auto monsters = world.repo.get_monsters();
+
+    AdventureFight fight;
+    fight.title = "The Ogre Gate";
+    fight.scene.title = "The Ogre Gate";
+    fight.scene.narration = "Two ogres.";
+    fight.scene.monsters = {{"Goblin", 1}};
+    fight.allies = dnd::next_fight_allies(world.repo, run, monsters);
+    REQUIRE(fight.allies.size() == 1);
+    CombatEncounterDialog combat(world.repo, {world.get(aria.character_id)}, monsters, nullptr, &fight);
+    combat.show();
+    settle();
+    REQUIRE(visibleText(combat).contains("Fighting beside you: Dagna Ironfoot"));
+    auto* table = combat.findChild<QTableWidget*>();
+    bool listed = false;
+    for (int row = 0; row < table->rowCount(); ++row) {
+        listed = listed || table->item(row, 0)->text() == "Dagna Ironfoot (Veteran) — ally";
+    }
+    REQUIRE(listed);
+}
+
+TEST_CASE("scene: with nothing left to ask, the party can still move on", "[ui][npcs][scenes]") {
+    World world;
+    auto aria = world.add("Aria", "Bard", 3);
+    const auto* ashgrove = dnd::find_adventure("Moonrise at Ashgrove");
+    dnd::AdventureRun run;
+    run.title = ashgrove->title;
+    run.party = {aria.character_id};
+    run.run_id = world.repo.add_adventure_run(run);
+    const dnd::AdventureScene* talk = nullptr;
+    for (const auto& scene : ashgrove->scenes) {
+        if (scene.kind == dnd::SceneKind::Social) talk = &scene;
+    }
+    REQUIRE(talk);
+
+    // Leaned on last time: Wenna is Hostile, and both requests are out of reach.
+    dnd::Npc wenna = *dnd::find_run_npc(world.repo, run, "wenna");
+    wenna.attitude = dnd::Attitude::Hostile;
+    world.repo.update_npc(wenna);
+
+    SceneDialog dialog(world.repo, run, *ashgrove, *talk, "The Miller's Wife");
+    dialog.show();
+    settle();
+    auto* options = dialog.findChild<QListWidget*>();
+    REQUIRE(options->count() == 3);
+    REQUIRE(options->item(2)->text() == "Move on");
+    REQUIRE(options->currentRow() == 2);
+    button(dialog, "Ask")->click();
+    settle();
+    REQUIRE(visibleText(dialog).contains("nothing more to say"));
+    REQUIRE(button(dialog, "Continue")->isEnabled());
 }

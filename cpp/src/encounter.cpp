@@ -221,6 +221,15 @@ void Encounter::add_monsters(const Monster& monster, int count) {
     }
 }
 
+void Encounter::add_ally(const Monster& monster, const std::string& name, int npc_id) {
+    add_monsters(monster, 1);
+    Combatant& ally = combatants_.back();
+    ally.name = name;
+    ally.ally = true;
+    ally.npc_id = npc_id;
+    ally.xp = 0;  // they don't count toward the party's XP
+}
+
 void Encounter::set_victory_reward(std::string victory_text, std::vector<LootGrant> loot, int coins_cp) {
     victory_text_ = std::move(victory_text);
     loot_ = std::move(loot);
@@ -327,7 +336,10 @@ std::vector<std::string> Encounter::status_tooltip(int index) const {
         return lines;
     }
     if (combatant.current_hp <= 0) {
-        if (!combatant.is_character) {
+        if (combatant.ally) {
+            lines.push_back("Down: an ally at 0 HP is out of the fight until healed. Left down if the fight is lost, "
+                            "they die.");
+        } else if (!combatant.is_character) {
             lines.push_back("Defeated.");
         } else if (saves.stable) {
             lines.push_back("Stable: unconscious at 0 HP, but no longer dying. Any healing wakes them.");
@@ -377,6 +389,7 @@ std::vector<std::string> Encounter::status_tooltip(int index) const {
         lines.push_back(line);
     }
 
+    if (combatant.ally) lines.push_back("An ally: fights on your side.");
     if (!combatant.is_character) {
         const DamageTraits& traits = combatant.damage_traits;
         std::vector<std::string> traitLines;
@@ -408,7 +421,7 @@ EncounterRating Encounter::difficulty() const {
     for (const auto& combatant : combatants_) {
         if (combatant.is_character) {
             if (!combatant.death_saves.dead) party_levels.push_back(combatant.level);
-        } else {
+        } else if (!combatant.ally) {
             monster_xp.push_back(combatant.xp);
         }
     }
@@ -439,7 +452,7 @@ void Encounter::roll_initiative() {
 
     surprised_.clear();
     for (int i = 0; i < static_cast<int>(combatants_.size()); ++i) {
-        bool character = combatants_[static_cast<size_t>(i)].is_character;
+        bool character = party_side(combatants_[static_cast<size_t>(i)]);
         if ((surprise_ == Surprise::PartySurprised && character) || (surprise_ == Surprise::PartySurprises && !character)) {
             surprised_.push_back(i);
         }
@@ -802,13 +815,13 @@ void Encounter::resolve_monster_turn(Combatant& monster) {
         return;
     }
 
-    // Monsters go after characters who are still up, ignoring anyone dying,
-    // and can't attack whoever charmed them.
+    // Monsters go after the other side's creatures still up (an ally goes after
+    // the monsters), ignoring anyone dying, and can't attack whoever charmed them.
     std::vector<int> candidates;
     bool charm_blocked = false;
     for (int i = 0; i < static_cast<int>(combatants_.size()); ++i) {
         const auto& candidate = combatants_[static_cast<size_t>(i)];
-        if (!candidate.is_character || candidate.current_hp <= 0) continue;
+        if (party_side(candidate) == party_side(monster) || candidate.current_hp <= 0) continue;
         if (has_condition(effects_, i, Condition::Petrified)) continue;  // stone: out of the fight
         if (charmed_by(monster_index, i)) {
             charm_blocked = true;
@@ -903,7 +916,7 @@ bool Encounter::ally_fighting(int index) const {
     const Combatant& self = combatants_.at(static_cast<size_t>(index));
     for (int i = 0; i < static_cast<int>(combatants_.size()); ++i) {
         const Combatant& other = combatants_[static_cast<size_t>(i)];
-        if (i != index && other.is_character == self.is_character && other.current_hp > 0 &&
+        if (i != index && party_side(other) == party_side(self) && other.current_hp > 0 &&
             !is_incapacitated(effects_, i)) {
             return true;
         }
@@ -961,7 +974,7 @@ bool Encounter::weapon_attack(int attacker_index, int target_index, const Weapon
     reaction_lines.clear();
     bool reacting = auto_reactions_ && monster_attack && target.is_character && !target.reaction_used &&
                     target.current_hp > 0;
-    if (monster_attack && target.is_character && result.hit && !result.critical && auto_reactions_) {
+    if (monster_attack && party_side(target) && result.hit && !result.critical && auto_reactions_) {
         // Cutting Words (a Lore bard's reaction, for anyone in the party).
         int total = result.attack_roll + attack_bonus + sum(bonus_rolls);
         int cut = cutting_words(target_index, total, armor_class(target_index));
@@ -970,7 +983,7 @@ bool Encounter::weapon_attack(int attacker_index, int target_index, const Weapon
             result.damage_total = 0;
         }
     }
-    if (attacker.is_character && !target.is_character && target.spellcasting && !target.reaction_used &&
+    if (party_side(attacker) && !party_side(target) && target.spellcasting && !target.reaction_used &&
         result.hit && !result.critical && target.current_hp > 0) {
         // A caster monster's Shield (Mage): +5 AC when that turns the hit into a miss.
         int total = result.attack_roll + attack_bonus + sum(bonus_rolls);
@@ -1266,13 +1279,13 @@ std::vector<std::string> Encounter::apply_damage(int target_index, int amount, b
 
     // Any harm from the charmer's side breaks a charm (Charm Person).
     if (source >= 0) {
-        bool source_is_character = combatants_[static_cast<size_t>(source)].is_character;
+        bool source_is_character = party_side(combatants_[static_cast<size_t>(source)]);
         auto before = effects_.size();
         effects_.erase(std::remove_if(effects_.begin(), effects_.end(),
                                       [&](const ActiveEffect& e) {
                                           return e.target == target_index && e.kind == EffectKind::Condition &&
                                                  e.condition == Condition::Charmed && e.source >= 0 &&
-                                                 combatants_[static_cast<size_t>(e.source)].is_character ==
+                                                 party_side(combatants_[static_cast<size_t>(e.source)]) ==
                                                      source_is_character;
                                       }),
                        effects_.end());
@@ -1307,7 +1320,7 @@ std::vector<std::string> Encounter::apply_damage(int target_index, int amount, b
     target.current_hp = std::max(0, target.current_hp - amount);
     target.rage_kept_up = true;  // taking damage keeps a rage going
 
-    if (target.current_hp == 0 && !target.is_character && source >= 0) {
+    if (target.current_hp == 0 && !party_side(target) && source >= 0) {
         // Dark One's Blessing (Fiend warlock): temporary HP for dropping a foe.
         Combatant& killer = combatants_[static_cast<size_t>(source)];
         const Character* warlock = character(killer.character_id);
@@ -1451,7 +1464,7 @@ void Encounter::check_for_victory_or_defeat() {
             down = down || has_condition(effects_, static_cast<int>(&combatant - combatants_.data()), Condition::Petrified);
             has_characters = true;
             all_characters_down = all_characters_down && down;
-        } else {
+        } else if (!combatant.ally) {  // allies don't decide the fight
             has_monsters = true;
             all_monsters_down = all_monsters_down && down;
         }
@@ -1461,6 +1474,12 @@ void Encounter::check_for_victory_or_defeat() {
         status_ = EncounterStatus::Defeat;
         result_message_ = "Defeat! All characters have fallen.";
         log("--- " + result_message_ + " ---");
+        for (const auto& combatant : combatants_) {  // allies left down on the field don't make it
+            if (combatant.ally && combatant.current_hp <= 0) {
+                fallen_allies_.push_back(combatant.npc_id);
+                log(combatant.name + " is left behind, and dies.");
+            }
+        }
         stabilize_dying();  // the fight is lost, but no one dies after it ends
     } else if (has_monsters && all_monsters_down) {
         status_ = EncounterStatus::Victory;
@@ -1485,7 +1504,7 @@ void Encounter::check_for_victory_or_defeat() {
 void Encounter::award_victory_experience() {
     int total_xp = 0;
     for (const auto& combatant : combatants_) {
-        if (!combatant.is_character) total_xp += combatant.xp;
+        if (!party_side(combatant)) total_xp += combatant.xp;
     }
     // The dead don't earn XP; everyone else in the party splits it.
     int survivors = static_cast<int>(std::count_if(characters_.begin(), characters_.end(),
@@ -1734,7 +1753,7 @@ std::vector<int> Encounter::attack_targets() const {
     for (int i = 0; i < static_cast<int>(combatants_.size()); ++i) {
         const auto& candidate = combatants_[static_cast<size_t>(i)];
         if (candidate.current_hp <= 0) continue;
-        if (candidate.is_character == actor.is_character) continue;  // only the opposing side
+        if (party_side(candidate) == party_side(actor)) continue;  // only the opposing side
         if (charmed_by(actor_index, i)) continue;
         targets.push_back(i);
     }
@@ -1802,17 +1821,17 @@ std::vector<int> Encounter::spell_target_candidates(const Spell& spell) const {
         if (candidate.death_saves.dead) continue;
         bool eligible = false;
         switch (spell.resolution) {
-            case SpellResolution::Heal:  // the party, including anyone down
-                eligible = candidate.is_character;
+            case SpellResolution::Heal:  // the party and its allies, including anyone down
+                eligible = party_side(candidate);
                 break;
-            case SpellResolution::Buff:  // the party, conscious
-                eligible = candidate.is_character && candidate.current_hp > 0;
+            case SpellResolution::Buff:  // the party and its allies, conscious
+                eligible = party_side(candidate) && candidate.current_hp > 0;
                 break;
             case SpellResolution::Stabilize:  // the dying
                 eligible = candidate.is_character && candidate.current_hp <= 0 && !candidate.death_saves.stable;
                 break;
             default:  // living enemies (not whoever charmed the caster)
-                eligible = !candidate.is_character && candidate.current_hp > 0 &&
+                eligible = !party_side(candidate) && candidate.current_hp > 0 &&
                            !(actor_index >= 0 && charmed_by(actor_index, i)) &&
                            (spell.target_creature_type.empty() ||
                             candidate.creature_type == spell.target_creature_type);
@@ -1980,8 +1999,8 @@ std::vector<int> Encounter::bonus_action_targets(BonusTarget target) const {
     for (int i = 0; i < static_cast<int>(combatants_.size()); ++i) {
         const auto& candidate = combatants_[static_cast<size_t>(i)];
         if (candidate.current_hp <= 0) continue;
-        if (target == BonusTarget::Ally && candidate.is_character && i != actor) targets.push_back(i);
-        if (target == BonusTarget::Enemy && !candidate.is_character && !(actor >= 0 && charmed_by(actor, i))) {
+        if (target == BonusTarget::Ally && party_side(candidate) && i != actor) targets.push_back(i);
+        if (target == BonusTarget::Enemy && !party_side(candidate) && !(actor >= 0 && charmed_by(actor, i))) {
             targets.push_back(i);
         }
     }
@@ -2202,7 +2221,7 @@ std::vector<int> Encounter::lay_on_hands_targets() const {
     if (lay_on_hands_pool() <= 0) return targets;
     for (int i = 0; i < static_cast<int>(combatants_.size()); ++i) {
         const auto& candidate = combatants_[static_cast<size_t>(i)];
-        if (candidate.is_character && !candidate.death_saves.dead) targets.push_back(i);
+        if (party_side(candidate) && !candidate.death_saves.dead) targets.push_back(i);
     }
     return targets;
 }
@@ -3166,7 +3185,7 @@ bool Encounter::channel_divinity(Channel kind) {
             for (int i = 0; i < static_cast<int>(combatants_.size()); ++i) {
                 Combatant& foe = combatants_[static_cast<size_t>(i)];
                 bool fits = foe.creature_type == "Undead" || (unholy && foe.creature_type == "Fiend");
-                if (foe.is_character || foe.current_hp <= 0 || !fits) continue;
+                if (party_side(foe) || foe.current_hp <= 0 || !fits) continue;
                 any = true;
                 std::string detail;
                 bool saved = roll_save(i, Ability::Wisdom, dc, detail);
@@ -3196,7 +3215,7 @@ bool Encounter::channel_divinity(Channel kind) {
             std::vector<int> hurt;
             for (int i = 0; i < static_cast<int>(combatants_.size()); ++i) {
                 const Combatant& c = combatants_[static_cast<size_t>(i)];
-                if (c.is_character && !c.death_saves.dead && c.current_hp < c.max_hp / 2) hurt.push_back(i);
+                if (party_side(c) && !c.death_saves.dead && c.current_hp < c.max_hp / 2) hurt.push_back(i);
             }
             std::stable_sort(hurt.begin(), hurt.end(), [&](int a, int b) {
                 const Combatant& x = combatants_[static_cast<size_t>(a)];

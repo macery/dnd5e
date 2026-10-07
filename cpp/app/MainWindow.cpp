@@ -929,11 +929,13 @@ void MainWindow::playAdventure(dnd::AdventureRun run) {
                                          .arg(QString::fromStdString(scene->title)));
             continue;
         }
+        fight.allies = dnd::next_fight_allies(repository_, run, monsters);  // NPCs an earlier scene brought along
         fight.victory_text = dnd::is_last_scene(run, *adventure) ? adventure->victory_text : std::string();
         fight.title = sceneTitle;
 
         CombatEncounterDialog combat(repository_, members, monsters, this, &fight);
         combat.exec();
+        dnd::mark_npcs_dead(repository_, run.campaign_id, combat.fallenAllies());
         switch (combat.outcome()) {
             case dnd::EncounterStatus::Victory:
                 dnd::record_fight(run, *adventure, true);

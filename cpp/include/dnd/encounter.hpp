@@ -99,6 +99,12 @@ struct Combatant {
     // taken off attack rolls, saving throws, and initiative.
     int roll_penalty = 0;
     int xp = 0;  // monsters only: awarded to the party on victory
+    // An NPC fighting on the party's side (docs/scenes-and-npcs.md, phase 3):
+    // a stat block run by the monster AI against the monsters. It earns and
+    // gives no XP, takes no loot, and is down (not dying) at 0 HP; healing
+    // brings it back up.
+    bool ally = false;
+    int npc_id = 0;  // allies only
     // Monsters only: STR..CHA, for saving throws. (Characters use their sheet.)
     std::array<int, 6> ability_scores{10, 10, 10, 10, 10, 10};
     // Monsters only: the stat block's attacks, creature type, and traits
@@ -119,6 +125,11 @@ struct Combatant {
     // The concentration spell this combatant is maintaining; empty if none.
     std::string concentration;
 };
+
+// The party's side: the characters and their NPC allies.
+inline bool party_side(const Combatant& combatant) {
+    return combatant.is_character || combatant.ally;
+}
 
 // Something the encounter did that the caller may need to show or persist.
 // The encounter never touches the database itself.
@@ -206,6 +217,11 @@ public:
                        std::vector<InventoryEntry> inventory);
     // Adds `count` copies (numbered "#1", "#2", ... when count > 1).
     void add_monsters(const Monster& monster, int count);
+    // An NPC who fights for the party with `monster`'s stat block, named
+    // "Dagna Ironfoot (Veteran)".
+    void add_ally(const Monster& monster, const std::string& name, int npc_id);
+    // Allies still down when the fight was lost: left on the field, they die.
+    const std::vector<int>& fallen_allies() const { return fallen_allies_; }
     // Shown after "Victory!" and handed out on victory, for adventures.
     // `coins_cp` is split evenly among the surviving characters (dnd/currency.hpp).
     // Items go to the only character standing at once; with more, they wait
@@ -573,6 +589,7 @@ private:
     TurnState turn_;
     EncounterStatus status_ = EncounterStatus::InProgress;
     std::string result_message_;
+    std::vector<int> fallen_allies_;  // npc ids (see fallen_allies())
     std::string victory_text_;
     std::vector<LootGrant> loot_;
     std::vector<Spell> scroll_spells_;
