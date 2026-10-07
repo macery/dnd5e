@@ -18,7 +18,7 @@ using detail::Statement;
 // for future schema changes -- never edit an existing one, since a
 // migration's sql is exactly what already ran on every database that has it
 // recorded in SchemaMigrations.
-constexpr std::array<Migration, 35> kMigrations = {{
+constexpr std::array<Migration, 36> kMigrations = {{
     {1, "initial schema: Players, Classes, Characters", R"sql(
         CREATE TABLE IF NOT EXISTS Players (
             PlayerID INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1172,6 +1172,31 @@ constexpr std::array<Migration, 35> kMigrations = {{
     // NPCs in fights (docs/scenes-and-npcs.md, phase 3): an ally can die.
     {35, "add Npcs.Dead", R"sql(
         ALTER TABLE Npcs ADD COLUMN Dead INTEGER NOT NULL DEFAULT 0;
+    )sql"},
+    // Town folk for The Missing Heir (docs/scenes-and-npcs.md, phase 4): SRD
+    // Bandit, Thug, Spy, and Noble. The Spy's Sneak Attack and the Noble's
+    // Parry aren't automated.
+    {36, "add Bandit, Thug, Spy, and Noble", R"sql(
+        INSERT INTO Monsters (Name, ArmorClass, HitPoints, Strength, Dexterity, Constitution, Intelligence, Wisdom,
+                              Charisma, ChallengeRating, CreatureType, DamageResistances, DamageImmunities,
+                              ConditionImmunities, Multiattack, Traits, NonmagicalWeapons) VALUES
+            ('Bandit', 12, 11, 11, 12, 12, 10, 10, 10, 0.125, 'Humanoid', '', '', '', '', '', ''),
+            ('Thug',   11, 32, 15, 11, 14, 10, 10, 11, 0.5,   'Humanoid', '', '', '', 'Two mace attacks', 'PackTactics', ''),
+            ('Spy',    12, 27, 10, 15, 10, 12, 14, 16, 1,     'Humanoid', '', '', '', 'Two shortsword attacks', '', ''),
+            ('Noble',  15, 9,  11, 12, 11, 12, 14, 16, 0.125, 'Humanoid', '', '', '', '', '', '');
+
+        INSERT INTO MonsterAttacks (MonsterID, Position, Name, AttackBonus, DamageDiceCount, DamageDiceSides,
+                                    DamageBonus, DamageType, Ranged, ExtraDiceCount, ExtraDiceSides, ExtraDamageType,
+                                    OnHitSaveAbility, OnHitSaveDC, OnHitCondition, Count, Preferred, LifeDrainDC)
+        SELECT MonsterID, a.Position, a.Name, a.Bonus, a.DiceCount, a.DiceSides, a.DamageBonus, a.Type, 0, 0, 0, '',
+               '', 0, '', a.Count, 0, 0
+        FROM Monsters JOIN (
+            SELECT 'Bandit' AS Monster, 1 AS Position, 'Scimitar' AS Name, 3 AS Bonus, 1 AS DiceCount,
+                   6 AS DiceSides, 1 AS DamageBonus, 'slashing' AS Type, 1 AS Count
+            UNION ALL SELECT 'Thug',  1, 'Mace',       4, 1, 6, 2, 'bludgeoning', 2
+            UNION ALL SELECT 'Spy',   1, 'Shortsword', 4, 1, 6, 2, 'piercing',    2
+            UNION ALL SELECT 'Noble', 1, 'Rapier',     3, 1, 8, 1, 'piercing',    1
+        ) AS a ON a.Monster = Monsters.Name;
     )sql"},
 }};
 

@@ -1,6 +1,6 @@
 # Scenes between fights, and NPCs
 
-Status: **phases 1–3 built** (checks, Challenge/Trap/Choice scenes, surprise, inspiration; NPCs, Social scenes, the merchant and the priest; NPC allies and NPCs who turn on the party). Next: phase 4, an adventure built around scenes and NPCs. Every recommendation was taken on 2026-10-05.
+Status: **all four phases built** (checks, Challenge/Trap/Choice scenes, surprise, inspiration; NPCs, Social scenes, the merchant and the priest; NPC allies and NPCs who turn on the party; The Missing Heir). Every recommendation was taken on 2026-10-05.
 
 Phase 1 notes:
 - The code is `dnd/checks` (checks, group checks, passive scores) and `dnd/scenes` (outcomes, traps, shaping the next fight); scenes are in `src/adventure.cpp`.
@@ -32,6 +32,15 @@ Phase 3 notes (NPCs who turn hostile, 2026-10-07):
 - **In the fight** (`Encounter::add_named_foe`): a monster in every way, so it gives XP and counts toward difficulty, but it's named ("Edric Hask (Cult Fanatic)"), and the fight header says "Against you". It's added after the fight is scaled, so it makes the fight harder: that's the cost of the failed scene.
 - **Killed is dead:** a named foe at 0 HP when the fight ends dies (`Encounter::fallen_npcs`, which also lists allies left down in a lost fight). A later meeting offers only Move on.
 - **Content:** if questioning Snig fails, he shrieks, gets free, and fights in the boss's den. In Ashgrove, if leaning on Wenna fails, her husband Edric Hask (a new NPC, Cult Fanatic) runs to warn the mill and fights there.
+
+Phase 4 notes (The Missing Heir, 2026-10-07):
+- **Level 3, ten scenes:** four conversations, two traps, two challenges, and two fights.
+- **Three people know different parts of the truth.** Mirela Voss, the Calders' steward, knows when Tamsin went missing. Bors Tallow, at the Gilded Lantern, knows where, and the way in through the coal chute. Pell, a Grey Hand runner (Hostile), knows who's paying: the steward. Mirela's own ledgers (a significant-risk request) and Tamsin herself also reveal the truth.
+- **The cellar:** two traps (lime vats, and tripwires with a crossbow), then the hideout door. Through the coal chute (if Bors told you), the party sneaks past the guard room entirely. Otherwise they pick the lock for surprise, or kick the door in.
+- **The guard room** (Thugs and Bandits; Pell joins if he was crossed) has a camp after it.
+- **Before Varro:** knowing the truth, the party can call Mirela out. She turns on them and fights beside Varro, and her purse spills the house's stolen silver. With the coal chute, they can instead slip away with Tamsin and skip Varro, giving up his rewards. They can also intimidate one of his thugs into leaving, or just attack.
+- **Tamsin** (Noble) can fight beside the party in Varro's den.
+- **Migration 36** adds the SRD Bandit, Thug, Spy, and Noble. The Spy's Sneak Attack and the Noble's Parry aren't automated.
 
 Rules follow the 2014 PHB (ch. 7, ability checks) and DMG (ch. 8: ability checks, social interaction, traps).
 
@@ -119,7 +128,7 @@ NPCs appear in Social scenes, and can stand behind the Shop counter and the Temp
    - NPCs in the adventures, the Shop, and the Temple.
    - Building NPCs (question 5).
 3. **NPCs in fights** (question 6): allies who fight beside the party, and named NPCs who turn hostile. Built.
-4. **A new adventure built around scenes and NPCs** (question 9).
+4. **A new adventure built around scenes and NPCs** (question 9). Built: The Missing Heir.
 
 ## Open questions
 

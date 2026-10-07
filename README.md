@@ -68,9 +68,10 @@ It manages players and characters, computes a full character sheet from the 5e r
   - **Spell scrolls:** a **Read Scroll** action in combat. Only classes with the spell on their list can read one, a spell above your highest slot needs a check, and the scroll's own DC and attack bonus apply.
   - **Where they come from:** boss fights drop them, and the Shop sells the common and uncommon ones.
 - **Shop** ([docs/shops.md](docs/shops.md)): buy gear at PHB list price (with change made automatically) and sell it for half; equipped gear must be unequipped first. Give coins, or items from the Inventory, to any other living character. A temple raises the dead for 550 gp (500 gp if its priest is Friendly); they return with 1 HP and −4 to attack rolls, saving throws, and ability checks, easing by 1 each long rest. Once between long rests, each character can haggle with the merchant (a Persuasion check) for 10% off.
-- **Solo adventures** ([docs/adventures-and-currency.md](docs/adventures-and-currency.md), [docs/content-5-10.md](docs/content-5-10.md)): nineteen pre-built adventures for levels 1–8.
+- **Solo adventures** ([docs/adventures-and-currency.md](docs/adventures-and-currency.md), [docs/content-5-10.md](docs/content-5-10.md)): twenty pre-built adventures for levels 1–8.
   - Thirteen are single fights, including The Bulette Field, The Golem's Workshop, The Gorgon's Pasture, and The Green Wyrm of Thornwood.
-  - Six are multi-fight runs: The Goblin Warren, Crypt of the Restless, The Hill Giant's Toll, The Barrow-King, Moonrise at Ashgrove, and The White Wyrm's Lair.
+  - Seven are multi-scene runs: The Goblin Warren, Crypt of the Restless, The Missing Heir, The Hill Giant's Toll, The Barrow-King, Moonrise at Ashgrove, and The White Wyrm's Lair.
+  - **The Missing Heir** (level 3) is an investigation in town. Three people each know part of the truth about the missing heir, and what the party learns decides how many fights there are, and against whom.
   - **Party:** you pick who goes.
   - **Fights:** each comes with narration, is scaled for the party (the final fight toward Hard), and pays coins and loot.
   - **Loot:** coins are split evenly. With two or more characters standing, a **Divide the Loot** panel on the victory screen picks who takes each item: healing potions start with the most hurt, and the rest is spread around. Closing the window hands it out as shown.
@@ -372,7 +373,7 @@ Phases 1 (core and data) and 2 (UI) are done; see [docs/magic-system.md](docs/ma
 - [x] **Multi-encounter adventures** ([docs/adventures-and-currency.md](docs/adventures-and-currency.md)): adventures made of scenes, party choice, short and long rests between fights (long rests at camps), retreat, progress saved between fights (Resume), and three multi-fight adventures.
 - [x] **Scenes and NPCs** ([docs/scenes-and-npcs.md](docs/scenes-and-npcs.md)): challenges, traps, choices, and conversations between fights; NPCs with attitudes, per campaign; a merchant to haggle with and a priest.
 - [x] **NPCs in fights** (phase 3): allies who fight beside the party, and named NPCs who turn on it.
-- [ ] **The Missing Heir** (phase 4): a new adventure built around scenes and NPCs.
+- [x] **The Missing Heir** (phase 4): a new adventure built around scenes and NPCs.
 - [ ] **AI combat tactics** ([docs/ai-tactics.md](docs/ai-tactics.md)): a local language model picks smart monsters' tactics from the legal options. Shelved: the small model on the home server was too slow (5–11 s a turn) and chose poorly.
 - [x] **Encounter difficulty**:
   - Fights are rated Trivial, Easy, Medium, Hard, or Deadly with the 2014 encounter-building rules: XP thresholds by level, plus a multiplier for the number of monsters.

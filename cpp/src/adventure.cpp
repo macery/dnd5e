@@ -154,6 +154,28 @@ SceneOutcome turns(SceneOutcome outcome, std::string who) {
     return outcome;
 }
 
+SceneOutcome unlocks(SceneOutcome outcome, std::string flag) {
+    outcome.unlock = std::move(flag);
+    return outcome;
+}
+
+SceneOutcome pays(SceneOutcome outcome, int coins_cp) {
+    outcome.coins_cp = coins_cp;
+    return outcome;
+}
+
+SceneOutcome skips(std::string text) {
+    SceneOutcome outcome = says(std::move(text));
+    outcome.skip_next_fight = true;
+    return outcome;
+}
+
+// An option offered only once an earlier outcome unlocked `flag`.
+SceneOption needs(SceneOption option, std::string flag) {
+    option.requires_flag = std::move(flag);
+    return option;
+}
+
 SceneOutcome inspires(SceneOutcome outcome) {
     outcome.inspiration = true;
     return outcome;
@@ -370,6 +392,125 @@ const std::vector<AdventureTemplate>& adventure_templates() {
             {person("tobin", "Old Tobin", "gravedigger", Attitude::Indifferent,
                     "A stooped old man with a spade, who has dug every grave on the moor for forty years.",
                     "his wife's grave in the barrow left in peace", "the dead walking into the village")},
+        },
+        // Phase 4 of docs/scenes-and-npcs.md: an investigation, built around scenes and NPCs. Three people
+        // know different parts of the truth; how the scenes go decides how many fights there are, and
+        // against whom.
+        {
+            "The Missing Heir",
+            "Tamsin Calder, heir to the richest house in Millbrook, hasn't come home in three days. The family's "
+            "steward wants her found, and wants it done quietly.",
+            "Tamsin is home and the Grey Hand is broken. Millbrook will be talking about it for years.",
+            3,
+            {
+                social("The Steward", "Mirela Voss receives you in the Calders' counting room, between stacks of "
+                       "ledgers. She is very glad you've come.",
+                       "mirela",
+                       {ask("Ask where Tamsin was last seen", SocialRequest::NoRisk,
+                            says("\"Three nights ago, at the Gilded Lantern. She goes there to annoy her "
+                                 "grandmother.\""),
+                            says("\"I really couldn't say.\"")),
+                        ask("Ask for something in advance", SocialRequest::MinorRisk,
+                            pays(says("She counts coins into your hand without looking at them."), 2000),
+                            says("\"After. The house pays for results.\"")),
+                        ask("Ask to see the house's accounts", SocialRequest::SignificantRisk,
+                            unlocks(says("She hesitates a moment too long before handing them over. Someone has "
+                                         "been paying large sums to \"the Hand\"."),
+                                    "truth"),
+                            sways(says("\"Those are no business of yours.\" Her smile goes cold."), -1))},
+                       13),
+                social("The Gilded Lantern", "The tavern is loud and smoky. Its keeper watches you come in and "
+                       "starts polishing a glass that's already clean.",
+                       "bors",
+                       {ask("Ask who Tamsin left with", SocialRequest::NoRisk,
+                            says("\"Two of the Grey Hand. They took her out the back, toward the old tannery.\""),
+                            says("He shrugs. You'll hear the same from everyone: the old tannery is Grey Hand "
+                                 "ground.")),
+                        ask("Ask for a way into the tannery that isn't the front door", SocialRequest::MinorRisk,
+                            unlocks(says("\"There's a coal chute behind the drying racks. Nobody watches it.\""),
+                                    "chute"),
+                            more("He sends a boy running to warn the Hand. He likes his windows unbroken.", 1))},
+                       12),
+                social("The Runner", "Outside the tannery, a Grey Hand runner leans in a doorway, flipping a "
+                       "knife. He's seen you.",
+                       "pell",
+                       {ask("Get him to stand aside", SocialRequest::NoHarm,
+                            says("He shrugs and melts into the alley. Not his problem."),
+                            turns(says("He whistles sharply and ducks inside."), "pell")),
+                        ask("Get him to say who's paying the Hand", SocialRequest::NoRisk,
+                            unlocks(sways(says("\"The steward. Voss. She's paying Varro to keep the girl until the "
+                                               "ransom's paid, and pocketing the rest.\""),
+                                          1),
+                                    "truth"),
+                            turns(says("He laughs, whistles, and ducks inside."), "pell"))},
+                       14),
+                trap("The Tannery Cellar", "Stairs lead down into the dark, over vats of lime that still steam.",
+                     hazard("a rotten step over the lime vats", 13, "Acrobatics", 12, 12, 2, 6, "acid")),
+                trap("The Bell Wires", "A long, low passage, strung with something that glints.",
+                     hazard("tripwires strung to bells and a cocked crossbow", 14, "Sleight of Hand", 14, 13, 2, 8,
+                            "piercing")),
+                challenge("The Hideout Door", "Behind the vats, a heavy door. Voices and dice on the other side.",
+                          {needs(check("Drop in through the coal chute", "Stealth", 12,
+                                       skips("You come down behind the guard room, and straight on to where "
+                                             "they're holding Tamsin."),
+                                       surprised("The coal shifts and roars down the chute. Every head in the "
+                                                 "guard room turns."),
+                                       true),
+                                 "chute"),
+                           check("Pick the lock quietly", "Sleight of Hand", 15,
+                                 surprises("The lock gives. The guards are still at their dice when you come "
+                                           "through."),
+                                 says("It won't give. You'll have to do it the loud way.")),
+                           pick("Kick the door in", says("Splinters fly."))}),
+                // The guard room's door bars from the inside: the party can rest before Varro.
+                scene("The Guard Room", "The Grey Hand's muscle, around a table of dice and coins.",
+                      {{"Thug", 2}, {"Bandit", 2}}, {{"Potion of Healing", 1}}, 1500, true),
+                social("The Heir", "Tamsin Calder is tied to a chair in a back room, furious rather than "
+                       "frightened.",
+                       "tamsin",
+                       {ask("Ask what she's overheard", SocialRequest::NoRisk,
+                            unlocks(inspires(says("\"Varro talks too loud. Someone in my own house is paying "
+                                                  "him.\"")),
+                                    "truth"),
+                            says("\"Nothing worth hearing.\"")),
+                        ask("Ask her to fight beside you", SocialRequest::MinorRisk,
+                            joins(says("She snatches a rapier off the table. \"Gladly.\""), "tamsin"),
+                            says("\"I'd only get in your way.\" She stays behind you."))},
+                       10),
+                challenge("Before Varro", "Through a crack in the last door: Varro, the Grey Hand's boss, counting "
+                          "coins. Beside him stands a woman in grey. Mirela Voss.",
+                          {needs(pick("Call her out: you know what she's done",
+                                      pays(inspires(turns(says("Mirela goes white. \"Kill them,\" she tells "
+                                                               "Varro, and draws a blade. Her purse spills: "
+                                                               "the house's stolen silver."),
+                                                          "mirela")),
+                                           3000)),
+                                 "truth"),
+                           check("Demand Tamsin's release", "Intimidation", 15,
+                                 fewer("One of Varro's thugs decides this isn't worth dying for, and leaves.", 1),
+                                 says("Varro just laughs.")),
+                           pick("Say nothing, and attack", says("You go in swinging.")),
+                           needs(pick("Leave them to it: take Tamsin out the way you came",
+                                      skips("You slip out through the coal chute with Tamsin. Varro will find an "
+                                            "empty room, and no ransom.")),
+                                 "chute")}),
+                scene("Varro's Den", "Varro draws two scimitars and a dagger. His bodyguard steps up beside him.",
+                      {{"Bandit Captain", 1}, {"Thug", 1}},
+                      {{"Rapier +1", 1}, {"Potion of Healing", 2}, {"Spell Scroll (Cure Wounds)", 1}}, 2500,
+                      false, true),
+            },
+            {person("mirela", "Mirela Voss", "steward of House Calder", Attitude::Friendly,
+                    "A precise woman in grey, who counts coins while she talks.",
+                    "the house's accounts kept out of sight", "old Lady Calder looking at the ledgers", "Noble"),
+             person("bors", "Bors Tallow", "keeper of the Gilded Lantern", Attitude::Indifferent,
+                    "A heavy, careful man who has kept his tavern open by never seeing anything.",
+                    "trouble out of his taproom", "the Grey Hand burning him out"),
+             person("pell", "Pell", "a Grey Hand runner", Attitude::Hostile,
+                    "A sharp-faced youth with a knife he can't stop flipping.",
+                    "out of the Grey Hand before it gets him killed", "Varro, the Grey Hand's boss", "Bandit"),
+             person("tamsin", "Tamsin Calder", "the missing heir", Attitude::Friendly,
+                    "Nineteen, sharp-tongued, and very tired of being rescued.",
+                    "to see whoever did this hang", "going home to be locked in again", "Noble")},
         },
         {
             "The Hill Giant's Toll",
