@@ -208,7 +208,7 @@ chmod +x DnD_Engine-x86_64.AppImage && ./DnD_Engine-x86_64.AppImage
 Things to know:
 - **FUSE:** AppImages need FUSE 2. If it won't start on Ubuntu, either `sudo apt install libfuse2t64`, or run it with `APPIMAGE_EXTRACT_AND_RUN=1 ./DnD_Engine-x86_64.AppImage`.
 - **OpenGL:** it expects the desktop's graphics libraries. On a minimal install, `sudo apt install libopengl0` provides the one most likely to be missing.
-- **Display:** only the X11 platform plugin is bundled. On a Wayland session it runs through XWayland.
+- **Display:** both the Wayland and X11 platform plugins are bundled. It runs natively on Wayland sessions and on X11 everywhere else; `QT_QPA_PLATFORM=xcb` forces X11.
 - **Save data:** each machine has its own database. To move characters, use **Export…** on one machine and **Import…** on the other (see Features).
 
 ### Where your data lives
@@ -229,6 +229,8 @@ Any pending schema migrations run on launch, so older save files are upgraded in
 5. Win to earn XP and loot. Use **Inventory** to see or use items. Afterwards, use **Short Rest** or **Long Rest** to recover before the next fight.
 
 ## Development notes
+
+See [AGENTS.md](AGENTS.md) for how work is done here: where code goes, schema changes, docs, and releases.
 
 - **Schema changes:** append a new entry to `kMigrations` in `cpp/src/migrations.cpp`. Never edit an existing migration, because it has already run on real databases.
 - **Rules logic:** put it in `dndcore`, not in `app/`, and cover it with a Catch2 test. Pass a fake `IRandomSource` to get deterministic dice.
