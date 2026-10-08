@@ -37,7 +37,7 @@ It manages players and characters, computes a full character sheet from the 5e r
   - **Heavy armor** without enough STR costs 10 ft of speed.
 - **Combat encounters**:
   - Real initiative order.
-  - Monster turns resolve automatically.
+  - Monster turns resolve automatically. Monsters pick targets by how smart they are ([docs/monster-ai.md](docs/monster-ai.md)): beasts and mindless creatures attack anyone, cunning ones favor the wounded, and tactical ones also go after spellcasters and anyone concentrating.
   - On each of your turns you pick Attack, Dash, Dodge, Drink Potion, Cast a Spell, or Stabilize.
   - **Conditions and effects:** all 14 PHB conditions, plus spell effects like *Bless*, *Guiding Bolt*, and *Charm Person*. They change advantage and disadvantage, saves, AC, and who can act. Hover a creature's status for what each one does and how long it lasts.
   - **Death saving throws:** characters at 0 HP are dying and roll each turn. Stabilize them, heal them, or lose them. The dead stay dead until a temple raises them (see *Shop*).
@@ -355,7 +355,7 @@ Phases 1 (core and data) and 2 (UI) are done; see [docs/magic-system.md](docs/ma
 
   Follow-ups are the open items below.
 - [x] **Monsters with several attacks**: Multiattack (the Bandit Captain, Owlbear, Ettin, Hill Giant, and Troll), with later attacks moving to someone else when a target drops.
-- [ ] **Smarter monster AI**: monsters already ignore dying characters and won't attack whoever charmed them. Beyond that, they pick a random conscious character. Better choices might be the lowest HP, the biggest threat, or the spellcaster who's concentrating.
+- [x] **Smarter monster AI** ([docs/monster-ai.md](docs/monster-ai.md)): each creature has a mind (Simple, Cunning, or Tactical, from its type and Intelligence). Cunning creatures favor the wounded; Tactical ones also go after spellcasters and anyone concentrating. A weighted roll still decides.
 - [x] **Damage types**:
   - Every hit is typed (weapon, spell, monster attack, and radiant for Divine Favor and Divine Smite).
   - Resistance halves, vulnerability doubles, and immunity cancels. A skeleton takes double from a mace, and a zombie shrugs off Poison Spray.

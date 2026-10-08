@@ -16,6 +16,7 @@
 #include "dnd/progression.hpp"
 #include "dnd/rules.hpp"
 #include "dnd/spellcasting.hpp"
+#include "dnd/tactics.hpp"
 
 namespace dnd {
 
@@ -411,6 +412,7 @@ std::vector<std::string> Encounter::status_tooltip(int index) const {
             traitLines.push_back("Can't be " + join(names, ", ") + ".");
         }
         if (!traitLines.empty()) lines.push_back(join(traitLines, " "));
+        lines.push_back(mind_description(creature_mind(combatant)));  // how it picks targets
     }
     if (!combatant.concentration.empty()) {
         lines.push_back("Concentrating on " + combatant.concentration +
@@ -854,8 +856,7 @@ void Encounter::resolve_monster_turn(Combatant& monster) {
     }
     if (monster.spellcasting && monster_cast(monster_index, candidates)) return;
 
-    int pick = dice_.roll(static_cast<int>(candidates.size()), 1).front() - 1;
-    int target = candidates[static_cast<size_t>(pick)];
+    int target = pick_target(monster_index, candidates);
     if (monster.monster_attacks.empty()) return;
 
     // Multiattack: every attack, each `count` times; otherwise just the first.
@@ -884,7 +885,7 @@ void Encounter::resolve_monster_turn(Combatant& monster) {
                 if (combatants_[static_cast<size_t>(candidate)].current_hp > 0) still_up.push_back(candidate);
             }
             if (still_up.empty()) break;
-            target = still_up[static_cast<size_t>(dice_.roll(static_cast<int>(still_up.size()), 1).front() - 1)];
+            target = pick_target(monster_index, still_up);
         }
         WeaponAttack attack;
         attack.name = stat->name;
@@ -2818,6 +2819,32 @@ const Spell* Encounter::spell_named(const std::string& name) const {
     return nullptr;
 }
 
+int Encounter::pick_target(int chooser, const std::vector<int>& candidates) {
+    if (candidates.empty()) return -1;
+    Mind mind = creature_mind(combatants_[static_cast<size_t>(chooser)]);
+    std::vector<int> weights;
+    for (int index : candidates) weights.push_back(target_weight(mind, combatants_[static_cast<size_t>(index)]));
+    bool even = std::all_of(weights.begin(), weights.end(), [&](int w) { return w == weights.front(); });
+    if (even) return candidates[static_cast<size_t>(dice_.roll(static_cast<int>(candidates.size()), 1).front() - 1)];
+    int total = 0;
+    for (int w : weights) total += w;
+    int roll = dice_.roll(total, 1).front();
+    for (size_t i = 0; i < candidates.size(); ++i) {
+        roll -= weights[i];
+        if (roll <= 0) return candidates[i];
+    }
+    return candidates.back();
+}
+
+std::vector<int> Encounter::by_preference(int chooser, std::vector<int> candidates) const {
+    Mind mind = creature_mind(combatants_[static_cast<size_t>(chooser)]);
+    std::stable_sort(candidates.begin(), candidates.end(), [&](int a, int b) {
+        return target_weight(mind, combatants_[static_cast<size_t>(a)]) >
+               target_weight(mind, combatants_[static_cast<size_t>(b)]);
+    });
+    return candidates;
+}
+
 void Encounter::use_breath(int monster_index, const std::vector<int>& candidates) {
     Combatant& monster = combatants_[static_cast<size_t>(monster_index)];
     const MonsterBreath breath = *monster.breath;
@@ -2893,10 +2920,11 @@ bool Encounter::monster_cast(int monster_index, const std::vector<int>& candidat
             }
             if (!choice || spell->level > choice->level) choice = spell;
         }
-        if (choice) {
+        if (choice) {  // the ones it most wants, when there are more than it can catch
             slot = lowest_slot(choice->level);
-            targets = std::vector<int>(candidates.begin(),
-                                       candidates.begin() + std::min<long>(choice->max_targets, static_cast<long>(candidates.size())));
+            std::vector<int> preferred = by_preference(monster_index, candidates);
+            targets = std::vector<int>(preferred.begin(),
+                                       preferred.begin() + std::min<long>(choice->max_targets, static_cast<long>(preferred.size())));
         }
     }
     // 2. A control spell (Hold Person) at someone it doesn't hold yet, while not concentrating.
@@ -2905,7 +2933,7 @@ bool Encounter::monster_cast(int monster_index, const std::vector<int>& candidat
             bool control = spell->level > 0 && spell->resolution == SpellResolution::Save && spell->dice_count == 0 &&
                            !spell->effects.empty();
             if (!control || lowest_slot(spell->level) == 0) continue;
-            for (int index : candidates) {
+            for (int index : by_preference(monster_index, candidates)) {
                 if (!spell->target_creature_type.empty() &&
                     combatants_[static_cast<size_t>(index)].creature_type != spell->target_creature_type) {
                     continue;
@@ -2923,7 +2951,7 @@ bool Encounter::monster_cast(int monster_index, const std::vector<int>& candidat
         }
     }
     // 3. The strongest single-target damage spell it has a slot for, else a damage cantrip.
-    int pick = candidates.empty() ? -1 : candidates[static_cast<size_t>(dice_.roll(static_cast<int>(candidates.size()), 1).front() - 1)];
+    int pick = candidates.empty() ? -1 : pick_target(monster_index, candidates);
     if (!choice && pick >= 0) {
         for (const Spell* spell : known) {
             if (!deals_damage(*spell) || (spell->level > 0 && lowest_slot(spell->level) == 0)) continue;

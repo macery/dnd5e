@@ -563,6 +563,11 @@ private:
     void use_action();
     void advance_to_actionable_turn();
     void resolve_monster_turn(Combatant& monster);
+    // The target `chooser` goes for among `candidates` (dnd/tactics.hpp): a
+    // weighted roll. When every weight is the same, it's a plain d(n).
+    int pick_target(int chooser, const std::vector<int>& candidates);
+    // `candidates` in the order `chooser` prefers them (ties keep their order).
+    std::vector<int> by_preference(int chooser, std::vector<int> candidates) const;
     void check_for_victory_or_defeat();
     void award_victory_experience();
     void award_loot();

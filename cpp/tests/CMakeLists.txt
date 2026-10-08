@@ -28,6 +28,7 @@ add_executable(dnd_tests
     test_npcs.cpp
     test_allies.cpp
     test_missing_heir.cpp
+    test_monster_ai.cpp
     test_damage.cpp
     test_dice.cpp
     test_effects.cpp

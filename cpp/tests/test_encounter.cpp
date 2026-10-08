@@ -1123,9 +1123,10 @@ TEST_CASE("status tooltips explain effects in plain language", "[encounter][effe
     REQUIRE(caster.size() == 1);
     REQUIRE(caster[0].rfind("Concentrating on Bless: taking damage forces a CON save", 0) == 0);
     auto goblin = encounter.status_tooltip(2);
-    REQUIRE(goblin.size() == 2);
+    REQUIRE(goblin.size() == 3);
     REQUIRE(goblin[0].rfind("Prone: Its attacks have disadvantage.", 0) == 0);
     REQUIRE(goblin[1] == "Humanoid.");  // its creature type and traits
+    REQUIRE(goblin[2] == "Fights cunningly: goes after the wounded.");  // how it picks targets
     REQUIRE(goblin[0].find("(from Aria)") != std::string::npos);
 }
 
