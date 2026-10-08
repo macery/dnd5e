@@ -396,7 +396,7 @@ Phases 1 (core and data) and 2 (UI) are done; see [docs/magic-system.md](docs/ma
 - [x] **Linux AppImage**: a local build script (`cpp/packaging/build-appimage.sh`).
 - [x] **AppImage in CI**: built on every push and attached to releases for `v*` tags.
 - [ ] **More packaging**: a Windows installer, and maybe Flatpak.
-- [ ] **Wayland plugin**: bundle Qt's Wayland platform plugin so the app runs natively on Wayland instead of through XWayland.
+- [x] **Wayland plugin**: the AppImage bundles Qt's Wayland platform plugin alongside X11 (v0.22.1).
 - [ ] **Code style**: add `clang-format` / `clang-tidy` configs and check them in CI.
 - [ ] **Legacy code**: decide whether to archive or remove the legacy `DND5EProject/` C# code.
 - [x] **Per-player save/load** ([docs/save-load.md](docs/save-load.md)): Export… (a player or one character), Import… (with a preview and per-character conflict choices), and Back Up Database…. Files are versioned JSON that names everything, so they load into any database.
