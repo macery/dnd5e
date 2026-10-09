@@ -264,3 +264,30 @@ TEST_CASE("combat: a level-5 wizard casts Fireball at several targets", "[ui][co
     REQUIRE(text.contains("Zanna casts Fireball (3rd-level slot)."));
     REQUIRE(text.count("DEX save") == 3);
 }
+
+TEST_CASE("combat: the spell hint describes buffs and lasting spells", "[ui][combat]") {
+    World world;
+    auto zanna = tough(world, "Zanna", "Cleric", 3, {});
+    for (const auto& spell : world.repo.get_spells()) {
+        if (spell.name == "Bless" || spell.name == "Aid") {
+            world.repo.add_character_spell(zanna.character_id, spell.spell_id);
+        }
+    }
+    AdventureFight fight;
+    fight.title = "Test";
+    fight.scene.title = "Orcs";
+    fight.scene.narration = "Orcs.";
+    fight.scene.monsters = {{"Orc", 1}};
+    CombatEncounterDialog combat(world.repo, {zanna}, world.repo.get_monsters(), nullptr, &fight);
+    combat.show();
+    button(combat, "Roll Initiative")->click();
+    settle();
+
+    REQUIRE(choose(combat, "Cast a Spell"));
+    REQUIRE(choose(combat, "Bless (1st)"));
+    REQUIRE(visibleText(combat).contains("Buff: Blessed (up to 3 allies)."));
+    REQUIRE_FALSE(visibleText(combat).contains("returns with 1 HP"));
+    REQUIRE(choose(combat, "Aid (2nd)"));
+    REQUIRE(visibleText(combat).contains("Until a long rest: +5 max and current HP"));
+    REQUIRE(visibleText(combat).contains("It lasts past this fight."));
+}
