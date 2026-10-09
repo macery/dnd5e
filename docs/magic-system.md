@@ -1,6 +1,6 @@
 # Magic system design
 
-Status: **phases 1 (core and data) and 2 (UI) implemented.** Phase 3 (effects) is designed and being built in [effects-system.md](effects-system.md). Spell side effects, *Bless*-style buffs, concentration, and *Spare the Dying* are done. Reactions, persisted effects (*Mage Armor*), and re-preparing spells remain. The open questions were settled on 2026-09-29; see [Decisions](#decisions).
+Status: **phases 1 (core and data) and 2 (UI) implemented.** Phase 3 (effects) is designed and being built in [effects-system.md](effects-system.md). Spell side effects, *Bless*-style buffs, concentration, and *Spare the Dying* are done. Reactions and re-preparing spells were built later, and persisted effects (*Mage Armor*, *Aid*) in [lasting-effects.md](lasting-effects.md). The open questions were settled on 2026-09-29; see [Decisions](#decisions).
 
 ### Phase 1 status
 

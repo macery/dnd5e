@@ -97,7 +97,7 @@ It manages players and characters, computes a full character sheet from the 5e r
   - **Spells:** 42 seeded spells. 18 are resolved automatically: spell attacks, saving throws (half or no damage on a success), always-hit spells, and heals. 24 are utility spells with no automated effect yet.
   - **Creation:** Bards, Clerics, Druids, Sorcerers, Warlocks, and Wizards choose their cantrips and spells in the character creation wizard.
   - **Character sheet:** shows the spellcasting ability, spell attack bonus, save DC, and remaining slots.
-  - **Spellbook:** learn and forget spells within your class's limits (this is also how you pick new spells after leveling up), and cast healing or utility spells on yourself outside combat.
+  - **Spellbook:** learn and forget spells within your class's limits (this is also how you pick new spells after leveling up), and cast healing or utility spells on yourself outside combat. *Mage Armor* and *Aid* can go on anyone in your campaign's party, and last until a long rest.
   - **Combat:** a **Cast a Spell** action with slot choice for upcasting, and multiple targets for area spells and Magic Missile.
   - **Rests:** spell slots come back on a long rest; Warlock pact slots also come back on a short rest.
 - **Inventory**:
@@ -284,7 +284,7 @@ Phases 1 (core and data) and 2 (UI) are done; see [docs/magic-system.md](docs/ma
   - Clerics, Druids, Paladins, and Wizards change prepared spells after a long rest, until their next fight. The Spellbook says when it's open.
   - Wizards keep a real spellbook (6 spells at level 1, plus 2 per level) and prepare INT + level spells from it. Combat offers only prepared spells.
 - [ ] **Copying spells into a spellbook**: from scrolls or another wizard's book (PHB: 50 gp and 2 hours per spell level).
-- [ ] **Effects that outlast combat**: *Mage Armor* (8 hours; AC 13 + DEX while unarmored) and *Aid*. They need effects saved on the character; today every effect ends with the fight. (Exhaustion and temporary hit points are saved now; see subclasses.)
+- [x] **Effects that outlast combat** ([docs/lasting-effects.md](docs/lasting-effects.md)): *Mage Armor* (unarmored AC 13 + DEX) and *Aid* (+5 max HP per slot level above 1st) are saved on the character until its next long rest. Cast them in combat or from the Spellbook, on yourself or your campaign's party.
 - [ ] **More utility spells with real effects**: 18 utility spells (*Light*, *Detect Magic*, *Command*, *Sanctuary*, ...) still have no automated effect.
 - [x] **Magic items** ([docs/magic-items.md](docs/magic-items.md)): +1/+2/+3 weapons, armor, and shields; four healing potions; five wondrous items with attunement; spell scrolls with the DMG's reading rules; boss loot and the Shop.
 - [ ] **Charged magic items**: wands and staffs (a Wand of Magic Missiles), with charges saved per item and recharged each dawn.

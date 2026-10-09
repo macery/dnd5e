@@ -17,6 +17,7 @@
 #include "dnd/currency.hpp"
 #include "dnd/equipment.hpp"
 #include "dnd/inventory.hpp"
+#include "dnd/lasting_effects.hpp"
 #include "dnd/magic_items.hpp"
 
 namespace {
@@ -263,6 +264,10 @@ void InventoryDialog::onEquipClicked() {
     }
     QString message = QString("Equipped %1.").arg(name);
     if (!removed.isEmpty()) message += QString(" (Took off %1.)").arg(removed.join(", "));
+    if (dnd::end_mage_armor_if_armored(character_, inventory_)) {
+        repository_.update_character(character_);
+        message += " Mage Armor ends.";
+    }
     for (const auto& warning : result.warnings) message += "<br><span style='color:#b00020'>" +
                                                            QString::fromStdString(warning).toHtmlEscaped() + "</span>";
     messageLabel_->setText(message);

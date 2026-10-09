@@ -582,6 +582,9 @@ private:
     void award_coins();
     // Copies a character combatant's HP onto its Character and reports it.
     void sync_character_hp(const Combatant& combatant);
+    // Mage Armor or Aid on a character: saved on the Character so it lasts
+    // past the fight, and the combatant's AC and HP follow. Returns the outcome.
+    std::string apply_lasting(const Spell& spell, int slot, int target_index);
 
     void log(std::string text);
     void changed(int character_id);

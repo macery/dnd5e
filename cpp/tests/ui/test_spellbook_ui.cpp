@@ -2,9 +2,11 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <QListWidget>
 #include <QTableWidget>
 
 #include "SpellbookDialog.hpp"
+#include "dnd/campaign.hpp"
 #include "dnd/spellbook.hpp"
 #include "dnd/spellcasting.hpp"
 #include "ui_helpers.hpp"
@@ -72,4 +74,46 @@ TEST_CASE("spellbook: a Cleric's list is locked until a long rest", "[ui][prepar
     settle();
     REQUIRE(visibleText(book).contains("Prepared spells change only after a long rest"));
     REQUIRE_FALSE(button(book, "Prepare")->isEnabled());  // the Learn button, renamed for Clerics
+}
+
+TEST_CASE("spellbook: Aid on the party lasts until a long rest", "[ui][lasting]") {
+    World world;
+    auto cleric = world.add("Sister", "Cleric", 3);
+    auto fighter = world.add("Aria", "Fighter", 3, {"Chain Mail"});
+    auto stranger = world.add("Bram", "Fighter", 3);  // not in the campaign
+    dnd::Campaign campaign;
+    campaign.name = "Ashgrove";
+    int campaignId = world.repo.add_campaign(campaign);
+    world.repo.set_character_campaign(cleric.character_id, campaignId);
+    world.repo.set_character_campaign(fighter.character_id, campaignId);
+    dnd::add_known_spell(world.repo, world.get(cleric.character_id), *dnd::find_class_info("Cleric"),
+                         spellId(world, "Aid"));
+
+    SpellbookDialog book(world.repo, world.get(cleric.character_id), world.repo.get_classes());
+    book.show();
+    settle();
+    REQUIRE(selectSpell(book, "Aid"));
+    auto* targets = book.findChild<QListWidget*>();
+    REQUIRE(targets->isVisible());
+    REQUIRE(targets->count() == 2);  // Sister and Aria, not Bram
+    REQUIRE(targets->item(0)->text() == "Sister (you)");
+    REQUIRE(targets->item(0)->checkState() == Qt::Checked);
+    targets->item(1)->setCheckState(Qt::Checked);
+    button(book, "Cast")->click();
+    settle();
+    REQUIRE(visibleText(book).contains("Cast Aid with a 2nd-level slot. Sister: Aid: +5 max HP; Aria: Aid: +5 max HP."));
+    REQUIRE(world.get(cleric.character_id).max_hp == 35);
+    REQUIRE(world.get(fighter.character_id).max_hp == 35);
+    REQUIRE(world.get(fighter.character_id).current_hp == 35);
+    REQUIRE(world.get(stranger.character_id).max_hp == 30);
+
+    // A stronger Aid could still replace it, but the same slot level is refused, and costs nothing.
+    REQUIRE(selectSpell(book, "Aid"));
+    REQUIRE(targets->item(1)->text() == "Aria");
+    targets->item(0)->setCheckState(Qt::Unchecked);
+    targets->item(1)->setCheckState(Qt::Checked);
+    button(book, "Cast")->click();
+    settle();
+    REQUIRE(visibleText(book).contains("Aria already has Aid."));
+    REQUIRE(world.get(cleric.character_id).spell_slots_used[1] == 1);
 }

@@ -10,6 +10,7 @@
 #include "dnd/damage.hpp"
 #include "dnd/detail/statement.hpp"
 #include "dnd/inventory.hpp"
+#include "dnd/lasting_effects.hpp"
 #include "dnd/spellcasting.hpp"
 #include "dnd/migrations.hpp"
 
@@ -24,7 +25,7 @@ constexpr const char* kCharacterColumns =
     "CharacterId, CharacterName, Class, Race, Alignment, PlayerID, Level, "
     "Strength, Dexterity, Constitution, Intelligence, Wisdom, Charisma, "
     "CurrentHP, MaxHP, SkillProficiencies, SaveProficiencies, "
-    "Experience, HitDiceUsed, Background, SpellSlotsUsed, Dead, FeatureUses, FightingStyle, Coins, RevivalPenalty, CampaignID, MayPrepare, Subclass, SubclassChoice, Exhaustion, TempHP, ClassOptions, MaxHpReduction, Inspiration, Haggle";
+    "Experience, HitDiceUsed, Background, SpellSlotsUsed, Dead, FeatureUses, FightingStyle, Coins, RevivalPenalty, CampaignID, MayPrepare, Subclass, SubclassChoice, Exhaustion, TempHP, ClassOptions, MaxHpReduction, Inspiration, Haggle, LastingEffects";
 // (Characters.ArmorClass and WeaponID still exist but are no longer used:
 // AC and weapons come from equipped inventory items since migration 15.)
 
@@ -120,6 +121,7 @@ Character read_character_row(sqlite3_stmt* stmt) {
     character.max_hp_reduction = sqlite3_column_int(stmt, 33);
     character.inspiration = sqlite3_column_int(stmt, 34) != 0;
     character.haggle = sqlite3_column_int(stmt, 35);
+    character.lasting_effects = parse_lasting_effects(column_text(stmt, 36));
     return character;
 }
 
@@ -603,8 +605,8 @@ int Repository::add_character(const Character& character) {
         "Strength, Dexterity, Constitution, Intelligence, Wisdom, Charisma, "
         "CurrentHP, MaxHP, SkillProficiencies, SaveProficiencies, "
         "Experience, HitDiceUsed, Background, SpellSlotsUsed, Dead, FeatureUses, FightingStyle, Coins, RevivalPenalty, MayPrepare, "
-        "Subclass, SubclassChoice, Exhaustion, TempHP, ClassOptions, MaxHpReduction, Inspiration, Haggle) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);");
+        "Subclass, SubclassChoice, Exhaustion, TempHP, ClassOptions, MaxHpReduction, Inspiration, Haggle, LastingEffects) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);");
     bind_text(stmt, 1, character.character_name);
     sqlite3_bind_int(stmt.get(), 2, character.class_id);
     sqlite3_bind_int(stmt.get(), 3, character.race);
@@ -639,6 +641,7 @@ int Repository::add_character(const Character& character) {
     sqlite3_bind_int(stmt.get(), 32, character.max_hp_reduction);
     sqlite3_bind_int(stmt.get(), 33, character.inspiration ? 1 : 0);
     sqlite3_bind_int(stmt.get(), 34, character.haggle);
+    bind_text(stmt, 35, format_lasting_effects(character.lasting_effects));
     detail::run_and_expect_done(stmt, "insert character");
     return static_cast<int>(sqlite3_last_insert_rowid(db_));
 }
@@ -677,7 +680,7 @@ void Repository::update_character(const Character& character) {
         "CurrentHP = ?, MaxHP = ?, SkillProficiencies = ?, SaveProficiencies = ?, "
         "Experience = ?, HitDiceUsed = ?, Background = ?, SpellSlotsUsed = ?, Dead = ?, FeatureUses = ?, "
         "FightingStyle = ?, Coins = ?, RevivalPenalty = ?, MayPrepare = ?, Subclass = ?, SubclassChoice = ?, "
-        "Exhaustion = ?, TempHP = ?, ClassOptions = ?, MaxHpReduction = ?, Inspiration = ?, Haggle = ? "
+        "Exhaustion = ?, TempHP = ?, ClassOptions = ?, MaxHpReduction = ?, Inspiration = ?, Haggle = ?, LastingEffects = ? "
         "WHERE CharacterId = ?;");
     bind_text(stmt, 1, character.character_name);
     sqlite3_bind_int(stmt.get(), 2, character.class_id);
@@ -712,7 +715,8 @@ void Repository::update_character(const Character& character) {
     sqlite3_bind_int(stmt.get(), 31, character.max_hp_reduction);
     sqlite3_bind_int(stmt.get(), 32, character.inspiration ? 1 : 0);
     sqlite3_bind_int(stmt.get(), 33, character.haggle);
-    sqlite3_bind_int(stmt.get(), 34, character.character_id);
+    bind_text(stmt, 34, format_lasting_effects(character.lasting_effects));
+    sqlite3_bind_int(stmt.get(), 35, character.character_id);
     detail::run_and_expect_done(stmt, "update character");
 }
 

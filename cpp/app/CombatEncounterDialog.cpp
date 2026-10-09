@@ -1180,6 +1180,11 @@ void CombatEncounterDialog::refreshSpellInfo() {
         case dnd::SpellResolution::Utility:
             text = "No automated effect yet -- casting uses the action (and slot) and shows the description.";
             break;
+        case dnd::SpellResolution::Lasting: {
+            QString summary = q(dnd::spell_summary(*spell));
+            text = summary.left(1).toUpper() + summary.mid(1) + ". It lasts past this fight.";
+            break;
+        }
         case dnd::SpellResolution::Buff:
         case dnd::SpellResolution::Revive:
             text = QString("A character who died in this fight returns with 1 HP.%1")

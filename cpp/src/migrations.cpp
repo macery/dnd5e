@@ -18,7 +18,7 @@ using detail::Statement;
 // for future schema changes -- never edit an existing one, since a
 // migration's sql is exactly what already ran on every database that has it
 // recorded in SchemaMigrations.
-constexpr std::array<Migration, 36> kMigrations = {{
+constexpr std::array<Migration, 37> kMigrations = {{
     {1, "initial schema: Players, Classes, Characters", R"sql(
         CREATE TABLE IF NOT EXISTS Players (
             PlayerID INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1197,6 +1197,17 @@ constexpr std::array<Migration, 36> kMigrations = {{
             UNION ALL SELECT 'Spy',   1, 'Shortsword', 4, 1, 6, 2, 'piercing',    2
             UNION ALL SELECT 'Noble', 1, 'Rapier',     3, 1, 8, 1, 'piercing',    1
         ) AS a ON a.Monster = Monsters.Name;
+    )sql"},
+    // Effects that outlast a fight (docs/lasting-effects.md): Mage Armor and
+    // Aid are saved on the character until a long rest.
+    {37, "add Characters.LastingEffects; automate Mage Armor and Aid", R"sql(
+        ALTER TABLE Characters ADD COLUMN LastingEffects TEXT NOT NULL DEFAULT '';
+        UPDATE Spells SET Resolution = 'Lasting', MaxTargets = 1,
+            Description = 'A creature not wearing armor has a base AC of 13 + its Dexterity modifier for 8 hours (until its next long rest). Putting on armor ends it.'
+            WHERE Name = 'Mage Armor';
+        UPDATE Spells SET Resolution = 'Lasting', MaxTargets = 3,
+            Description = 'Up to three creatures'' hit point maximum and current hit points rise by 5 for 8 hours (until their next long rest). Each slot level above 2nd adds 5 more.'
+            WHERE Name = 'Aid';
     )sql"},
 }};
 

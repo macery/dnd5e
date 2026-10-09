@@ -48,6 +48,7 @@ struct ExportedCharacter {
     std::map<std::string, std::vector<std::string>> class_options;  // optional in files
     int max_hp_reduction = 0;
     bool inspiration = false;
+    std::map<std::string, int> lasting_effects;  // Mage Armor, Aid (dnd/lasting_effects.hpp)
     std::vector<std::string> saving_throws;  // ability names
     std::vector<std::string> skills;         // skill names
     std::string fighting_style;

@@ -8,6 +8,7 @@
 
 #include "dnd/character_creation.hpp"
 #include "dnd/class_features.hpp"
+#include "dnd/lasting_effects.hpp"
 #include "dnd/rules.hpp"
 
 namespace dnd {
@@ -96,6 +97,7 @@ int spend_hit_die(Character& character, const Dice& dice, int hit_die) {
 
 void take_long_rest(Character& character) {
     if (character.dead) return;  // only revival magic brings the dead back
+    end_lasting_effects(character);  // Mage Armor and Aid last 8 hours
     character.max_hp += character.max_hp_reduction;  // Life Drain wears off
     character.max_hp_reduction = 0;
     character.current_hp = character.max_hp;

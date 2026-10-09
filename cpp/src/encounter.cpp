@@ -12,6 +12,7 @@
 #include "dnd/currency.hpp"
 #include "dnd/equipment.hpp"
 #include "dnd/inventory.hpp"
+#include "dnd/lasting_effects.hpp"
 #include "dnd/magic_items.hpp"
 #include "dnd/progression.hpp"
 #include "dnd/rules.hpp"
@@ -1842,6 +1843,16 @@ std::vector<int> Encounter::spell_target_candidates(const Spell& spell) const {
             case SpellResolution::Stabilize:  // the dying
                 eligible = candidate.is_character && candidate.current_hp <= 0 && !candidate.death_saves.stable;
                 break;
+            case SpellResolution::Lasting:  // the party's characters, saved after the fight; not a beast form
+                if (candidate.is_character && candidate.current_hp > 0 && !candidate.druid_form) {
+                    const Character* target = character(candidate.character_id);
+                    const auto* pack = inventory_of(candidate.character_id);
+                    // The strongest slot, so someone with a weaker Aid still shows.
+                    eligible = target && lasting_refusal(spell, *target, pack ? *pack : std::vector<InventoryEntry>{},
+                                                         kMaxSpellLevel)
+                                             .empty();
+                }
+                break;
             default:  // living enemies (not whoever charmed the caster)
                 eligible = !party_side(candidate) && candidate.current_hp > 0 &&
                            !(actor_index >= 0 && charmed_by(actor_index, i)) &&
@@ -2732,6 +2743,9 @@ void Encounter::resolve_spell(int actor_index, const Spell& spell, const CasterS
             case SpellResolution::Revive:
                 outcome = revive(target_index);
                 break;
+            case SpellResolution::Lasting:
+                outcome = apply_lasting(spell, slot, target_index);
+                break;
             case SpellResolution::AutoHit:
                 followups = apply_damage(target_index, dealt, false, actor_index, spell.damage_type);
                 outcome = "hit for " + std::to_string(dealt) + damage_note;
@@ -2749,7 +2763,8 @@ void Encounter::resolve_spell(int actor_index, const Spell& spell, const CasterS
         }
         if (!labels.empty()) outcome += "; " + join(labels, ", ");
         bool shows_hp = spell.resolution != SpellResolution::Buff && spell.resolution != SpellResolution::Stabilize &&
-                        spell.resolution != SpellResolution::Revive;
+                        spell.resolution != SpellResolution::Revive &&
+                        !(spell.resolution == SpellResolution::Lasting && spell.name != kAid);
         log("    " + target.name + ": " + outcome + (shows_hp ? ". Now " + hp_text(target) + " HP." : "."));
         for (const auto& line : followups) log(line);
     }
@@ -3406,6 +3421,27 @@ std::vector<EncounterEvent> Encounter::take_events() {
     std::vector<EncounterEvent> events;
     events.swap(events_);
     return events;
+}
+
+std::string Encounter::apply_lasting(const Spell& spell, int slot, int target_index) {
+    Combatant& target = combatants_[static_cast<size_t>(target_index)];
+    Character* character = character_mut(target.character_id);
+    if (!character) return "unaffected";
+    const auto* pack = inventory_of(target.character_id);
+    std::vector<InventoryEntry> inventory = pack ? *pack : std::vector<InventoryEntry>{};
+    std::string refusal = lasting_refusal(spell, *character, inventory, slot);
+    if (!refusal.empty()) return "unaffected (" + refusal.substr(0, refusal.size() - 1) + ")";
+
+    int max_before = character->max_hp;
+    std::string outcome = apply_lasting_spell(spell, *character, slot);
+    int gain = character->max_hp - max_before;
+    target.max_hp += gain;
+    target.current_hp += gain;
+    character->current_hp = target.current_hp;  // the fight's HP, not the one saved before it
+    target.armor_class = calculate_armor_class(*character, target.class_name, inventory).total;
+    changed(target.character_id);
+    if (spell.name == kMageArmor) outcome += " (AC " + std::to_string(armor_class(target_index)) + ")";
+    return outcome;
 }
 
 void Encounter::sync_character_hp(const Combatant& combatant) {

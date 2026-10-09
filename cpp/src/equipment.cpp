@@ -6,6 +6,7 @@
 
 #include "dnd/class_features.hpp"
 #include "dnd/class_options.hpp"
+#include "dnd/lasting_effects.hpp"
 #include "dnd/magic_items.hpp"
 #include "dnd/rules.hpp"
 
@@ -180,6 +181,11 @@ ArmorClassBreakdown calculate_armor_class(const Character& stored, const std::st
                 best = {{"Unarmored Defense", 10}, {"DEX", dex}, {"WIS", wis}};
                 best_total = 10 + dex + wis;
             }
+        }
+        // Mage Armor is one more unarmored base; only the best one counts.
+        if (has_lasting_effect(character, kMageArmor) && 13 + dex > best_total) {
+            best = {{kMageArmor, 13}, {"DEX", dex}};
+            best_total = 13 + dex;
         }
         ac.parts = best;
     }

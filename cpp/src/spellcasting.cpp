@@ -5,6 +5,7 @@
 #include <stdexcept>
 
 #include "dnd/combat.hpp"
+#include "dnd/lasting_effects.hpp"
 #include "dnd/rules.hpp"
 
 #include "dnd/subclass.hpp"
@@ -66,6 +67,7 @@ const char* spell_resolution_name(SpellResolution resolution) {
         case SpellResolution::Buff: return "Buff";
         case SpellResolution::Stabilize: return "Stabilize";
         case SpellResolution::Revive: return "Revive";
+        case SpellResolution::Lasting: return "Lasting";
     }
     throw std::invalid_argument("unknown spell resolution");
 }
@@ -73,7 +75,7 @@ const char* spell_resolution_name(SpellResolution resolution) {
 SpellResolution spell_resolution_from_name(const std::string& name) {
     for (auto resolution : {SpellResolution::Attack, SpellResolution::Save, SpellResolution::AutoHit,
                             SpellResolution::Heal, SpellResolution::Utility, SpellResolution::Buff,
-                            SpellResolution::Stabilize, SpellResolution::Revive}) {
+                            SpellResolution::Stabilize, SpellResolution::Revive, SpellResolution::Lasting}) {
         if (name == spell_resolution_name(resolution)) return resolution;
     }
     throw std::invalid_argument("unknown spell resolution: " + name);
@@ -432,6 +434,9 @@ std::string spell_summary(const Spell& spell) {
         case SpellResolution::Revive:
             summary = "a creature that died in this fight returns with 1 HP";
             break;
+        case SpellResolution::Lasting:
+            summary = lasting_summary(spell);
+            break;
     }
     if (spell.concentration) summary += " (concentration)";
     return summary;
@@ -465,7 +470,7 @@ SpellCastResult cast_spell(const Dice& dice, const Spell& spell, const CasterSta
     int bonus = spell.flat_bonus + (spell.adds_modifier ? caster.spellcasting_modifier : 0);
 
     if (spell.resolution == SpellResolution::Buff || spell.resolution == SpellResolution::Stabilize ||
-        spell.resolution == SpellResolution::Revive) {
+        spell.resolution == SpellResolution::Revive || spell.resolution == SpellResolution::Lasting) {
         for (size_t i = 0; i < targets.size(); ++i) {
             SpellEffectRoll effect;
             effect.target = static_cast<int>(i);

@@ -65,6 +65,9 @@ struct Character {
     // ("SecondWind", "Rage", ...). Maximums come from class and level
     // (dnd/class_features.hpp); rests clear them.
     std::map<std::string, int> feature_uses_spent;
+    // Spell effects that outlast a fight, by spell name, with an amount (Aid's
+    // HP bonus); a long rest ends them (dnd/lasting_effects.hpp).
+    std::map<std::string, int> lasting_effects;
     // A Fighter's Fighting Style ("Defense", "Archery", ...); empty if none
     // (see dnd/class_features.hpp).
     std::string fighting_style;

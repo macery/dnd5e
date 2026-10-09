@@ -19,6 +19,7 @@ enum class SpellResolution {
     Buff,       // no roll: applies its effects to allies or the caster (Bless, Shield of Faith)
     Stabilize,  // a dying creature becomes stable (Spare the Dying)
     Revive,     // a character who died in this fight returns with 1 HP (Revivify)
+    Lasting,    // saved on the character until a long rest (Mage Armor, Aid; dnd/lasting_effects.hpp)
 };
 
 // When a spell's effect lands (SpellEffects.Trigger).

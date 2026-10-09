@@ -54,6 +54,7 @@ add_library(dndcore
     src/scenes.cpp
     src/npc.cpp
     src/tactics.cpp
+    src/lasting_effects.cpp
     src/damage.cpp
     src/dice.cpp
     src/effects.cpp

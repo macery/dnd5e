@@ -47,7 +47,7 @@ Status: **done.** As with campaigns, the questions were settled with the recomme
 
 - **Spells that need a map, auras, or summons:** *Spiritual Weapon*'s later turns, *Spirit Guardians*, *Moonbeam*, *Call Lightning*'s later bolts, *Conjure Animals*. They're Utility for now.
 - **Reactions:** *Counterspell* waits for reactions and isn't seeded.
-- **Effects that outlast combat:** *Aid*'s 8 hours. It's Utility too.
+- **Effects that outlast combat:** *Aid*'s 8 hours. It was Utility at first; [lasting-effects.md](lasting-effects.md) automated it.
 - **Revivify outside combat.** There's no clock to tell "within the last minute" once the fight ends.
 
 ## Engine changes

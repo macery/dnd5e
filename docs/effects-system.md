@@ -141,7 +141,7 @@ A short, fixed list, the same idea as the spell resolution kinds:
 | any + `concentration` | ends when the caster's concentration does |
 | any + `save_to_end` | the target repeats the save at the end of each of its turns (for later spells like *Hold Person*) |
 
-Combat ends every effect. Effects that outlast combat are a [later](#later) change.
+Combat ends every effect. Effects that outlast combat came later: see [lasting-effects.md](lasting-effects.md).
 
 ## How effects change the rules
 

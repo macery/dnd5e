@@ -6,6 +6,7 @@
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLabel>
+#include <QListWidget>
 #include <QPushButton>
 #include <QStringList>
 #include <QTableWidget>
@@ -15,6 +16,7 @@
 
 #include "WindowSizing.hpp"
 #include "dnd/class_features.hpp"
+#include "dnd/lasting_effects.hpp"
 #include "dnd/spellbook.hpp"
 #include "dnd/spellcasting.hpp"
 #include "dnd/subclass.hpp"
@@ -82,6 +84,10 @@ SpellbookDialog::SpellbookDialog(dnd::Repository& repository, dnd::Character cha
     castRow->addWidget(castButton_);
     castRow->addWidget(prepareButton_);
     castRow->addWidget(forgetButton_);
+    targetList_ = new QListWidget(this);
+    targetList_->setToolTip("Who gets the spell. It lasts until each one's next long rest.");
+    targetList_->setMaximumHeight(110);
+    targetList_->setVisible(false);
     prepareLabel_ = new QLabel(this);
     prepareLabel_->setWordWrap(true);
     fontRow_ = new QWidget(this);
@@ -116,6 +122,7 @@ SpellbookDialog::SpellbookDialog(dnd::Repository& repository, dnd::Character cha
     layout->addWidget(prepareLabel_);
     layout->addWidget(fontRow_);
     layout->addWidget(table_, 1);
+    layout->addWidget(targetList_);
     layout->addLayout(castRow);
     layout->addWidget(messageLabel_);
     layout->addLayout(learnRow);
@@ -291,9 +298,13 @@ void SpellbookDialog::onSelectionChanged() {
     prepareButton_->setToolTip(!refusal.empty() ? q(refusal) : QString());
 
     slotCombo_->clear();
+    bool lasting = spell && spell->resolution == dnd::SpellResolution::Lasting;
     bool castable = spell && spell->prepared && spell->casting_time != dnd::CastingTime::Reaction &&
                     (spell->resolution == dnd::SpellResolution::Heal ||
-                     spell->resolution == dnd::SpellResolution::Utility);
+                     spell->resolution == dnd::SpellResolution::Utility || lasting);
+    castButton_->setText(lasting ? "Cast" : "Cast on Self");
+    targetList_->setVisible(lasting);
+    if (lasting) fillLastingTargets(*spell);
     if (spell && spell->level > 0) {
         for (int level = spell->level; level <= dnd::kMaxSpellLevel; ++level) {
             int remaining = dnd::slots_remaining(character_, *classInfo_, level);
@@ -305,7 +316,7 @@ void SpellbookDialog::onSelectionChanged() {
     slotCombo_->setVisible(spell && spell->level > 0);
     castButton_->setEnabled(castable);
     castButton_->setToolTip(spell && !castable && spell->resolution != dnd::SpellResolution::Heal &&
-                                    spell->resolution != dnd::SpellResolution::Utility
+                                    spell->resolution != dnd::SpellResolution::Utility && !lasting
                                 ? "Cast this spell from Combat Encounter: damage, buffs, and stabilizing only matter "
                                   "in a fight."
                                 : "");
@@ -321,6 +332,10 @@ void SpellbookDialog::onCastClicked() {
         return;
     }
 
+    if (spell.resolution == dnd::SpellResolution::Lasting) {
+        castLasting(spell, slotLevel);
+        return;
+    }
     if (spell.resolution == dnd::SpellResolution::Heal && character_.current_hp >= character_.max_hp) {
         messageLabel_->setText(QString("%1 is already at full HP.").arg(q(character_.character_name)));
         return;
@@ -346,6 +361,85 @@ void SpellbookDialog::onCastClicked() {
         messageLabel_->setText(QString("Cast %1%2. %3").arg(q(spell.name), slotText, q(spell.description)));
     }
     repository_.update_character(character_);
+    reload();
+}
+
+void SpellbookDialog::fillLastingTargets(const dnd::Spell& spell) {
+    targetList_->clear();
+    std::vector<dnd::Character> targets = {character_};
+    if (character_.campaign_id != 0) {
+        for (const auto& other : repository_.get_characters()) {
+            if (other.campaign_id == character_.campaign_id && other.character_id != character_.character_id &&
+                !other.dead) {
+                targets.push_back(other);
+            }
+        }
+    }
+    for (const auto& target : targets) {
+        // The strongest slot, so someone with a weaker Aid can still be picked.
+        std::string refusal = dnd::lasting_refusal(spell, target, repository_.get_inventory(target.character_id),
+                                                   dnd::kMaxSpellLevel);
+        QString name = q(target.character_name);
+        if (target.character_id == character_.character_id) name += " (you)";
+        auto* item = new QListWidgetItem(refusal.empty() ? name : name + " — " + q(refusal), targetList_);
+        item->setData(Qt::UserRole, target.character_id);
+        if (refusal.empty()) {
+            item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
+            item->setCheckState(target.character_id == character_.character_id ? Qt::Checked : Qt::Unchecked);
+        } else {
+            item->setFlags(item->flags() & ~Qt::ItemIsEnabled);
+        }
+    }
+}
+
+void SpellbookDialog::castLasting(const dnd::Spell& spell, int slotLevel) {
+    std::vector<dnd::Character> targets;
+    auto everyone = repository_.get_characters();
+    for (int row = 0; row < targetList_->count(); ++row) {
+        QListWidgetItem* item = targetList_->item(row);
+        if (!(item->flags() & Qt::ItemIsUserCheckable) || item->checkState() != Qt::Checked) continue;
+        int id = item->data(Qt::UserRole).toInt();
+        if (id == character_.character_id) {
+            targets.push_back(character_);
+        } else {
+            auto other = std::find_if(everyone.begin(), everyone.end(),
+                                      [id](const dnd::Character& c) { return c.character_id == id; });
+            if (other != everyone.end()) targets.push_back(*other);
+        }
+    }
+    int maxTargets = dnd::spell_max_targets(spell, character_.level, slotLevel);
+    if (targets.empty() || static_cast<int>(targets.size()) > maxTargets) {
+        messageLabel_->setText(QString("Check 1 to %1 %2 for %3.")
+                                   .arg(maxTargets)
+                                   .arg(maxTargets == 1 ? "target" : "targets", q(spell.name)));
+        return;
+    }
+    // Check everyone before spending the slot.
+    for (const auto& target : targets) {
+        std::string refusal =
+            dnd::lasting_refusal(spell, target, repository_.get_inventory(target.character_id), slotLevel);
+        if (!refusal.empty()) {
+            messageLabel_->setText(q(refusal));
+            return;
+        }
+    }
+    if (slotLevel > 0 && !dnd::spend_spell_slot(character_, *classInfo_, slotLevel)) {
+        messageLabel_->setText("No spell slots of that level left.");
+        return;
+    }
+
+    QStringList outcomes;
+    for (auto& target : targets) {
+        if (target.character_id == character_.character_id) {
+            outcomes << q(character_.character_name) + ": " + q(dnd::apply_lasting_spell(spell, character_, slotLevel));
+        } else {
+            outcomes << q(target.character_name) + ": " + q(dnd::apply_lasting_spell(spell, target, slotLevel));
+            repository_.update_character(target);
+        }
+    }
+    repository_.update_character(character_);
+    messageLabel_->setText(QString("Cast %1 with a %2-level slot. %3.")
+                               .arg(q(spell.name), ordinal(slotLevel), outcomes.join("; ")));
     reload();
 }
 

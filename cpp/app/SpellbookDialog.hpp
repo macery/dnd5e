@@ -12,14 +12,16 @@
 
 class QComboBox;
 class QLabel;
+class QListWidget;
 class QPushButton;
 class QTableWidget;
 
 // A caster's spells outside combat: spellcasting stats and slots, learning
 // and forgetting spells within the class allowance (how new spells are
-// picked after leveling up), and casting healing or utility spells on
-// themselves. Damage spells are cast from Combat Encounter. Every change is
-// persisted immediately via Repository.
+// picked after leveling up), casting healing or utility spells on
+// themselves, and Mage Armor or Aid on themselves or their campaign's party.
+// Damage spells are cast from Combat Encounter. Every change is persisted
+// immediately via Repository.
 class SpellbookDialog : public QDialog {
     Q_OBJECT
 
@@ -37,6 +39,10 @@ private slots:
 
 private:
     void reload();
+    // Fills the target list for a spell that lasts (Mage Armor, Aid): the
+    // caster, then the living characters in the same campaign.
+    void fillLastingTargets(const dnd::Spell& spell);
+    void castLasting(const dnd::Spell& spell, int slotLevel);
     const dnd::Spell* selectedSpell() const;
     // The spells the character would know after adding `extra`.
     std::vector<dnd::Spell> knownPlus(const dnd::Spell& extra) const;
@@ -57,6 +63,7 @@ private:
     QTableWidget* table_ = nullptr;
     QComboBox* slotCombo_ = nullptr;
     QPushButton* castButton_ = nullptr;
+    QListWidget* targetList_ = nullptr;  // Mage Armor, Aid: who gets it
     QPushButton* forgetButton_ = nullptr;
     QPushButton* prepareButton_ = nullptr;  // Wizards: prepare or unprepare a spellbook spell
     QLabel* prepareLabel_ = nullptr;        // when prepared spells can change

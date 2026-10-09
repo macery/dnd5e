@@ -17,6 +17,7 @@
 #include "dnd/class_features.hpp"
 #include "dnd/currency.hpp"
 #include "dnd/equipment.hpp"
+#include "dnd/lasting_effects.hpp"
 #include "dnd/level_up.hpp"
 #include "dnd/magic_items.hpp"
 #include "dnd/progression.hpp"
@@ -222,6 +223,12 @@ CharacterSheetDialog::CharacterSheetDialog(const dnd::Character& character,
                    summaryGroup),
         "How hard this character is to hit. An attack roll must meet or beat this number to hit. Calculated "
         "from worn armor, DEX, a shield, and class features -- equip armor from the Inventory.");
+    if (!character.lasting_effects.empty()) {
+        addExplainedRow(summaryForm, "Spells in effect",
+            new QLabel(QString::fromStdString(dnd::describe_lasting_effects(character)), summaryGroup),
+            "Spells that last 8 hours: they end at the next long rest. Mage Armor sets unarmored AC to 13 + DEX and "
+            "ends if armor goes on; Aid's bonus is already in the hit points.");
+    }
     addExplainedRow(summaryForm, "Speed",
         new QLabel(QString("%1 ft.").arg(dnd::walking_speed(character, raceName, inventory)), summaryGroup),
         "How far this character can move in a turn, from their race. Heavy armor without enough STR costs 10 ft. "
