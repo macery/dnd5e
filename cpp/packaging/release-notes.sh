@@ -20,6 +20,10 @@ fi
 
 cat <<NOTES
 
+## Install (Windows x64)
+
+Download \`DnD_Engine-windows-x64.zip\`, unzip it, and run \`DnD_Engine.exe\`.
+
 ## Install (Linux x86_64)
 
 \`\`\`sh

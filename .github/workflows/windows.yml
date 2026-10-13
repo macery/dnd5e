@@ -1,0 +1,72 @@
+name: Windows
+
+# Builds a portable Windows zip (the app, Qt's DLLs, and SQLite). Every run
+# uploads it as a workflow artifact; pushing a v* tag also attaches it to the
+# GitHub release. Tests run in cpp-ci.yml, so this only builds and packages.
+
+"on":
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    paths:
+      - 'cpp/**'
+      - '.github/workflows/windows.yml'
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    permissions:
+      contents: write  # only used to attach the zip to a release
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install SQLite3 (via preinstalled vcpkg)
+        shell: pwsh
+        run: vcpkg install sqlite3:x64-windows
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.7.2'
+          host: windows
+          target: desktop
+          arch: win64_msvc2019_64
+          cache: true
+
+      - name: Configure
+        shell: pwsh
+        run: >
+          cmake -S cpp -B cpp/build -A x64
+          -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
+          -DVCPKG_TARGET_TRIPLET=x64-windows
+
+      - name: Build
+        run: cmake --build cpp/build --config Release --parallel --target dnd_app
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $dir = "DnD_Engine"
+          New-Item -ItemType Directory $dir | Out-Null
+          Copy-Item cpp/build/app/Release/dnd_app.exe "$dir/DnD_Engine.exe"
+          Copy-Item "$env:VCPKG_INSTALLATION_ROOT/installed/x64-windows/bin/sqlite3.dll" $dir
+          windeployqt --release --no-translations --no-system-d3d-compiler "$dir/DnD_Engine.exe"
+          Compress-Archive -Path $dir -DestinationPath DnD_Engine-windows-x64.zip
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DnD_Engine-windows-x64
+          path: DnD_Engine-windows-x64.zip
+          if-no-files-found: error
+
+      # No body here: the AppImage workflow writes the release notes, and
+      # whichever job gets to the release first creates it.
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: DnD_Engine-windows-x64.zip

@@ -180,7 +180,7 @@ ctest --test-dir cpp/build --output-on-failure
 - **`dnd_tests`:** the core rules, with Catch2.
 - **`dnd_ui_tests`:** offscreen UI tests, built when Qt is available. They open the app's windows against an in-memory database on Qt's offscreen platform and click through them. They check that every window fits an 800×600 screen, and they cover Level Up, the creation wizard, the editor, the character sheet's columns, the import preview, rests, the combat controls, and solo adventures. To run them alone: `QT_QPA_PLATFORM=offscreen ./cpp/build/tests/ui/dnd_ui_tests`.
 
-On Windows, CI installs SQLite through vcpkg; see `.github/workflows/cpp-ci.yml` for the exact configure command.
+On Windows, CI installs SQLite through vcpkg, and the `Windows` workflow packages a portable zip (unzip it and run `DnD_Engine.exe`); see `.github/workflows/cpp-ci.yml` for the exact configure command.
 
 ### Portable Linux build (AppImage)
 
@@ -396,6 +396,7 @@ Phases 1 (core and data) and 2 (UI) are done; see [docs/magic-system.md](docs/ma
 - [x] **Qt UI tests**: `dnd_ui_tests` (in `cpp/tests/ui`) runs in CI on Linux, Windows, and the AppImage build, checking that every window fits a small screen and covering the dialogs' behavior. New windows should get a line in `test_window_sizes.cpp`.
 - [x] **Linux AppImage**: a local build script (`cpp/packaging/build-appimage.sh`).
 - [x] **AppImage in CI**: built on every push and attached to releases for `v*` tags.
+- [x] **Windows zip in CI**: `.github/workflows/windows.yml` builds a portable zip (the app, Qt, and SQLite DLLs) on every push to `main` and attaches it to `v*` releases. Unzip and run `DnD_Engine.exe`.
 - [ ] **More packaging**: a Windows installer, and maybe Flatpak.
 - [x] **Wayland plugin**: the AppImage bundles Qt's Wayland platform plugin alongside X11 (v0.22.1).
 - [ ] **Code style**: add `clang-format` / `clang-tidy` configs and check them in CI.
