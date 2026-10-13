@@ -38,7 +38,7 @@ It manages players and characters, computes a full character sheet from the 5e r
 - **Combat encounters**:
   - Real initiative order.
   - Monster turns resolve automatically. Monsters pick targets by how smart they are ([docs/monster-ai.md](docs/monster-ai.md)): beasts and mindless creatures attack anyone, cunning ones favor the wounded, and tactical ones also go after spellcasters and anyone concentrating.
-  - On each of your turns you pick Attack, Dash, Dodge, Drink Potion, Cast a Spell, or Stabilize.
+  - On each of your turns you pick Attack, Dash, Dodge, Help, Drink Potion, Cast a Spell, or Stabilize.
   - **Conditions and effects:** all 14 PHB conditions, plus spell effects like *Bless*, *Guiding Bolt*, and *Charm Person*. They change advantage and disadvantage, saves, AC, and who can act. Hover a creature's status for what each one does and how long it lasts.
   - **Death saving throws:** characters at 0 HP are dying and roll each turn. Stabilize them, heal them, or lose them. The dead stay dead until a temple raises them (see *Shop*).
   - **Concentration:** one spell at a time, and damage can break it.
@@ -54,6 +54,7 @@ It manages players and characters, computes a full character sheet from the 5e r
     Bonus-action spells follow the PHB rule.
   - Natural 20s crit and natural 1s miss.
   - Dodge imposes disadvantage on attacks against you.
+  - Help gives an ally advantage on their next attack roll, until the start of your next turn.
   - Drink Potion heals from your inventory.
   - The encounter ends with a victory or a defeat.
 - **Campaigns** ([docs/campaigns.md](docs/campaigns.md)): a table that plays together, with characters from any players.
@@ -132,7 +133,7 @@ dnd5e/
 | `dice` / `rng` | The dice engine. Randomness comes from an injected `IRandomSource`, so tests are deterministic. |
 | `rules` | Pure 5e rules math: modifiers, proficiency, skills, saves, weapon attack bonuses. |
 | `combat` | Attack resolution (hit/miss, crits, advantage/disadvantage). Knows nothing about characters or monsters. |
-| `encounter` | The combat engine: initiative and turns, monster AI, the Attack/Dash/Dodge/Drink Potion/Cast a Spell actions, victory and defeat, XP and loot. It reports log lines and what to persist as events, and never touches the database. |
+| `encounter` | The combat engine: initiative and turns, monster AI, the Attack/Dash/Dodge/Help/Drink Potion/Cast a Spell actions, victory and defeat, XP and loot. It reports log lines and what to persist as events, and never touches the database. |
 | `inventory` | The item model (`item.hpp`), healing consumables, weight and cost helpers. |
 | `character_creation` | Class, race, and background rules data; ability score generation; skill plans; validation; and assembling a level-1 character. |
 | `spellcasting` | Spell model (`spell.hpp`), class spellcasting stats, spell counts, slot tables, and `cast_spell`. |
@@ -346,7 +347,7 @@ Phases 1 (core and data) and 2 (UI) are done; see [docs/magic-system.md](docs/ma
 - [x] **Conditions**: all 14 PHB conditions are wired into advantage, disadvantage, auto-fails, auto-crits, and skipped turns (`dnd/effects`). They're applied in play by *Charm Person*, the Wolf's knock-prone, and dropping to 0 HP. Hovering a status in combat explains each one. More sources will come as monsters and spells are added.
 - [x] **Death saving throws**: characters at 0 HP fall unconscious and roll death saves each turn. A natural 1 counts as two failures, and a natural 20 brings them back with 1 HP. Massive damage kills outright. Healing revives them, and the fight's end stabilizes them. Monsters ignore the dying. A **Stabilize** action (Medicine check, or automatic with a Healer's Kit) and *Spare the Dying* stabilize the dying. Death save pips show in combat, and the dead are marked and kept out of play.
 - [ ] **Revival**: a temple's *raise dead* is done (the Shop's Temple tab, with the −4 penalty that eases each long rest). Still to come: characters casting *Revivify*, *Raise Dead*, *Reincarnate*, *Resurrection*, and *True Resurrection* themselves, which needs the spells, their material components, and time tracking. The penalty doesn't touch skill checks yet; initiative is the only ability check in combat.
-- [ ] **More actions**: Disengage, Help, Hide, and Ready. (Attack, Dash, Dodge, Drink Potion, Cast a Spell, and Stabilize exist.) Most need positions or reactions to mean much without a map; Help (advantage on an ally's next attack) works without one.
+- [ ] **More actions**: Disengage, Hide, and Ready. (Attack, Dash, Dodge, Help, Drink Potion, Cast a Spell, and Stabilize exist.) Most need positions or reactions to mean much without a map. Help works without one: it gives any other standing character advantage on their next attack roll, rather than tying it to an enemy within 5 feet. Monsters don't use it.
 - [x] **Monsters and encounter balance** ([docs/monsters-and-encounters.md](docs/monsters-and-encounters.md)):
   - Damage and creature types.
   - Multiattack and 13 SRD monsters from CR ½ to 5, with monster traits.

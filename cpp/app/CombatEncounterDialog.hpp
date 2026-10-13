@@ -86,6 +86,7 @@ private:
     void refreshTargetCombo();
     void refreshPotionCombo();
     void refreshStabilizeCombo();
+    void refreshHelpCombo();
     // The current character's non-spell bonus actions (class features) and
     // the Action Surge button.
     void refreshBonusControls();
@@ -151,6 +152,7 @@ private:
     QComboBox* targetCombo_ = nullptr;
     QComboBox* potionCombo_ = nullptr;
     QComboBox* stabilizeCombo_ = nullptr;
+    QComboBox* helpCombo_ = nullptr;
     QLabel* stabilizeInfoLabel_ = nullptr;
     QComboBox* spellCombo_ = nullptr;
     QComboBox* spellSlotCombo_ = nullptr;

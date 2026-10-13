@@ -1878,6 +1878,17 @@ std::vector<int> Encounter::stabilize_targets() const {
     return targets;
 }
 
+std::vector<int> Encounter::help_targets() const {
+    std::vector<int> targets;
+    if (!current_character()) return targets;
+    int self = current_index();
+    for (int i = 0; i < static_cast<int>(combatants_.size()); ++i) {
+        const auto& candidate = combatants_[static_cast<size_t>(i)];
+        if (i != self && candidate.is_character && candidate.current_hp > 0) targets.push_back(i);
+    }
+    return targets;
+}
+
 bool Encounter::has_healers_kit() const {
     const Combatant* actor = current_character();
     if (!actor) return false;
@@ -2465,6 +2476,30 @@ bool Encounter::stabilize(int target_index) {
         target.death_saves = DeathSaveState{};
         target.death_saves.stable = true;
     }
+    use_action();
+    check_for_victory_or_defeat();
+    return true;
+}
+
+bool Encounter::help(int target_index) {
+    if (!can_take_action()) return false;
+    auto targets = help_targets();
+    if (std::find(targets.begin(), targets.end(), target_index) == targets.end()) return false;
+
+    int actor_index = current_index();
+    ActiveEffect helped;
+    helped.kind = EffectKind::AdvantageOnNextAttack;
+    helped.target = target_index;
+    helped.source = actor_index;
+    helped.label = "Helped";
+    helped.duration.kind = DurationKind::UntilStartOfTurn;
+    helped.duration.participant = actor_index;
+    helped.duration.until_used = true;
+    add_effect(helped);
+    log(combatants_[static_cast<size_t>(actor_index)].name + " helps " +
+        combatants_[static_cast<size_t>(target_index)].name +
+        " (advantage on their next attack roll until the start of " +
+        combatants_[static_cast<size_t>(actor_index)].name + "'s next turn).");
     use_action();
     check_for_victory_or_defeat();
     return true;

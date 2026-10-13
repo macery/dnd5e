@@ -426,6 +426,11 @@ public:
     // Stabilize a dying ally: a DC 10 WIS (Medicine) check, or automatic with a
     // Healer's Kit (not used up; kit uses aren't tracked yet).
     bool stabilize(int target);
+    // Help: another character (not the helper, not a dead or dying one) has
+    // advantage on their next attack roll before the helper's next turn. The
+    // PHB ties it to an enemy within 5 feet; with no map, any ally will do.
+    std::vector<int> help_targets() const;
+    bool help(int target);
     // `slot_level` is 0 for cantrips; `targets` are combatant indices (ignored
     // for Utility spells). The spell's casting time decides whether it takes
     // the action or the bonus action.

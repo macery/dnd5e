@@ -216,6 +216,39 @@ TEST_CASE("dodge gives monsters disadvantage until the dodger's next turn", "[en
     REQUIRE_FALSE(dnd::has_effect(encounter.effects(), 0, dnd::EffectKind::Dodging));  // cleared at the start of Aria's turn
 }
 
+TEST_CASE("help gives an ally advantage on their next attack until the helper's next turn", "[encounter]") {
+    Fixture f;
+    // Init: Aria 20, Zanna 15, Goblin 1; plenty of rolls left for the goblin's turn.
+    ScriptedRandomSource rolls({20, 15, 1, 1, 10, 10, 10, 10, 10, 10});
+    dnd::Dice dice(rolls);
+    auto encounter = f.encounter(dice);
+    encounter.add_character(f.fighter(), {}, f.fighter_gear());
+    encounter.add_character(f.wizard(), {}, {});
+    encounter.add_monsters(f.monster("Goblin"), 1);
+    encounter.roll_initiative();
+    encounter.take_events();
+
+    REQUIRE(encounter.help_targets() == std::vector<int>{1});  // not herself, not the goblin
+    REQUIRE_FALSE(encounter.help(0));
+    REQUIRE_FALSE(encounter.help(2));
+    REQUIRE(encounter.help(1));
+    REQUIRE(dnd::has_effect(encounter.effects(), 1, dnd::EffectKind::AdvantageOnNextAttack));
+    REQUIRE_FALSE(encounter.help(1));  // the action is spent
+
+    auto mods = dnd::attack_roll_modifiers(encounter.effects(), 1, 2, true, {true, true, true});
+    REQUIRE(mods.mode() == dnd::RollMode::Advantage);
+    REQUIRE(mods.used_effects.size() == 1);  // used up by the first roll
+
+    auto own = dnd::attack_roll_modifiers(encounter.effects(), 0, 2, true, {true, true, true});
+    REQUIRE(own.mode() == dnd::RollMode::Normal);
+
+    // Unused, it ends when Aria's next turn starts.
+    encounter.next_turn();
+    encounter.next_turn();
+    encounter.next_turn();
+    REQUIRE_FALSE(dnd::has_effect(encounter.effects(), 1, dnd::EffectKind::AdvantageOnNextAttack));
+}
+
 TEST_CASE("suggesting how to divide loot", "[encounter][loot]") {
     Fixture f;
     dnd::Item potion = f.item("Potion of Healing");

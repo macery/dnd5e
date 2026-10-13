@@ -50,7 +50,7 @@ QString abilityTag(dnd::Ability ability) {
 
 // LayOnHandsAction is last: it's only in the combo on a Paladin's turn.
 enum Action { AttackAction, DashAction, DodgeAction, DrinkPotionAction, CastSpellAction, StabilizeAction,
-              ReadScrollAction, LayOnHandsAction };
+              ReadScrollAction, HelpAction, LayOnHandsAction };
 }  // namespace
 
 CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::vector<dnd::Character> characters,
@@ -167,7 +167,13 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
         "with the spell on their list can read it; a spell above your highest slot level needs a spellcasting check "
         "(DC 10 + its level). The scroll's own save DC and attack bonus apply.",
         Qt::ToolTipRole);
+    actionCombo_->addItem("Help");
+    actionCombo_->setItemData(HelpAction,
+        "Give an ally advantage on their next attack roll, until the start of your next turn. (In the PHB the "
+        "enemy must be within 5 feet of you; without a map, any ally can be helped.)",
+        Qt::ToolTipRole);
     targetCombo_ = new QComboBox(attackGroup);
+    helpCombo_ = new QComboBox(attackGroup);
     potionCombo_ = new QComboBox(attackGroup);
     stabilizeCombo_ = new QComboBox(attackGroup);
     stabilizeInfoLabel_ = new QLabel(attackGroup);
@@ -233,6 +239,7 @@ CombatEncounterDialog::CombatEncounterDialog(dnd::Repository& repository, std::v
     attackForm->addRow("Target", targetCombo_);
     attackForm->addRow("Potion", potionCombo_);
     attackForm->addRow("Ally", stabilizeCombo_);
+    attackForm->addRow("Help", helpCombo_);
     attackForm->addRow(stabilizeInfoLabel_);
     attackForm->addRow("Spell", spellCombo_);
     attackForm->addRow("Slot", spellSlotCombo_);
@@ -525,6 +532,7 @@ void CombatEncounterDialog::onTurnStarted() {
         refreshTargetCombo();
         refreshPotionCombo();
         refreshStabilizeCombo();
+        refreshHelpCombo();
         refreshSpellControls();
         refreshFeatureControls();
         updateAttackFieldsForCurrentTurn();
@@ -649,6 +657,13 @@ void CombatEncounterDialog::onTakeActionClicked() {
             }
             acted = encounter_.stabilize(stabilizeCombo_->currentData().toInt());
             break;
+        case HelpAction:
+            if (helpCombo_->count() == 0) {
+                log("No ally can be helped -- choose another action.");
+                return;
+            }
+            acted = encounter_.help(helpCombo_->currentData().toInt());
+            break;
         case ReadScrollAction: {
             const dnd::Spell* spell = selectedSpell();
             if (!spell) {
@@ -705,6 +720,7 @@ void CombatEncounterDialog::afterCharacterActed() {
     refreshTargetCombo();
     refreshPotionCombo();
     refreshStabilizeCombo();
+    refreshHelpCombo();
     refreshSpellControls();
     updateActionControlsVisibility();
 }
@@ -893,6 +909,10 @@ void CombatEncounterDialog::updateActionControlsVisibility() {
         if (auto* row_label = attackFormLayout_->labelForField(field)) row_label->setVisible(is_stabilize);
     }
 
+    bool is_help = actionCombo_->currentIndex() == HelpAction;
+    helpCombo_->setVisible(is_help);
+    if (auto* row_label = attackFormLayout_->labelForField(helpCombo_)) row_label->setVisible(is_help);
+
     bool is_scroll = actionCombo_->currentIndex() == ReadScrollAction;
     bool is_spell = actionCombo_->currentIndex() == CastSpellAction || is_scroll;
     const dnd::Spell* spell = is_spell ? selectedSpell() : nullptr;
@@ -921,6 +941,7 @@ void CombatEncounterDialog::updateActionControlsVisibility() {
                                            : "Cast Spell");
             break;
         case StabilizeAction: takeActionButton_->setText("Stabilize"); break;
+        case HelpAction: takeActionButton_->setText("Help Ally"); break;
         case ReadScrollAction:
             takeActionButton_->setText(spell && spell->casting_time == dnd::CastingTime::BonusAction
                                            ? "Read Scroll (bonus action)"
@@ -989,6 +1010,13 @@ void CombatEncounterDialog::refreshPotionCombo() {
     potionCombo_->clear();
     for (const auto& entry : encounter_.healing_items()) {
         potionCombo_->addItem(QString("%1 (×%2)").arg(q(entry.item.name)).arg(entry.quantity), entry.item.item_id);
+    }
+}
+
+void CombatEncounterDialog::refreshHelpCombo() {
+    helpCombo_->clear();
+    for (int index : encounter_.help_targets()) {
+        helpCombo_->addItem(q(encounter_.combatants()[static_cast<size_t>(index)].name), index);
     }
 }
 

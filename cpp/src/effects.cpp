@@ -60,7 +60,7 @@ Condition condition_from_name(const std::string& name) {
 }
 
 namespace {
-constexpr std::array<std::pair<EffectKind, const char*>, 16> kEffectKindNames = {{
+constexpr std::array<std::pair<EffectKind, const char*>, 17> kEffectKindNames = {{
     {EffectKind::Condition, "Condition"},
     {EffectKind::Dodging, "Dodging"},
     {EffectKind::AttackBonusDice, "AttackBonusDice"},
@@ -77,6 +77,7 @@ constexpr std::array<std::pair<EffectKind, const char*>, 16> kEffectKindNames = 
     {EffectKind::InspirationDie, "InspirationDie"},
     {EffectKind::AttackBonusFlat, "AttackBonusFlat"},
     {EffectKind::Turned, "Turned"},
+    {EffectKind::AdvantageOnNextAttack, "AdvantageOnNextAttack"},
 }};
 }  // namespace
 
@@ -119,6 +120,7 @@ std::string effect_description(const ActiveEffect& effect) {
         case EffectKind::InspirationDie:
             return "Inspired: adds 1d" + amount + " to its next attack roll or saving throw.";
         case EffectKind::AttackBonusFlat: return "+" + amount + " to its weapon attack rolls.";
+        case EffectKind::AdvantageOnNextAttack: return "Its next attack roll has advantage.";
         case EffectKind::Turned:
             return "Turned: it spends its turns keeping away and doesn't attack. Taking any damage ends it.";
         case EffectKind::ArmorNotProficient:
@@ -186,6 +188,9 @@ RollModifiers attack_roll_modifiers(const std::vector<ActiveEffect>& effects, in
             if (source_alive) m.disadvantage.push_back("frightened");
         } else if (effect.kind == EffectKind::DisadvantageOnNextAttack) {
             m.disadvantage.push_back(effect.label.empty() ? "hindered" : effect.label);
+            add_used(m, effect);
+        } else if (effect.kind == EffectKind::AdvantageOnNextAttack) {
+            m.advantage.push_back(effect.label.empty() ? "helped" : effect.label);
             add_used(m, effect);
         } else if (effect.kind == EffectKind::AttackBonusDice) {
             m.bonus_dice.push_back(effect.amount);

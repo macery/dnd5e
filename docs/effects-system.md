@@ -39,6 +39,7 @@ Status: **step zero and phases 2–4 done.** What's left is under [Later](#later
   - Stabilizes the dying on defeat, and on victory as well (the party tends its fallen).
   - Gives the dead no XP.
 - **Dodge** is now an effect.
+- **Help** is an effect too (`AdvantageOnNextAttack`): the helped ally's next attack roll has advantage, and it ends when the helper's next turn starts. With no map, any other standing character can be helped instead of an enemy within 5 feet.
 - **The combat dialog's Status column** shows effects, "Dying (✓ ✗)", "Stable", and "Dead".
 - **Characters** gained a `Dead` flag (migration 13). Rests, potions, and the Spellbook refuse the dead, and only revival will change it.
 - **Not yet:** nothing in the game *applies* conditions or spell effects yet. That's phase 3's data; for now, tests add effects directly.
