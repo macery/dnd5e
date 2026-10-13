@@ -38,8 +38,12 @@ jobs:
         run: cpp/packaging/build-appimage.sh
 
       - name: Upload artifact
+        # The release asset is attached from the file, so a full artifact quota
+        # must not fail the run or block the release.
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
+          retention-days: 3
           name: DnD_Engine-x86_64.AppImage
           path: cpp/packaging/out/DnD_Engine-x86_64.AppImage
           if-no-files-found: error
