@@ -94,6 +94,22 @@ int use_healing_item(Character& character, const Dice& dice, const Item& item) {
     return character.current_hp - before;
 }
 
+bool spend_use(InventoryEntry& entry) {
+    if (entry.item.uses <= 0 || entry.uses_spent + 1 >= entry.item.uses) {
+        entry.uses_spent = 0;
+        if (entry.quantity > 0) --entry.quantity;
+        return true;
+    }
+    ++entry.uses_spent;
+    return false;
+}
+
+std::string item_label(const InventoryEntry& entry) {
+    if (entry.item.uses <= 0) return entry.item.name;
+    return entry.item.name + " (" + std::to_string(entry.item.uses - entry.uses_spent) + " of " +
+           std::to_string(entry.item.uses) + " uses left)";
+}
+
 double total_weight(const std::vector<InventoryEntry>& inventory) {
     double total = 0.0;
     for (const auto& entry : inventory) total += entry.item.weight_lb * entry.quantity;

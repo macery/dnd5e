@@ -2462,7 +2462,25 @@ bool Encounter::stabilize(int target_index) {
 
     bool success = true;
     if (has_healers_kit()) {
-        log(actor.name + " uses a Healer's Kit on " + target.name + ": " + target.name + " is stable.");
+        std::string line = actor.name + " uses a Healer's Kit on " + target.name + ": " + target.name + " is stable.";
+        auto& pack = inventories_[actor.character_id];
+        auto kit = std::find_if(pack.begin(), pack.end(), [](const InventoryEntry& entry) {
+            return entry.item.name == "Healer's Kit" && entry.quantity > 0;
+        });
+        if (kit != pack.end()) {
+            EncounterEvent spent;
+            spent.kind = EncounterEvent::Kind::ItemUseSpent;
+            spent.character_id = actor.character_id;
+            spent.item_id = kit->item.item_id;
+            events_.push_back(spent);
+            if (spend_use(*kit)) {
+                line += " The kit is used up.";
+                if (kit->quantity == 0) pack.erase(kit);
+            } else {
+                line += " (" + std::to_string(kit->item.uses - kit->uses_spent) + " uses left.)";
+            }
+        }
+        log(line);
     } else {
         RollModifiers mods = ability_check_modifiers(effects_, actor_index, alive_flags());
         int roll = dice_.roll_d20(mods.mode()).result;

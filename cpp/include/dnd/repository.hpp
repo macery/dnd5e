@@ -48,6 +48,9 @@ public:
     // none are left. Returns how many were actually removed (0 if the
     // character had none).
     int remove_from_inventory(int character_id, int item_id, int quantity = 1);
+    // Spends one use of a limited-use item (Item::uses > 0). Its last use
+    // removes that item. An item without tracked uses is removed outright.
+    void spend_item_use(int character_id, int item_id);
     // Marks an inventory entry worn/wielded or not. Which combinations are
     // allowed (one armor, one shield, ...) is dnd::equip's job (dnd/equipment.hpp).
     void set_equipped(int character_id, int item_id, bool equipped);

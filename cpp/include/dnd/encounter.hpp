@@ -139,6 +139,7 @@ struct EncounterEvent {
         Log,               // `text` is a line for the combat log
         CharacterChanged,  // character(character_id) changed (HP, slots, XP, level): save it
         ItemUsed,          // character_id used `quantity` of item_id: remove from inventory
+        ItemUseSpent,      // character_id spent one use of item_id (Repository::spend_item_use)
         ItemGained,        // character_id gained `quantity` of item_id: add to inventory
     };
     Kind kind = Kind::Log;

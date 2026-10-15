@@ -22,7 +22,7 @@ Status: **step zero and phases 2–4 done.** What's left is under [Later](#later
 - **Side effects now in play:** *Guiding Bolt*, *Ray of Frost* (speed shown only), *Chill Touch*, *Vicious Mockery*, *Faerie Fire*, *Charm Person*.
 - **Concentration:** casting any concentration spell starts it and ends the previous one. Utility concentration spells like *Detect Magic* count too.
 - **"End of your next turn"** effects survive the turn they were cast.
-- **Stabilize action:** a DC 10 WIS (Medicine) check, with disadvantage while poisoned or frightened, or automatic with a Healer's Kit. Kit uses aren't tracked, so it isn't used up.
+- **Stabilize action:** a DC 10 WIS (Medicine) check, with disadvantage while poisoned or frightened, or automatic with a Healer's Kit. Each use spends one of the kit's ten (see [magic-items.md](magic-items.md)).
 - **Combat dialog:** a Stabilize action; a spell summary line covering buffs, riders, and concentration; no target list for self-only spells.
 - **`spell_summary()`** in the core replaces three copies of the "describe this spell" text in the UI.
 

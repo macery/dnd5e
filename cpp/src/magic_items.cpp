@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <optional>
 
+#include "dnd/equipment.hpp"
+#include "dnd/inventory.hpp"
 #include "dnd/spellcasting.hpp"
 
 namespace dnd {
@@ -176,6 +178,98 @@ ScrollReading read_scroll(const Character& character, const ClassInfo& class_inf
         }
     }
     return reading;
+}
+
+// --- Reading scrolls outside combat -----------------------------------------------
+
+std::string scroll_outside_combat_refusal(const Spell& spell) {
+    if (spell.resolution == SpellResolution::Heal) return "";
+    return spell.name + " has nothing to do outside a fight. Read it in combat.";
+}
+
+ScrollUse read_scroll_outside_combat(Repository& repo, const Dice& dice, int reader_id, int scroll_item_id,
+                                     const std::vector<int>& target_ids) {
+    auto refuse = [](const std::string& why) { return ScrollUse{false, why}; };
+
+    auto reader = find_character(repo, reader_id);
+    if (!reader) return refuse("No such character.");
+    if (reader->dead) return refuse(reader->character_name + " is dead.");
+
+    auto pack = repo.get_inventory(reader_id);
+    const InventoryEntry* held = find_entry(pack, scroll_item_id);
+    if (!held || held->item.category != ItemCategory::Scroll || held->quantity <= 0) {
+        return refuse("That scroll isn't in the pack.");
+    }
+    const Spell* spell = nullptr;
+    auto spells = repo.get_spells();
+    for (const auto& candidate : spells) {
+        if (candidate.spell_id == held->item.scroll_spell_id) spell = &candidate;
+    }
+    if (!spell) return refuse("That scroll's spell isn't in the rules data.");
+    if (auto why = scroll_outside_combat_refusal(*spell); !why.empty()) return refuse(why);
+
+    const ClassInfo* info = find_class_info_by_id(repo.get_classes(), reader->class_id);
+    if (!info) return refuse(reader->character_name + " has no class to read it with.");
+    if (wearing_armor_without_proficiency(info->name, pack, reader->subclass)) {
+        return refuse(reader->character_name + " can't cast spells while wearing armor they aren't proficient with.");
+    }
+    ScrollReading reading = read_scroll(*reader, *info, *spell);
+    if (!reading.readable) return refuse(reading.reason);
+
+    int most = spell_max_targets(*spell, reader->level, spell->level);
+    if (target_ids.empty() || static_cast<int>(target_ids.size()) > most) {
+        return refuse("Choose between 1 and " + std::to_string(most) + " target" + (most == 1 ? "" : "s") + ".");
+    }
+    std::vector<Character> targets;
+    bool anyone_hurt = false;
+    for (int id : target_ids) {
+        if (std::count(target_ids.begin(), target_ids.end(), id) > 1) return refuse("Each target can be chosen once.");
+        auto target = find_character(repo, id);
+        if (!target) return refuse("No such character.");
+        if (target->dead) return refuse(target->character_name + " is dead; " + spell->name + " can't help.");
+        if (target->current_hp < target->max_hp) anyone_hurt = true;
+        targets.push_back(*target);
+    }
+    if (!anyone_hurt) return refuse("Nobody needs healing, so the scroll is kept.");
+
+    CasterStats caster = caster_stats(with_item_scores(*reader, pack), *info);
+    std::string message = reader->character_name + " reads a " + held->item.name;
+    bool wasted = false;
+    if (reading.needs_check) {
+        int roll = dice.roll(20, 1).front();
+        bool passed = roll + caster.spellcasting_modifier >= reading.check_dc;
+        message += ": spellcasting check d20(" + std::to_string(roll) + ") " +
+                   (caster.spellcasting_modifier < 0 ? "-" : "+") + std::to_string(std::abs(caster.spellcasting_modifier)) +
+                   " vs DC " + std::to_string(reading.check_dc) + " -> " + (passed ? "success" : "failure");
+        wasted = !passed;
+    }
+
+    std::vector<SpellTarget> spell_targets(targets.size());
+    SpellCastResult cast;
+    if (wasted) {
+        message += ". The scroll crumbles to dust, its magic wasted.";
+    } else {
+        // Disciple of Life, as in combat.
+        int bonus = reader->subclass == "Life Domain" && spell->level > 0 ? 2 + spell->level : 0;
+        cast = cast_spell(dice, *spell, caster, spell->level, spell_targets);
+        message += ". " + reader->character_name + " casts " + spell->name + ".";
+        for (const auto& roll : cast.effects) {
+            Character& target = targets[static_cast<size_t>(roll.target)];
+            int healed = std::min(roll.amount + bonus, target.max_hp - target.current_hp);
+            healed = std::max(healed, 0);
+            target.current_hp += healed;
+            message += "\n" + target.character_name + " regains " + std::to_string(healed) + " HP (now " +
+                       std::to_string(target.current_hp) + "/" + std::to_string(target.max_hp) + ").";
+        }
+    }
+
+    repo.with_transaction([&] {
+        repo.remove_from_inventory(reader_id, scroll_item_id);
+        if (!wasted) {
+            for (const auto& target : targets) repo.update_character(target);
+        }
+    });
+    return {true, message};
 }
 
 }  // namespace dnd

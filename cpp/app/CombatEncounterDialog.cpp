@@ -441,6 +441,9 @@ void CombatEncounterDialog::processEvents() {
             case dnd::EncounterEvent::Kind::ItemUsed:
                 repository_.remove_from_inventory(event.character_id, event.item_id, event.quantity);
                 break;
+            case dnd::EncounterEvent::Kind::ItemUseSpent:
+                repository_.spend_item_use(event.character_id, event.item_id);
+                break;
             case dnd::EncounterEvent::Kind::ItemGained:
                 repository_.add_to_inventory(event.character_id, event.item_id, event.quantity);
                 break;

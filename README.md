@@ -66,7 +66,7 @@ It manages players and characters, computes a full character sheet from the 5e r
   - **Healing potions** from Healing to Supreme.
   - **Wondrous items:** Cloak and Ring of Protection, Bracers of Defense, Gauntlets of Ogre Power, and Amulet of Health.
   - **Attunement:** one item per short rest (chosen in the Short Rest dialog), three at most.
-  - **Spell scrolls:** a **Read Scroll** action in combat. Only classes with the spell on their list can read one, a spell above your highest slot needs a check, and the scroll's own DC and attack bonus apply.
+  - **Spell scrolls:** a **Read Scroll** action in combat, and Use in the Inventory for healing scrolls. Only classes with the spell on their list can read one, a spell above your highest slot needs a check, and the scroll's own DC and attack bonus apply.
   - **Where they come from:** boss fights drop them, and the Shop sells the common and uncommon ones.
 - **Shop** ([docs/shops.md](docs/shops.md)): buy gear at PHB list price (with change made automatically) and sell it for half; equipped gear must be unequipped first. Give coins, or items from the Inventory, to any other living character. A temple raises the dead for 550 gp (500 gp if its priest is Friendly); they return with 1 HP and −4 to attack rolls, saving throws, and ability checks, easing by 1 each long rest. Once between long rests, each character can haggle with the merchant (a Persuasion check) for 10% off.
 - **Solo adventures** ([docs/adventures-and-currency.md](docs/adventures-and-currency.md), [docs/content-5-10.md](docs/content-5-10.md)): twenty pre-built adventures for levels 1–8.
@@ -258,7 +258,7 @@ See [AGENTS.md](AGENTS.md) for how work is done here: where code goes, schema ch
 - [ ] **Coins from Combat Encounter fights** (open question): fights built with the main window's **Combat Encounter** award XP only; coins and loot come only from Solo Adventure fights. One option is the 2014 DMG's *Individual Treasure* table: each defeated monster rolls coins by challenge rating (CR 0–4: d100 for 5d6 cp, 4d6 sp, 3d6 ep, 3d6 gp, or 1d6 pp), logged and split among the survivors. Undecided: whether free-form fights should pay at all, and whether to use the DMG tables or a simpler scale.
 - [x] **Divide loot after a victory**: a **Divide the Loot** panel on the combat screen's victory, with a "goes to" choice per item (per unit for small stacks). Potions start with the most hurt, and everything else goes to whoever has received least. A lone survivor takes it all at once. Later moves use the Inventory's **Give…**.
 - [ ] **Encumbrance** (optional): item weights compared with carrying capacity (STR × 15).
-- [ ] **Item uses**: a Healer's Kit has 10 uses in the PHB, but they aren't tracked, so stabilizing with one never uses it up. The same applies to other limited-use gear later (torches burning out, rations eaten).
+- [x] **Item uses**: a Healer's Kit has ten uses. Each Stabilize with one spends a use, the kit is gone on the tenth, and the Inventory shows what's left ("Healer's Kit (7 of 10 uses left)"). Uses are saved per stack. Other limited-use gear (torches burning out, rations eaten) can reuse this later.
 
 ### Magic system
 
@@ -289,7 +289,7 @@ Phases 1 (core and data) and 2 (UI) are done; see [docs/magic-system.md](docs/ma
 - [ ] **More utility spells with real effects**: 18 utility spells (*Light*, *Detect Magic*, *Command*, *Sanctuary*, ...) still have no automated effect.
 - [x] **Magic items** ([docs/magic-items.md](docs/magic-items.md)): +1/+2/+3 weapons, armor, and shields; four healing potions; five wondrous items with attunement; spell scrolls with the DMG's reading rules; boss loot and the Shop.
 - [ ] **Charged magic items**: wands and staffs (a Wand of Magic Missiles), with charges saved per item and recharged each dawn.
-- [ ] **Scrolls out of combat**: reading a *Cure Wounds* scroll from the Inventory, like Use for potions. Scrolls are combat-only for now.
+- [x] **Scrolls out of combat**: **Use** on a healing scroll (*Cure Wounds*, *Healing Word*, *Mass Healing Word*) in the Inventory asks who it's read on, then follows the same reading rules as in combat. Other scrolls say to read them in combat.
 
 ### Characters
 

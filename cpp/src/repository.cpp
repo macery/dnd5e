@@ -137,8 +137,8 @@ constexpr const char* kItemColumns =
     "ArmorStats.ItemID, ArmorStats.ArmorType, ArmorStats.BaseAC, ArmorStats.MaxDexBonus, "
     "ArmorStats.StrengthRequirement, ArmorStats.StealthDisadvantage, "
     "Items.Rarity, Items.BaseItem, Items.MagicBonus, Items.RequiresAttunement, Items.AcBonus, Items.SaveBonus, "
-    "Items.UnarmoredAcBonus, Items.SetsAbility, Items.SetsAbilityTo, Items.ScrollSpellID";
-constexpr int kItemColumnCount = 40;
+    "Items.UnarmoredAcBonus, Items.SetsAbility, Items.SetsAbilityTo, Items.ScrollSpellID, Items.Uses";
+constexpr int kItemColumnCount = 41;
 constexpr const char* kItemJoins =
     " LEFT JOIN WeaponStats ON WeaponStats.ItemID = Items.ItemID"
     " LEFT JOIN ArmorStats ON ArmorStats.ItemID = Items.ItemID";
@@ -193,6 +193,7 @@ Item read_item_row(sqlite3_stmt* stmt) {
     item.sets_ability = column_text(stmt, 37);
     item.sets_ability_to = sqlite3_column_int(stmt, 38);
     item.scroll_spell_id = sqlite3_column_int(stmt, 39);
+    item.uses = sqlite3_column_int(stmt, 40);
     return item;
 }
 
@@ -487,7 +488,8 @@ std::vector<Item> Repository::get_items() const {
 
 std::vector<InventoryEntry> Repository::get_inventory(int character_id) const {
     std::string sql = std::string("SELECT ") + kItemColumns +
-                       ", CharacterInventory.Quantity, CharacterInventory.Equipped, CharacterInventory.Attuned "
+                       ", CharacterInventory.Quantity, CharacterInventory.Equipped, CharacterInventory.Attuned, "
+                       "CharacterInventory.UsesSpent "
                        "FROM CharacterInventory "
                        "JOIN Items ON Items.ItemID = CharacterInventory.ItemID" + kItemJoins +
                        " WHERE CharacterInventory.CharacterID = ? ORDER BY Items.Name;";
@@ -500,6 +502,7 @@ std::vector<InventoryEntry> Repository::get_inventory(int character_id) const {
         entry.quantity = sqlite3_column_int(stmt.get(), kItemColumnCount);
         entry.equipped = sqlite3_column_int(stmt.get(), kItemColumnCount + 1) != 0;
         entry.attuned = sqlite3_column_int(stmt.get(), kItemColumnCount + 2) != 0;
+        entry.uses_spent = sqlite3_column_int(stmt.get(), kItemColumnCount + 3);
         inventory.push_back(std::move(entry));
     }
     return inventory;
@@ -519,6 +522,39 @@ void Repository::set_attuned(int character_id, int item_id, bool attuned) {
     sqlite3_bind_int(stmt.get(), 2, character_id);
     sqlite3_bind_int(stmt.get(), 3, item_id);
     detail::run_and_expect_done(stmt, "set attuned");
+}
+
+void Repository::spend_item_use(int character_id, int item_id) {
+    int uses = 0;
+    int spent = 0;
+    {
+        Statement stmt(db_,
+            "SELECT Items.Uses, CharacterInventory.UsesSpent FROM CharacterInventory "
+            "JOIN Items ON Items.ItemID = CharacterInventory.ItemID "
+            "WHERE CharacterInventory.CharacterID = ? AND CharacterInventory.ItemID = ?;");
+        sqlite3_bind_int(stmt.get(), 1, character_id);
+        sqlite3_bind_int(stmt.get(), 2, item_id);
+        if (sqlite3_step(stmt.get()) != SQLITE_ROW) return;
+        uses = sqlite3_column_int(stmt.get(), 0);
+        spent = sqlite3_column_int(stmt.get(), 1);
+    }
+    if (uses <= 0) {
+        remove_from_inventory(character_id, item_id);
+        return;
+    }
+    if (spent + 1 >= uses) {
+        // The last use: this item is gone, and the next one in the stack is fresh.
+        remove_from_inventory(character_id, item_id);
+        Statement stmt(db_, "UPDATE CharacterInventory SET UsesSpent = 0 WHERE CharacterID = ? AND ItemID = ?;");
+        sqlite3_bind_int(stmt.get(), 1, character_id);
+        sqlite3_bind_int(stmt.get(), 2, item_id);
+        detail::run_and_expect_done(stmt, "reset item uses");
+        return;
+    }
+    Statement stmt(db_, "UPDATE CharacterInventory SET UsesSpent = UsesSpent + 1 WHERE CharacterID = ? AND ItemID = ?;");
+    sqlite3_bind_int(stmt.get(), 1, character_id);
+    sqlite3_bind_int(stmt.get(), 2, item_id);
+    detail::run_and_expect_done(stmt, "spend item use");
 }
 
 void Repository::add_to_inventory(int character_id, int item_id, int quantity) {

@@ -6,6 +6,7 @@
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLabel>
+#include <QListWidget>
 #include <QPushButton>
 #include <QStringList>
 #include <QSpinBox>
@@ -18,7 +19,9 @@
 #include "dnd/equipment.hpp"
 #include "dnd/inventory.hpp"
 #include "dnd/lasting_effects.hpp"
+#include "dnd/campaign.hpp"
 #include "dnd/magic_items.hpp"
+#include "dnd/spellcasting.hpp"
 
 namespace {
 std::string nameFor(const std::vector<dnd::LookupEntry>& entries, int id) {
@@ -27,6 +30,46 @@ std::string nameFor(const std::vector<dnd::LookupEntry>& entries, int id) {
     }
     return "";
 }
+
+// Asks who a healing scroll is read on. Returns their character ids, or none
+// if cancelled.
+std::vector<int> chooseScrollTargets(QWidget* parent, dnd::Repository& repository, const QString& scrollName,
+                                     const dnd::Spell& spell, int maxTargets) {
+    QDialog dialog(parent);
+    dialog.setWindowTitle(QString("Read %1").arg(scrollName));
+    auto* list = new QListWidget(&dialog);
+    list->setSelectionMode(QAbstractItemView::MultiSelection);
+    for (const auto& character : dnd::characters_in_play(repository)) {
+        if (character.dead) continue;
+        auto* item = new QListWidgetItem(QString("%1 — HP %2 / %3")
+                                             .arg(QString::fromStdString(character.character_name))
+                                             .arg(character.current_hp)
+                                             .arg(character.max_hp));
+        item->setData(Qt::UserRole, character.character_id);
+        list->addItem(item);
+    }
+    auto* hint = new QLabel(QString("%1 heals up to %2 %3. Choose who it's read on.")
+                                .arg(QString::fromStdString(spell.name))
+                                .arg(maxTargets)
+                                .arg(maxTargets == 1 ? "creature" : "creatures"),
+                            &dialog);
+    hint->setWordWrap(true);
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+    buttons->button(QDialogButtonBox::Ok)->setText("Read");
+    QObject::connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    QObject::connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    auto* layout = new QVBoxLayout(&dialog);
+    layout->addWidget(hint);
+    layout->addWidget(list);
+    layout->addWidget(buttons);
+    if (list->count() == 1) list->item(0)->setSelected(true);
+
+    std::vector<int> chosen;
+    if (dialog.exec() != QDialog::Accepted) return chosen;
+    for (auto* item : list->selectedItems()) chosen.push_back(item->data(Qt::UserRole).toInt());
+    return chosen;
+}
+
 }  // namespace
 
 InventoryDialog::InventoryDialog(dnd::Repository& repository, dnd::Character character,
@@ -73,7 +116,8 @@ InventoryDialog::InventoryDialog(dnd::Repository& repository, dnd::Character cha
     equipButton_->setToolTip("Wear armor or a shield, or wield a weapon. One of each at a time; a two-handed "
                              "weapon can't be used with a shield.");
     useButton_ = new QPushButton("Use", this);
-    useButton_->setToolTip("Use the selected consumable, e.g. drink a Potion of Healing to regain HP.");
+    useButton_->setToolTip("Use the selected item: drink a Potion of Healing, or read a healing scroll on someone. "
+                           "(In combat, use the Drink Potion and Read Scroll actions.)");
     dropButton_ = new QPushButton("Drop One", this);
     giveButton_ = new QPushButton("Give…", this);  // tooltip set in onSelectionChanged
     rowButtons->addStretch(1);
@@ -131,7 +175,7 @@ void InventoryDialog::reload() {
     table_->setRowCount(static_cast<int>(inventory_.size()));
     for (int row = 0; row < static_cast<int>(inventory_.size()); ++row) {
         const auto& entry = inventory_[static_cast<size_t>(row)];
-        QString name = QString::fromStdString(entry.item.name);
+        QString name = QString::fromStdString(dnd::item_label(entry));
         if (entry.item.magical()) name += QString(" (%1)").arg(dnd::rarity_name(entry.item.rarity));
         auto* nameItem = new QTableWidgetItem(name);
         nameItem->setToolTip(QString::fromStdString(entry.item.description));
@@ -187,7 +231,8 @@ void InventoryDialog::onSelectionChanged() {
     bool equippable = entry && (entry->item.weapon || entry->item.armor);
     equipButton_->setEnabled(equippable);
     equipButton_->setText(entry && entry->equipped ? "Unequip" : "Equip");
-    useButton_->setEnabled(entry != nullptr && dnd::is_healing_item(entry->item));
+    useButton_->setEnabled(entry != nullptr &&
+                           (dnd::is_healing_item(entry->item) || entry->item.category == dnd::ItemCategory::Scroll));
 }
 
 void InventoryDialog::onAddClicked() {
@@ -216,6 +261,10 @@ void InventoryDialog::onDropClicked() {
 
 void InventoryDialog::onUseClicked() {
     const dnd::InventoryEntry* entry = selectedEntry();
+    if (entry && entry->item.category == dnd::ItemCategory::Scroll) {
+        readScroll(entry->item);
+        return;
+    }
     if (!entry || !dnd::is_healing_item(entry->item)) return;
 
     dnd::Item item = entry->item;  // reload() below invalidates `entry`
@@ -232,6 +281,30 @@ void InventoryDialog::onUseClicked() {
     repository_.remove_from_inventory(character_.character_id, item.item_id);
     repository_.update_character(character_);
     messageLabel_->setText(QString("Used %1: regained %2 HP.").arg(QString::fromStdString(item.name)).arg(regained));
+    reload();
+}
+
+void InventoryDialog::readScroll(const dnd::Item& scroll) {
+    const dnd::Spell* spell = nullptr;
+    auto spells = repository_.get_spells();
+    for (const auto& candidate : spells) {
+        if (candidate.spell_id == scroll.scroll_spell_id) spell = &candidate;
+    }
+    if (!spell) return;
+    if (auto why = dnd::scroll_outside_combat_refusal(*spell); !why.empty()) {
+        messageLabel_->setText(QString::fromStdString(why));
+        return;
+    }
+    int most = dnd::spell_max_targets(*spell, character_.level, spell->level);
+    auto targets = chooseScrollTargets(this, repository_, QString::fromStdString(scroll.name), *spell, most);
+    if (targets.empty()) return;
+
+    auto result = dnd::read_scroll_outside_combat(repository_, dice_, character_.character_id, scroll.item_id, targets);
+    messageLabel_->setText(QString::fromStdString(result.message));
+    // The reader may have been healed, so take their stored HP back.
+    for (const auto& stored : repository_.get_characters()) {
+        if (stored.character_id == character_.character_id) character_ = stored;
+    }
     reload();
 }
 

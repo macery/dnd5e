@@ -10,7 +10,11 @@ Status: **phases 1 (rules and data) and 2 (scrolls and UI) done.** Decisions wer
 - **Shop:** lists only what shops sell, with a **Magic items** filter and rarity after names.
 - **Boss loot:** the Goblin Warren's boss drops a Cloak of Protection; the Crypt's a Mace +1, a Potion of Greater Healing, and a Cure Wounds scroll; the Hill Giant's two Greater Healing potions, a Shield +1, and Gauntlets of Ogre Power.
 - **UI tests** (`tests/ui/test_magic_items_ui.cpp`): reading a scroll in combat, attuning on a short rest (and what that locks in the Inventory), the Shop's filter, and the sheet.
-- **Left for later** (README TODO): charged items, and reading scrolls outside combat.
+- **Left for later** (README TODO): charged items.
+
+**Out-of-combat scrolls and item uses (v0.29.0):**
+- **Scrolls between fights:** Use on a scroll in the Inventory. Only healing spells (*Cure Wounds*, *Healing Word*, *Mass Healing Word*) have anything to do away from a fight; any other scroll says to read it in combat. The reader picks up to the spell's target count from the characters in play. The rules are `read_scroll_outside_combat` in `dnd/magic_items.hpp`: the same class-list and spellcasting-check rules as in combat, the scroll's own level, and Disciple of Life. A failed check wastes the scroll. If nobody is hurt it's refused and kept.
+- **Item uses:** migration 38 adds `Items.Uses` (10 for the Healer's Kit) and `CharacterInventory.UsesSpent`. `Stabilize` with a kit spends one use (an `ItemUseSpent` event, saved by the combat dialog), and the tenth use consumes the kit. A stack of kits spends the current one first. Exports don't carry uses spent, so an imported kit is fresh.
 
 **Phase 1 as built:**
 - **Migration 23:**

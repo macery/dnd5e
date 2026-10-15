@@ -18,7 +18,7 @@ using detail::Statement;
 // for future schema changes -- never edit an existing one, since a
 // migration's sql is exactly what already ran on every database that has it
 // recorded in SchemaMigrations.
-constexpr std::array<Migration, 37> kMigrations = {{
+constexpr std::array<Migration, 38> kMigrations = {{
     {1, "initial schema: Players, Classes, Characters", R"sql(
         CREATE TABLE IF NOT EXISTS Players (
             PlayerID INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1209,7 +1209,15 @@ constexpr std::array<Migration, 37> kMigrations = {{
             Description = 'Up to three creatures'' hit point maximum and current hit points rise by 5 for 8 hours (until their next long rest). Each slot level above 2nd adds 5 more.'
             WHERE Name = 'Aid';
     )sql"},
+    // Limited-use gear (docs/magic-items.md, "Item uses"): a Healer's Kit has
+    // ten uses. UsesSpent counts the uses gone from the stack's current item.
+    {38, "add Items.Uses and CharacterInventory.UsesSpent; a Healer's Kit has ten uses", R"sql(
+        ALTER TABLE Items ADD COLUMN Uses INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE CharacterInventory ADD COLUMN UsesSpent INTEGER NOT NULL DEFAULT 0;
+        UPDATE Items SET Uses = 10 WHERE Name = 'Healer''s Kit';
+    )sql"},
 }};
+
 
 void exec_or_throw(sqlite3* db, const char* sql) {
     char* error = nullptr;

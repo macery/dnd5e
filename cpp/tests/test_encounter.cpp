@@ -1078,8 +1078,20 @@ TEST_CASE("stabilizing a dying ally", "[encounter][effects]") {
         auto encounter = setup(dice, {}, {{f.item("Healer's Kit"), 1}});
         REQUIRE(encounter.has_healers_kit());
         REQUIRE(encounter.stabilize(0));
-        REQUIRE(contains(logs(encounter.take_events()), "Zanna uses a Healer's Kit on Aria: Aria is stable."));
+        auto events = encounter.take_events();
+        REQUIRE(contains(logs(events), "Zanna uses a Healer's Kit on Aria: Aria is stable. (9 uses left.)"));
+        REQUIRE(has_event(events, EncounterEvent::Kind::ItemUseSpent, 2, f.item("Healer's Kit").item_id));
         REQUIRE(encounter.status_text(0) == "Stable");
+    }
+
+    SECTION("the tenth use uses the kit up") {
+        ScriptedRandomSource rolls(orc_drops_aria());
+        dnd::Dice dice(rolls);
+        auto kit = f.item("Healer's Kit");
+        auto encounter = setup(dice, {}, {{kit, 1, false, false, 9}});
+        REQUIRE(encounter.stabilize(0));
+        REQUIRE(contains(logs(encounter.take_events()), "The kit is used up."));
+        REQUIRE_FALSE(encounter.has_healers_kit());
     }
 
     SECTION("Spare the Dying") {

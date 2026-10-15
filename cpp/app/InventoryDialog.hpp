@@ -18,7 +18,8 @@ class QTableWidget;
 // A character's carried items: add from the seeded item list, drop, give to
 // another character, equip
 // weapons, armor, and shields (which set AC and the wielded weapon), and use
-// healing consumables outside combat (in combat that's Drink Potion). Every
+// healing consumables and scrolls outside combat (in combat that's Drink
+// Potion and Read Scroll). Every
 // change is persisted immediately via Repository.
 class InventoryDialog : public QDialog {
     Q_OBJECT
@@ -38,6 +39,8 @@ private slots:
 
 private:
     void reload();
+    // Reads a healing scroll outside combat: asks who it's for, then reports the result.
+    void readScroll(const dnd::Item& scroll);
     // The inventory entry for the selected table row, or nullptr.
     const dnd::InventoryEntry* selectedEntry() const;
 

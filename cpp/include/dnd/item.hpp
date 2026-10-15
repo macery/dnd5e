@@ -73,6 +73,7 @@ struct Item {
     std::string sets_ability;     // "Strength" or "Constitution": raised to sets_ability_to while attuned
     int sets_ability_to = 0;
     int scroll_spell_id = 0;      // category Scroll: the spell it casts
+    int uses = 0;                 // limited-use gear (a Healer's Kit has 10); 0 = not tracked
 
     bool magical() const { return rarity != Rarity::None; }
 };
@@ -85,6 +86,9 @@ struct InventoryEntry {
     // Attuned to (DMG): needed for items that require attunement to work. An
     // attuned wondrous item counts as worn (docs/magic-items.md).
     bool attuned = false;
+    // Limited-use items: uses gone from the stack's current item. When it
+    // reaches Item::uses, that item is used up and the count starts over.
+    int uses_spent = 0;
 };
 
 }  // namespace dnd

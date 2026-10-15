@@ -6,6 +6,7 @@
 
 #include "dnd/character.hpp"
 #include "dnd/character_creation.hpp"
+#include "dnd/dice.hpp"
 #include "dnd/item.hpp"
 #include "dnd/repository.hpp"
 #include "dnd/rules.hpp"
@@ -91,5 +92,26 @@ struct ScrollReading {
 // slots at this level) needs a check with their spellcasting ability, DC 10
 // + the spell's level; cantrips never do.
 ScrollReading read_scroll(const Character& character, const ClassInfo& class_info, const Spell& spell);
+
+// --- Reading scrolls outside combat -----------------------------------------------
+
+// What reading a scroll between fights did.
+struct ScrollUse {
+    bool ok = false;           // the scroll was read (even if the attempt failed); false = nothing changed
+    std::string message;       // lines for the player, newline-separated
+};
+
+// Whether a scroll can be read outside combat at all: only healing spells
+// have anything to do away from a fight. Returns "" if it can, else why not.
+std::string scroll_outside_combat_refusal(const Spell& spell);
+
+// Reads `scroll_item_id` from the reader's pack on up to
+// spell_max_targets characters, with the scroll's own level and numbers
+// (read_scroll above, including the spellcasting check). Refused, with
+// nothing changed, when the reader or a target is dead, nobody needs the
+// healing, or the reader can't cast. The scroll is used up either way once
+// it's read. Saves the healed characters and the pack in one transaction.
+ScrollUse read_scroll_outside_combat(Repository& repo, const Dice& dice, int reader_id, int scroll_item_id,
+                                     const std::vector<int>& target_ids);
 
 }  // namespace dnd

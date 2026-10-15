@@ -109,3 +109,29 @@ TEST_CASE("sheet: an attuned item's raised score", "[ui][magic_items]") {
     settle();
     REQUIRE(visibleText(sheet).contains("19 (+4) — Gauntlets of Ogre Power; 16 without it"));
 }
+
+TEST_CASE("inventory: scrolls and limited-use gear", "[ui][magic_items]") {
+    World world;
+    auto zanna = world.add("Zanna", "Wizard", 3);
+    world.repo.add_to_inventory(zanna.character_id, world.itemId("Spell Scroll (Magic Missile)"));
+    world.repo.add_to_inventory(zanna.character_id, world.itemId("Healer's Kit"));
+    world.repo.spend_item_use(zanna.character_id, world.itemId("Healer's Kit"));
+
+    InventoryDialog inventory(world.repo, world.get(zanna.character_id), world.repo.get_classes(),
+                              world.repo.get_races());
+    inventory.show();
+    settle();
+    REQUIRE(tableHas(inventory, "Healer's Kit (9 of 10 uses left)"));
+
+    auto* table = inventory.findChild<QTableWidget*>();
+    for (int row = 0; row < table->rowCount(); ++row) {
+        if (!table->item(row, 0)->text().startsWith("Spell Scroll")) continue;
+        table->selectRow(row);
+        settle();
+        REQUIRE(button(inventory, "Use")->isEnabled());
+        button(inventory, "Use")->click();  // Magic Missile has nothing to do out of combat
+        settle();
+        REQUIRE(visibleText(inventory).contains("Read it in combat"));
+    }
+    REQUIRE(world.repo.get_inventory(zanna.character_id).size() == 2);  // nothing was used up
+}

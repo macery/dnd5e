@@ -427,3 +427,101 @@ TEST_CASE("reading a scroll in combat", "[magic_items][encounter]") {
         REQUIRE(text.find("vs DC 13") != std::string::npos);
     }
 }
+
+TEST_CASE("a Healer's Kit has ten uses", "[magic_items][inventory]") {
+    Magic m;
+    int id = m.add("Medic");
+    int kit = m.item("Healer's Kit").item_id;
+    REQUIRE(m.item("Healer's Kit").uses == 10);
+    m.repo.add_to_inventory(id, kit, 2);
+
+    for (int i = 0; i < 9; ++i) m.repo.spend_item_use(id, kit);
+    auto pack = m.repo.get_inventory(id);
+    REQUIRE(pack.front().quantity == 2);
+    REQUIRE(pack.front().uses_spent == 9);
+    REQUIRE(dnd::item_label(pack.front()) == "Healer's Kit (1 of 10 uses left)");
+
+    m.repo.spend_item_use(id, kit);  // the tenth: one kit is gone, the next is fresh
+    pack = m.repo.get_inventory(id);
+    REQUIRE(pack.front().quantity == 1);
+    REQUIRE(pack.front().uses_spent == 0);
+
+    for (int i = 0; i < 10; ++i) m.repo.spend_item_use(id, kit);
+    REQUIRE(m.repo.get_inventory(id).empty());
+}
+
+TEST_CASE("spend_use mirrors the repository", "[inventory]") {
+    Magic m;
+    dnd::InventoryEntry kit{m.item("Healer's Kit"), 1, false, false, 8};
+    REQUIRE_FALSE(dnd::spend_use(kit));
+    REQUIRE(kit.uses_spent == 9);
+    REQUIRE(dnd::spend_use(kit));
+    REQUIRE(kit.quantity == 0);
+
+    dnd::InventoryEntry rope{m.item("Hempen Rope (50 feet)"), 1, false, false, 0};
+    REQUIRE(dnd::spend_use(rope));  // no tracked uses: gone at once
+}
+
+TEST_CASE("reading a healing scroll between fights", "[magic_items][scrolls]") {
+    Magic m;
+    int cleric = m.add("Cleric", "Cleric");
+    int fighter = m.add("Fighter");
+    {
+        auto hurt = m.get(fighter);
+        hurt.current_hp = 10;
+        m.repo.update_character(hurt);
+    }
+    int scroll = m.item("Spell Scroll (Cure Wounds)").item_id;
+    m.carry(cleric, "Spell Scroll (Cure Wounds)");
+
+    SECTION("heals the target and uses the scroll up") {
+        ScriptedRandomSource rolls({5});  // 1d8
+        dnd::Dice dice(rolls);
+        auto result = dnd::read_scroll_outside_combat(m.repo, dice, cleric, scroll, {fighter});
+        REQUIRE(result.ok);
+        REQUIRE(m.get(fighter).current_hp > 10);
+        REQUIRE(result.message.find("Fighter regains") != std::string::npos);
+        REQUIRE(m.repo.get_inventory(cleric).empty());
+    }
+    SECTION("a fighter can't read it, and keeps the scroll") {
+        m.carry(fighter, "Spell Scroll (Cure Wounds)");
+        ScriptedRandomSource rolls({5});
+        dnd::Dice dice(rolls);
+        auto result = dnd::read_scroll_outside_combat(m.repo, dice, fighter, scroll, {fighter});
+        REQUIRE_FALSE(result.ok);
+        REQUIRE(m.repo.get_inventory(fighter).size() == 1);
+        REQUIRE(m.get(fighter).current_hp == 10);
+    }
+    SECTION("nobody hurt: refused, scroll kept") {
+        auto healed = m.get(fighter);
+        healed.current_hp = healed.max_hp;
+        m.repo.update_character(healed);
+        ScriptedRandomSource rolls({5});
+        dnd::Dice dice(rolls);
+        auto result = dnd::read_scroll_outside_combat(m.repo, dice, cleric, scroll, {fighter});
+        REQUIRE_FALSE(result.ok);
+        REQUIRE(m.repo.get_inventory(cleric).size() == 1);
+    }
+    SECTION("a dead target is refused") {
+        auto dead = m.get(fighter);
+        dead.dead = true;
+        m.repo.update_character(dead);
+        ScriptedRandomSource rolls({5});
+        dnd::Dice dice(rolls);
+        REQUIRE_FALSE(dnd::read_scroll_outside_combat(m.repo, dice, cleric, scroll, {fighter}).ok);
+    }
+    SECTION("too many targets") {
+        ScriptedRandomSource rolls({5});
+        dnd::Dice dice(rolls);
+        REQUIRE_FALSE(dnd::read_scroll_outside_combat(m.repo, dice, cleric, scroll, {fighter, cleric}).ok);
+        REQUIRE_FALSE(dnd::read_scroll_outside_combat(m.repo, dice, cleric, scroll, {}).ok);
+    }
+    SECTION("a scroll of a combat spell has nothing to do") {
+        m.carry(cleric, "Spell Scroll (Bless)");
+        ScriptedRandomSource rolls({5});
+        dnd::Dice dice(rolls);
+        auto result = dnd::read_scroll_outside_combat(m.repo, dice, cleric, m.item("Spell Scroll (Bless)").item_id, {fighter});
+        REQUIRE_FALSE(result.ok);
+        REQUIRE(result.message.find("Read it in combat") != std::string::npos);
+    }
+}

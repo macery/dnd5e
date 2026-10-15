@@ -37,6 +37,15 @@ int roll_healing(const Dice& dice, const Item& item);
 // std::invalid_argument if the item doesn't heal.
 int use_healing_item(Character& character, const Dice& dice, const Item& item);
 
+// Spends one use of the stack's current item, the in-memory twin of
+// Repository::spend_item_use. Returns true if that used the item up (one
+// is gone from `entry.quantity`, and the next starts with all its uses).
+// An item without tracked uses is used up at once.
+bool spend_use(InventoryEntry& entry);
+
+// "Healer's Kit (7 of 10 uses left)" for limited-use items, else the name.
+std::string item_label(const InventoryEntry& entry);
+
 // Sum of weight_lb * quantity across the inventory.
 double total_weight(const std::vector<InventoryEntry>& inventory);
 
